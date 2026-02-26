@@ -31,11 +31,16 @@ export interface ToolContext {
   enrichmentEnabled: boolean;
 }
 
+/** A handler result: plain text OR text + structured data for outputSchema */
+export type ToolHandlerResult =
+  | string
+  | { text: string; structured: Record<string, unknown> };
+
 /** A tool handler function */
 export type ToolHandler = (
   args: Record<string, unknown>,
   ctx: ToolContext
-) => Promise<string>;
+) => Promise<ToolHandlerResult>;
 
 /** A tool module exports definitions and handlers */
 export interface ToolModule {
@@ -48,6 +53,7 @@ export interface ToolSpec {
   name: string;
   description: string;
   schema: ZodObject<ZodRawShape>;
+  outputSchema?: ZodObject<ZodRawShape>;
   annotations?: ToolAnnotations;
   handler: ToolHandler;
 }

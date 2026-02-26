@@ -173,7 +173,8 @@ export class ToolRegistry {
           : null;
 
       // Execute original handler
-      const result = await handler(args, ctx);
+      const rawResult = await handler(args, ctx);
+      const result = typeof rawResult === "string" ? rawResult : rawResult.text;
 
       // After: track interaction (fire-and-forget)
       if (this.enricher) {

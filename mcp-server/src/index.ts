@@ -100,10 +100,17 @@ for (const spec of allSpecs) {
   server.registerTool(spec.name, {
     description: spec.description,
     inputSchema: spec.schema,
+    ...(spec.outputSchema ? { outputSchema: spec.outputSchema } : {}),
     annotations: spec.annotations,
   }, async (args) => {
     const result = await wrapped(args as Record<string, unknown>, ctx);
-    return { content: [{ type: "text" as const, text: result }] };
+    if (typeof result === "string") {
+      return { content: [{ type: "text" as const, text: result }] };
+    }
+    return {
+      content: [{ type: "text" as const, text: result.text }],
+      structuredContent: result.structured,
+    };
   });
 }
 

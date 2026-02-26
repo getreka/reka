@@ -9,7 +9,7 @@
  * Phase 3 replaces ToolRegistry with wrapHandler() + McpServer.registerTool().
  */
 
-import type { ToolContext, ToolHandler } from "./types.js";
+import type { ToolContext, ToolHandler, ToolHandlerResult } from "./types.js";
 import type { ContextEnricher } from "./context-enrichment.js";
 
 // ── Timeouts ────────────────────────────────────────────────
@@ -232,7 +232,7 @@ export function wrapHandler(
   handler: ToolHandler,
   deps: MiddlewareDeps
 ): ToolHandler {
-  return async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
+  return async (args: Record<string, unknown>, ctx: ToolContext): Promise<ToolHandlerResult> => {
     // Auto-start session (skip for session management tools)
     if (!SESSION_TOOLS.has(name)) {
       await ensureSession(ctx);
@@ -251,16 +251,25 @@ export function wrapHandler(
       const timeoutMs = TOOL_TIMEOUTS[name] ?? DEFAULT_TIMEOUT_MS;
       const result = await withTimeout(handler(args, ctx), timeoutMs, name);
 
+      // Extract text for tracking/enrichment
+      const text = typeof result === "string" ? result : result.text;
+
       // After: track interaction (fire-and-forget)
       if (deps.enricher) {
-        deps.enricher.after(name, args, result, ctx);
+        deps.enricher.after(name, args, text, ctx);
       }
 
       // Track usage (fire-and-forget)
-      trackUsage(name, args, startTime, true, result, undefined, ctx);
+      trackUsage(name, args, startTime, true, text, undefined, ctx);
 
       // Prepend context if available
-      return contextPrefix ? contextPrefix + "\n\n" + result : result;
+      if (contextPrefix) {
+        if (typeof result === "string") {
+          return contextPrefix + "\n\n" + result;
+        }
+        return { text: contextPrefix + "\n\n" + result.text, structured: result.structured };
+      }
+      return result;
     } catch (error: unknown) {
       const errorMessage = formatToolError(error, ctx);
 

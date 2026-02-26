@@ -126,7 +126,7 @@ async function uploadFiles(
 }
 
 // In-memory cache for get_index_status (30 min TTL)
-let _statusCache: { data: string; expiresAt: number } | null = null;
+let _statusCache: { data: string; expiresAt: number; structured: Record<string, unknown> } | null = null;
 const STATUS_CACHE_TTL = 30 * 60 * 1000; // 30 minutes
 
 /**
@@ -166,12 +166,23 @@ export function createIndexingTools(projectName: string): ToolSpec[] {
       name: "get_index_status",
       description: `Get the indexing status for ${projectName} codebase. Results cached for 30 minutes.`,
       schema: z.object({}),
+      outputSchema: z.object({
+        status: z.string(),
+        totalFiles: z.number().optional(),
+        indexedFiles: z.number().optional(),
+        lastUpdated: z.string().optional(),
+        vectorCount: z.number().optional(),
+        cached: z.boolean(),
+      }),
       annotations: TOOL_ANNOTATIONS["get_index_status"],
-      handler: async (_args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
+      handler: async (_args: Record<string, unknown>, ctx: ToolContext) => {
         // Return cached result if still valid
         if (_statusCache && Date.now() < _statusCache.expiresAt) {
           const remainingMin = Math.round((_statusCache.expiresAt - Date.now()) / 60000);
-          return _statusCache.data + `\n_Cached (expires in ${remainingMin}min)_`;
+          return {
+            text: _statusCache.data + `\n_Cached (expires in ${remainingMin}min)_`,
+            structured: { ..._statusCache.structured, cached: true },
+          };
         }
 
         const response = await ctx.api.get(
@@ -179,17 +190,26 @@ export function createIndexingTools(projectName: string): ToolSpec[] {
         );
         const data = response.data;
 
-        let result = `## Index Status: ${projectName}\n\n`;
-        result += `- **Status:** ${data.status || "unknown"}\n`;
-        result += `- **Total Files:** ${data.totalFiles ?? "N/A"}\n`;
-        result += `- **Indexed Files:** ${data.indexedFiles ?? "N/A"}\n`;
-        result += `- **Last Updated:** ${data.lastUpdated ? new Date(data.lastUpdated).toLocaleString() : "Never"}\n`;
-        result += `- **Vector Count:** ${data.vectorCount ?? "N/A"}\n`;
+        let text = `## Index Status: ${projectName}\n\n`;
+        text += `- **Status:** ${data.status || "unknown"}\n`;
+        text += `- **Total Files:** ${data.totalFiles ?? "N/A"}\n`;
+        text += `- **Indexed Files:** ${data.indexedFiles ?? "N/A"}\n`;
+        text += `- **Last Updated:** ${data.lastUpdated ? new Date(data.lastUpdated).toLocaleString() : "Never"}\n`;
+        text += `- **Vector Count:** ${data.vectorCount ?? "N/A"}\n`;
+
+        const structured = {
+          status: data.status || "unknown",
+          totalFiles: data.totalFiles,
+          indexedFiles: data.indexedFiles,
+          lastUpdated: data.lastUpdated,
+          vectorCount: data.vectorCount,
+          cached: false,
+        };
 
         // Cache for 30 minutes
-        _statusCache = { data: result, expiresAt: Date.now() + STATUS_CACHE_TTL };
+        _statusCache = { data: text, expiresAt: Date.now() + STATUS_CACHE_TTL, structured };
 
-        return result;
+        return { text, structured };
       },
     },
     {

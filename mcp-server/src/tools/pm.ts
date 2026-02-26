@@ -133,247 +133,61 @@ export function createPmTools(projectName: string): ToolSpec[] {
           includeSubtasks?: boolean;
         };
 
-        // Search for related requirements
-        const reqResponse = await ctx.api.post("/api/search", {
-          collection: `${ctx.collectionPrefix}confluence`,
-          query: feature,
-          limit: 5,
+        const response = await ctx.api.post("/api/estimate-feature", {
+          projectName: ctx.projectName,
+          feature,
+          includeSubtasks,
         });
 
-        // Search for related code
-        const codeResponse = await ctx.api.post("/api/search", {
-          collection: `${ctx.collectionPrefix}codebase`,
-          query: feature,
-          limit: 15,
-        });
+        const d = response.data;
 
-        // Search for related tests
-        const testResponse = await ctx.api
-          .post("/api/search", {
-            collection: `${ctx.collectionPrefix}codebase`,
-            query: `${feature} test spec`,
-            limit: 10,
-            filter: { must: [{ key: "file", match: { text: "test" } }] },
-          })
-          .catch(() => ({ data: { results: [] } }));
-
-        const requirements = reqResponse.data.results || [];
-        const relatedCode = codeResponse.data.results || [];
-        const relatedTests = testResponse.data.results || [];
-
-        // Analyze complexity based on findings
-        const hasRequirements = requirements.length > 0;
-        const hasExistingCode = relatedCode.length > 0;
-        const hasTests = relatedTests.length > 0;
-        const affectedFiles = Array.from(
-          new Set(relatedCode.map((r: any) => r.payload?.file || r.file))
-        ) as string[];
-        const testFiles = Array.from(
-          new Set(relatedTests.map((r: any) => r.payload?.file || r.file))
-        ) as string[];
-
-        // Advanced code complexity analysis
-        let totalComplexityScore = 0;
-        let totalIntegrationPoints = 0;
-        const integrations = new Set<string>();
-        const complexFunctions: string[] = [];
-
-        for (const result of relatedCode) {
-          const content = result.payload?.content || result.content || "";
-
-          // Count complexity indicators
-          const ifCount = (content.match(/\bif\s*\(/g) || []).length;
-          const elseCount = (content.match(/\belse\b/g) || []).length;
-          const switchCount = (content.match(/\bswitch\s*\(/g) || []).length;
-          const forCount = (content.match(/\bfor\s*\(/g) || []).length;
-          const whileCount = (content.match(/\bwhile\s*\(/g) || []).length;
-          const tryCount = (content.match(/\btry\s*\{/g) || []).length;
-          const asyncCount = (content.match(/\basync\b/g) || []).length;
-          const awaitCount = (content.match(/\bawait\b/g) || []).length;
-
-          // Cyclomatic complexity approximation
-          const complexity =
-            1 + ifCount + elseCount + switchCount + forCount + whileCount + tryCount;
-          totalComplexityScore += complexity;
-
-          // Track complex functions (rough estimate)
-          if (complexity > 10) {
-            const funcMatch = content.match(
-              /(?:function|const|async)\s+(\w+)/
-            );
-            if (funcMatch) {
-              complexFunctions.push(
-                `${result.payload?.file || result.file}: ${funcMatch[1]}() - complexity ~${complexity}`
-              );
-            }
-          }
-
-          // Analyze integration points
-          const imports =
-            content.match(/import\s+.*from\s+['"]([^'"]+)['"]/g) || [];
-          const requires =
-            content.match(/require\s*\(['"]([^'"]+)['"]\)/g) || [];
-          const apiCalls =
-            content.match(/(?:axios|fetch|http|api)\.[a-z]+\(/gi) || [];
-          const dbOps =
-            content.match(
-              /(?:prisma|mongoose|sequelize|knex|db)\.[a-z]+/gi
-            ) || [];
-          const externalServices =
-            content.match(
-              /(?:redis|kafka|rabbitmq|queue|cache)\.[a-z]+/gi
-            ) || [];
-
-          [...imports, ...requires].forEach((imp) => {
-            const match = imp.match(/['"]([^'"]+)['"]/);
-            if (match && !match[1].startsWith(".")) {
-              integrations.add(`Package: ${match[1]}`);
-            }
-          });
-
-          if (apiCalls.length > 0) integrations.add("HTTP/API calls");
-          if (dbOps.length > 0) integrations.add("Database operations");
-          if (externalServices.length > 0)
-            integrations.add("External services (cache/queue)");
-          if (asyncCount > 3 || awaitCount > 3)
-            integrations.add("Heavy async operations");
-
-          totalIntegrationPoints +=
-            imports.length + requires.length + apiCalls.length + dbOps.length;
-        }
-
-        // Determine complexity level
-        const avgComplexity =
-          affectedFiles.length > 0
-            ? totalComplexityScore / relatedCode.length
-            : 0;
-        let complexity = "Low";
-        let complexityScore = 0;
-
-        // Factor 1: File count (0-30 points)
-        if (affectedFiles.length > 15) complexityScore += 30;
-        else if (affectedFiles.length > 8) complexityScore += 20;
-        else if (affectedFiles.length > 3) complexityScore += 10;
-        else complexityScore += 5;
-
-        // Factor 2: Code complexity (0-30 points)
-        if (avgComplexity > 15) complexityScore += 30;
-        else if (avgComplexity > 8) complexityScore += 20;
-        else if (avgComplexity > 4) complexityScore += 10;
-        else complexityScore += 5;
-
-        // Factor 3: Integration points (0-20 points)
-        if (integrations.size > 6) complexityScore += 20;
-        else if (integrations.size > 3) complexityScore += 15;
-        else if (integrations.size > 1) complexityScore += 10;
-        else complexityScore += 5;
-
-        // Factor 4: Test coverage (0-20 points) - less tests = more risk
-        const testRatio =
-          affectedFiles.length > 0
-            ? testFiles.length / affectedFiles.length
-            : 0;
-        if (testRatio < 0.2) complexityScore += 20;
-        else if (testRatio < 0.5) complexityScore += 15;
-        else if (testRatio < 0.8) complexityScore += 10;
-        else complexityScore += 5;
-
-        if (complexityScore >= 70) complexity = "Very High";
-        else if (complexityScore >= 50) complexity = "High";
-        else if (complexityScore >= 30) complexity = "Medium";
-        else complexity = "Low";
-
-        // Risk assessment
-        const riskFactors: string[] = [];
-        let riskScore = 0;
-
-        if (!hasRequirements) {
-          riskFactors.push("No documented requirements - scope unclear");
-          riskScore += 25;
-        }
-        if (affectedFiles.length > 10) {
-          riskFactors.push(
-            `Wide impact: ${affectedFiles.length} files affected`
-          );
-          riskScore += 20;
-        }
-        if (!hasTests) {
-          riskFactors.push("No existing tests found - regression risk");
-          riskScore += 20;
-        }
-        if (integrations.has("Database operations")) {
-          riskFactors.push("Database changes - migration complexity");
-          riskScore += 15;
-        }
-        if (integrations.has("External services (cache/queue)")) {
-          riskFactors.push("External service dependencies");
-          riskScore += 15;
-        }
-        if (complexFunctions.length > 3) {
-          riskFactors.push(
-            `${complexFunctions.length} complex functions to modify`
-          );
-          riskScore += 15;
-        }
-        if (!hasExistingCode) {
-          riskFactors.push("New development - no patterns to follow");
-          riskScore += 10;
-        }
-
-        let riskLevel = "Low";
-        if (riskScore >= 60) riskLevel = "Critical";
-        else if (riskScore >= 40) riskLevel = "High";
-        else if (riskScore >= 20) riskLevel = "Medium";
-
-        // Build result
+        // Format structured API response as markdown
         let result = `# Feature Estimation: ${feature}\n\n`;
 
         result += `## Overview\n`;
         result += `| Metric | Value |\n`;
         result += `|--------|-------|\n`;
-        result += `| Complexity | **${complexity}** (score: ${complexityScore}/100) |\n`;
-        result += `| Risk Level | **${riskLevel}** (score: ${riskScore}/100) |\n`;
-        result += `| Affected Files | ${affectedFiles.length} |\n`;
-        result += `| Test Files | ${testFiles.length} (ratio: ${(testRatio * 100).toFixed(0)}%) |\n`;
-        result += `| Integration Points | ${integrations.size} |\n`;
-        result += `| Avg Cyclomatic Complexity | ${avgComplexity.toFixed(1)} |\n`;
-        result += `| Requirements Documented | ${hasRequirements ? "Yes" : "No"} |\n\n`;
+        result += `| Complexity | **${d.complexity}** (score: ${d.complexityScore}/100) |\n`;
+        result += `| Risk Level | **${d.riskLevel}** (score: ${d.riskScore}/100) |\n`;
+        result += `| Affected Files | ${d.affectedFiles.length} |\n`;
+        result += `| Test Files | ${d.testFiles.length} (ratio: ${(d.testRatio * 100).toFixed(0)}%) |\n`;
+        result += `| Integration Points | ${d.integrations.length} |\n`;
+        result += `| Avg Cyclomatic Complexity | ${d.avgCyclomaticComplexity} |\n`;
+        result += `| Requirements Documented | ${d.hasRequirements ? "Yes" : "No"} |\n\n`;
 
-        if (integrations.size > 0) {
+        if (d.integrations.length > 0) {
           result += `## Integration Points\n`;
-          Array.from(integrations)
-            .slice(0, 10)
-            .forEach((i: string) => {
-              result += `- ${i}\n`;
-            });
+          d.integrations.slice(0, 10).forEach((i: string) => {
+            result += `- ${i}\n`;
+          });
           result += "\n";
         }
 
-        if (affectedFiles.length > 0) {
+        if (d.affectedFiles.length > 0) {
           result += `## Affected Files\n`;
-          affectedFiles.slice(0, 15).forEach((f: string) => {
-            const hasTest = testFiles.some((t) =>
+          d.affectedFiles.slice(0, 15).forEach((f: string) => {
+            const hasTest = d.testFiles.some((t: string) =>
               t.includes(f.replace(/\.(ts|js|py|go)$/, ""))
             );
             result += `- ${f} ${hasTest ? "(tested)" : "(no tests)"}\n`;
           });
-          if (affectedFiles.length > 15) {
-            result += `- ... and ${affectedFiles.length - 15} more\n`;
+          if (d.affectedFiles.length > 15) {
+            result += `- ... and ${d.affectedFiles.length - 15} more\n`;
           }
           result += "\n";
         }
 
-        if (complexFunctions.length > 0) {
+        if (d.complexFunctions.length > 0) {
           result += `## Complex Functions (may need refactoring)\n`;
-          complexFunctions.slice(0, 5).forEach((f: string) => {
+          d.complexFunctions.slice(0, 5).forEach((f: string) => {
             result += `- ${f}\n`;
           });
           result += "\n";
         }
 
         result += `## Risk Factors\n`;
-        if (riskFactors.length > 0) {
-          riskFactors.forEach((r) => {
+        if (d.riskFactors.length > 0) {
+          d.riskFactors.forEach((r: string) => {
             result += `- ${r}\n`;
           });
         } else {
@@ -381,32 +195,11 @@ export function createPmTools(projectName: string): ToolSpec[] {
         }
         result += "\n";
 
-        if (includeSubtasks) {
+        if (d.subtasks) {
           result += `## Suggested Subtasks\n`;
-          let taskNum = 1;
-          result += `${taskNum++}. Review and clarify requirements\n`;
-          if (!hasRequirements) {
-            result += `${taskNum++}. Document requirements\n`;
-          }
-          if (hasExistingCode) {
-            result += `${taskNum++}. Analyze existing implementation and complexity\n`;
-            if (complexFunctions.length > 0) {
-              result += `${taskNum++}. Refactor complex functions if needed\n`;
-            }
-            result += `${taskNum++}. Plan modifications\n`;
-          } else {
-            result += `${taskNum++}. Design solution architecture\n`;
-            result += `${taskNum++}. Implement core functionality\n`;
-          }
-          if (integrations.has("Database operations")) {
-            result += `${taskNum++}. Create database migrations\n`;
-          }
-          result += `${taskNum++}. Write/update tests (target: >${affectedFiles.length} test cases)\n`;
-          if (integrations.has("External services (cache/queue)")) {
-            result += `${taskNum++}. Integration testing with external services\n`;
-          }
-          result += `${taskNum++}. Code review & QA\n`;
-          result += `${taskNum++}. Documentation update\n`;
+          d.subtasks.forEach((t: string, i: number) => {
+            result += `${i + 1}. ${t}\n`;
+          });
         }
 
         return result;

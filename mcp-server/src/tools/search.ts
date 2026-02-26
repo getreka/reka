@@ -179,24 +179,42 @@ export function createSearchTools(projectName: string): ToolSpec[] {
       name: "get_project_stats",
       description: `Get statistics about the ${projectName} codebase.`,
       schema: z.object({}),
+      outputSchema: z.object({
+        projectName: z.string(),
+        totalFiles: z.number(),
+        totalLines: z.number().optional(),
+        vectorCount: z.number(),
+        lastIndexed: z.string().optional(),
+        languages: z.record(z.string(), z.number()).optional(),
+      }),
       annotations: TOOL_ANNOTATIONS["get_project_stats"],
-      handler: async (_args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
+      handler: async (_args: Record<string, unknown>, ctx: ToolContext) => {
         const response = await ctx.api.get(
           `/api/stats/${ctx.collectionPrefix}codebase`
         );
         const stats = response.data;
-        let result = `**${ctx.projectName} Project Statistics**\n\n`;
-        result += `- Total Files: ${stats.totalFiles}\n`;
-        result += `- Total Lines: ${stats.totalLines?.toLocaleString() || "N/A"}\n`;
-        result += `- Vector Count: ${stats.vectorCount}\n`;
-        result += `- Last Indexed: ${stats.lastIndexed ? new Date(stats.lastIndexed).toLocaleString() : "Never"}\n`;
+        let text = `**${ctx.projectName} Project Statistics**\n\n`;
+        text += `- Total Files: ${stats.totalFiles}\n`;
+        text += `- Total Lines: ${stats.totalLines?.toLocaleString() || "N/A"}\n`;
+        text += `- Vector Count: ${stats.vectorCount}\n`;
+        text += `- Last Indexed: ${stats.lastIndexed ? new Date(stats.lastIndexed).toLocaleString() : "Never"}\n`;
         if (stats.languages) {
-          result += `\n**Languages:**\n`;
+          text += `\n**Languages:**\n`;
           for (const [lang, count] of Object.entries(stats.languages)) {
-            result += `- ${lang}: ${count} files\n`;
+            text += `- ${lang}: ${count} files\n`;
           }
         }
-        return result;
+        return {
+          text,
+          structured: {
+            projectName: ctx.projectName,
+            totalFiles: stats.totalFiles,
+            totalLines: stats.totalLines,
+            vectorCount: stats.vectorCount,
+            lastIndexed: stats.lastIndexed,
+            languages: stats.languages,
+          },
+        };
       },
     },
     {
@@ -207,8 +225,19 @@ export function createSearchTools(projectName: string): ToolSpec[] {
         kind: z.string().optional().describe("Filter by kind: function, class, interface, type, enum, const"),
         limit: z.number().optional().describe("Max results (default: 10)"),
       }),
+      outputSchema: z.object({
+        symbols: z.array(z.object({
+          kind: z.string(),
+          name: z.string(),
+          file: z.string(),
+          startLine: z.number(),
+          endLine: z.number(),
+          signature: z.string(),
+          exported: z.boolean(),
+        })),
+      }),
       annotations: TOOL_ANNOTATIONS["find_symbol"],
-      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
+      handler: async (args: Record<string, unknown>, ctx: ToolContext) => {
         const { symbol, kind, limit = 10 } = args as {
           symbol: string;
           kind?: string;
@@ -224,7 +253,7 @@ export function createSearchTools(projectName: string): ToolSpec[] {
         if (!results || results.length === 0) {
           return `No symbol "${symbol}" found.`;
         }
-        return results
+        const text = results
           .map(
             (r: any) =>
               `**${r.kind} ${r.name}** in \`${r.file}\` (lines ${r.startLine}-${r.endLine})\n` +
@@ -232,6 +261,20 @@ export function createSearchTools(projectName: string): ToolSpec[] {
               (r.exports ? " _(exported)_" : "")
           )
           .join("\n\n");
+        return {
+          text,
+          structured: {
+            symbols: results.map((r: any) => ({
+              kind: r.kind,
+              name: r.name,
+              file: r.file,
+              startLine: r.startLine,
+              endLine: r.endLine,
+              signature: r.signature,
+              exported: !!r.exports,
+            })),
+          },
+        };
       },
     },
     {

@@ -103,7 +103,7 @@ ${rules ? `### Business Rules\n${rules}` : ""}`;
       schema: z.object({
         ruleName: z.string().describe("Short name for the rule"),
         description: z.string().describe("Detailed description of the rule"),
-        scope: z.enum(["global", "table", "column", "query", "migration"]).describe("Where this rule applies"),
+        scope: z.enum(["global", "table", "column", "query", "migration", "naming", "primary-key", "timestamps", "multi-tenancy", "soft-delete", "status"]).describe("Where this rule applies"),
         examples: z.string().optional().describe("Good and bad examples of applying this rule"),
       }),
       annotations: TOOL_ANNOTATIONS["record_db_rule"],
@@ -402,13 +402,24 @@ ${transitions ? `### State Transitions\n${transitions}` : ""}`;
         }
 
         result += `## Suggestions\n\n`;
-        result += `Based on the existing schema patterns:\n\n`;
-        result += `1. **Table naming**: Use snake_case, plural (e.g., \`notifications\`)\n`;
-        result += `2. **Primary key**: UUID with \`gen_random_uuid()\`\n`;
-        result += `3. **Timestamps**: Include \`created_at\`, \`updated_at\`\n`;
-        result += `4. **Multi-tenant**: Add \`partner_id UUID NOT NULL\` with FK\n`;
-        result += `5. **Soft delete**: Consider \`deleted_at\` timestamp\n`;
-        result += `6. **Status fields**: Use PostgreSQL ENUMs\n`;
+        if (rules.length > 0) {
+          result += `Based on your project's documented DB rules:\n\n`;
+          rules.forEach((r: any, i: number) => {
+            const name = r.memory.metadata?.ruleName || r.memory.relatedTo || "Rule";
+            const scope = r.memory.metadata?.scope || "";
+            const desc = r.memory.content.replace(/^## DB Rule:.*\n*/m, "").replace(/\*\*Scope:\*\*.*\n*/m, "").trim();
+            result += `${i + 1}. **${name}**${scope ? ` (${scope})` : ""}: ${desc.split("\n")[0]}\n`;
+          });
+          result += "\n";
+        } else {
+          result += `No project-specific DB rules found. Using defaults:\n\n`;
+          result += `1. **Table naming**: Use snake_case, plural (e.g., \`notifications\`)\n`;
+          result += `2. **Primary key**: UUID with \`gen_random_uuid()\`\n`;
+          result += `3. **Timestamps**: Include \`created_at\`, \`updated_at\`\n`;
+          result += `4. **Soft delete**: Consider \`deleted_at\` timestamp\n`;
+          result += `5. **Status fields**: Use PostgreSQL ENUMs\n`;
+          result += `\n_Tip: Use \`record_db_rule\` to document project-specific conventions._\n`;
+        }
 
         result += `\n## Next Steps\n`;
         result += `1. Design the schema using suggestions above\n`;
