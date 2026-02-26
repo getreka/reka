@@ -11,17 +11,13 @@
  * - RAG_API_URL: URL of the shared RAG API (default: http://localhost:3100)
  */
 
-import { Server } from "@modelcontextprotocol/sdk/server/index.js";
+import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import {
-  CallToolRequestSchema,
-  ListToolsRequestSchema,
-} from "@modelcontextprotocol/sdk/types.js";
 
 import { createApiClient } from "./api-client.js";
-import { ToolRegistry } from "./tool-registry.js";
 import { ContextEnricher } from "./context-enrichment.js";
-import type { ToolContext } from "./types.js";
+import { wrapHandler } from "./tool-middleware.js";
+import type { ToolContext, ToolSpec } from "./types.js";
 
 // Tool modules
 import { createSearchTools } from "./tools/search.js";
@@ -62,62 +58,54 @@ const ctx: ToolContext = {
   enrichmentEnabled: true,
 };
 
-// Build tool registry from modules
-const registry = new ToolRegistry();
-
-registry.register(createSearchTools(PROJECT_NAME));
-registry.register(createAskTools(PROJECT_NAME));
-registry.register(createIndexingTools(PROJECT_NAME));
-registry.register(createMemoryTools(PROJECT_NAME));
-registry.register(createArchitectureTools(PROJECT_NAME));
-registry.register(createDatabaseTools(PROJECT_NAME));
-registry.register(createConfluenceTools(PROJECT_NAME));
-registry.register(createPmTools(PROJECT_NAME));
-registry.register(createReviewTools(PROJECT_NAME));
-registry.register(createAnalyticsTools(PROJECT_NAME));
-registry.register(createClusteringTools(PROJECT_NAME));
-registry.register(createSessionTools(PROJECT_NAME, ctx));
-registry.register(createFeedbackTools(PROJECT_NAME));
-registry.register(createSuggestionTools(PROJECT_NAME));
-registry.register(createCacheTools(PROJECT_NAME));
-registry.register(createGuidelinesTools(PROJECT_NAME));
-registry.register(createAdvancedTools(PROJECT_NAME));
-registry.register(createAgentTools(PROJECT_NAME));
-
-// Initialize context enrichment middleware
+// Context enrichment middleware
 const enricher = new ContextEnricher({
   maxAutoRecall: 3,
   minRelevance: 0.6,
   timeoutMs: 2000,
 });
-registry.setEnricher(enricher);
 
-// MCP Server
-const server = new Server(
-  {
-    name: `${PROJECT_NAME}-rag`,
-    version: "1.0.0",
-  },
-  {
-    capabilities: {
-      tools: {},
-    },
-  }
+// Collect all tool specs from modules
+const allSpecs: ToolSpec[] = [
+  ...createSearchTools(PROJECT_NAME),
+  ...createAskTools(PROJECT_NAME),
+  ...createIndexingTools(PROJECT_NAME),
+  ...createMemoryTools(PROJECT_NAME),
+  ...createArchitectureTools(PROJECT_NAME),
+  ...createDatabaseTools(PROJECT_NAME),
+  ...createConfluenceTools(PROJECT_NAME),
+  ...createPmTools(PROJECT_NAME),
+  ...createReviewTools(PROJECT_NAME),
+  ...createAnalyticsTools(PROJECT_NAME),
+  ...createClusteringTools(PROJECT_NAME),
+  ...createSessionTools(PROJECT_NAME, ctx),
+  ...createFeedbackTools(PROJECT_NAME),
+  ...createSuggestionTools(PROJECT_NAME),
+  ...createCacheTools(PROJECT_NAME),
+  ...createGuidelinesTools(PROJECT_NAME),
+  ...createAdvancedTools(PROJECT_NAME),
+  ...createAgentTools(PROJECT_NAME),
+];
+
+// MCP Server (modern McpServer API with native Zod validation)
+const server = new McpServer(
+  { name: `${PROJECT_NAME}-rag`, version: "1.0.5" },
+  { capabilities: { tools: {} } }
 );
 
-// List tools handler
-server.setRequestHandler(ListToolsRequestSchema, async () => ({
-  tools: registry.getTools(),
-}));
+// Register all tools with McpServer using wrapHandler middleware
+for (const spec of allSpecs) {
+  const wrapped = wrapHandler(spec.name, spec.handler, { enricher, ctx });
 
-// Call tool handler
-server.setRequestHandler(CallToolRequestSchema, async (request) => {
-  const { name, arguments: args } = request.params;
-  const result = await registry.handle(name, args || {}, ctx);
-  return {
-    content: [{ type: "text", text: result }],
-  };
-});
+  server.registerTool(spec.name, {
+    description: spec.description,
+    inputSchema: spec.schema,
+    annotations: spec.annotations,
+  }, async (args) => {
+    const result = await wrapped(args as Record<string, unknown>, ctx);
+    return { content: [{ type: "text" as const, text: result }] };
+  });
+}
 
 // Graceful shutdown: close active session on exit
 async function cleanup() {
@@ -142,7 +130,7 @@ async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
   console.error(`${PROJECT_NAME} RAG MCP server running (collection prefix: ${COLLECTION_PREFIX})`);
-  console.error(`Registered ${registry.getTools().length} tools from 18 modules`);
+  console.error(`Registered ${allSpecs.length} tools from 18 modules`);
 }
 
 main().catch(console.error);

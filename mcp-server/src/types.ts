@@ -3,8 +3,10 @@
  */
 
 import type { AxiosInstance } from "axios";
+import type { ZodObject, ZodRawShape } from "zod";
+import type { ToolAnnotations } from "./annotations.js";
 
-/** MCP tool input schema shape */
+/** MCP tool input schema shape (raw JSON Schema) */
 export interface ToolInputSchema {
   type: "object";
   properties: Record<string, unknown>;
@@ -16,6 +18,7 @@ export interface ToolDefinition {
   name: string;
   description: string;
   inputSchema: ToolInputSchema;
+  annotations?: ToolAnnotations;
 }
 
 /** Context passed to every tool handler */
@@ -38,4 +41,13 @@ export type ToolHandler = (
 export interface ToolModule {
   tools: ToolDefinition[];
   handlers: Record<string, ToolHandler>;
+}
+
+/** Phase 3 tool spec: schema + handler colocated per tool */
+export interface ToolSpec {
+  name: string;
+  description: string;
+  schema: ZodObject<ZodRawShape>;
+  annotations?: ToolAnnotations;
+  handler: ToolHandler;
 }

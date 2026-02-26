@@ -95,6 +95,22 @@ export function formatNavigationResults(
   }).join('\n\n');
 }
 
+/** Format pagination footer for list tools */
+export function paginationFooter(
+  count: number,
+  limit: number,
+  offset: number
+): string {
+  const hasMore = count >= limit;
+  if (!hasMore && offset === 0) return "";
+  let footer = `\n---\n_Showing ${offset + 1}–${offset + count}`;
+  if (hasMore) {
+    footer += ` | More results available (offset: ${offset + limit})`;
+  }
+  footer += "_\n";
+  return footer;
+}
+
 /** Format a simple list of files with scores */
 export function formatFileList(
   files: Array<{ file: string; score?: number }>,

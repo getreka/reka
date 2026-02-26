@@ -10,7 +10,9 @@
 import * as fs from "fs";
 import * as path from "path";
 import { glob } from "glob";
-import type { ToolModule, ToolHandler, ToolContext } from "../types.js";
+import type { ToolSpec, ToolContext } from "../types.js";
+import { z } from "zod";
+import { TOOL_ANNOTATIONS } from "../annotations.js";
 
 const DEFAULT_PATTERNS = [
   "**/*.ts",
@@ -130,172 +132,126 @@ const STATUS_CACHE_TTL = 30 * 60 * 1000; // 30 minutes
 /**
  * Create the indexing tools module with project-specific descriptions.
  */
-export function createIndexingTools(projectName: string): ToolModule {
-  const tools = [
+export function createIndexingTools(projectName: string): ToolSpec[] {
+  return [
     {
       name: "index_codebase",
       description: `Index or re-index the ${projectName} codebase for RAG search.`,
-      inputSchema: {
-        type: "object" as const,
-        properties: {
-          path: {
-            type: "string",
-            description: "Path to index (default: entire project)",
-          },
-          force: {
-            type: "boolean",
-            description: "Force re-index even if already indexed",
-            default: false,
-          },
-        },
+      schema: z.object({
+        path: z.string().optional().describe("Path to index (default: entire project)"),
+        force: z.boolean().optional().describe("Force re-index even if already indexed"),
+      }),
+      annotations: TOOL_ANNOTATIONS["index_codebase"],
+      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
+        const { path: indexPath, force = false } = args as {
+          path?: string;
+          force?: boolean;
+        };
+        const projectPath = indexPath || ctx.projectPath;
+
+        const stats = await uploadFiles(ctx, projectPath, { force });
+        _statusCache = null; // Invalidate status cache after indexing
+
+        let result = `## Indexing ${projectName}\n\n`;
+        result += `- **Total files found:** ${stats.totalFiles}\n`;
+        result += `- **Files indexed:** ${stats.indexedFiles}\n`;
+        result += `- **Chunks created:** ${stats.totalChunks}\n`;
+        result += `- **Errors:** ${stats.errors}\n`;
+        result += `- **Duration:** ${stats.duration}ms\n`;
+
+        return result;
       },
     },
     {
       name: "get_index_status",
       description: `Get the indexing status for ${projectName} codebase. Results cached for 30 minutes.`,
-      inputSchema: {
-        type: "object" as const,
-        properties: {},
+      schema: z.object({}),
+      annotations: TOOL_ANNOTATIONS["get_index_status"],
+      handler: async (_args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
+        // Return cached result if still valid
+        if (_statusCache && Date.now() < _statusCache.expiresAt) {
+          const remainingMin = Math.round((_statusCache.expiresAt - Date.now()) / 60000);
+          return _statusCache.data + `\n_Cached (expires in ${remainingMin}min)_`;
+        }
+
+        const response = await ctx.api.get(
+          `/api/index/status/${ctx.collectionPrefix}codebase`
+        );
+        const data = response.data;
+
+        let result = `## Index Status: ${projectName}\n\n`;
+        result += `- **Status:** ${data.status || "unknown"}\n`;
+        result += `- **Total Files:** ${data.totalFiles ?? "N/A"}\n`;
+        result += `- **Indexed Files:** ${data.indexedFiles ?? "N/A"}\n`;
+        result += `- **Last Updated:** ${data.lastUpdated ? new Date(data.lastUpdated).toLocaleString() : "Never"}\n`;
+        result += `- **Vector Count:** ${data.vectorCount ?? "N/A"}\n`;
+
+        // Cache for 30 minutes
+        _statusCache = { data: result, expiresAt: Date.now() + STATUS_CACHE_TTL };
+
+        return result;
       },
     },
     {
       name: "reindex_zero_downtime",
       description: `Reindex ${projectName} codebase with zero downtime using alias swap.`,
-      inputSchema: {
-        type: "object" as const,
-        properties: {
-          path: {
-            type: "string",
-            description: "Path to index (default: entire project)",
-          },
-          patterns: {
-            type: "array",
-            items: { type: "string" },
-            description: "File patterns to include (e.g., ['**/*.ts', '**/*.py'])",
-          },
-          excludePatterns: {
-            type: "array",
-            items: { type: "string" },
-            description: "File patterns to exclude (e.g., ['node_modules/**'])",
-          },
-        },
+      schema: z.object({
+        path: z.string().optional().describe("Path to index (default: entire project)"),
+        patterns: z.array(z.string()).optional().describe("File patterns to include (e.g., ['**/*.ts', '**/*.py'])"),
+        excludePatterns: z.array(z.string()).optional().describe("File patterns to exclude (e.g., ['node_modules/**'])"),
+      }),
+      annotations: TOOL_ANNOTATIONS["reindex_zero_downtime"],
+      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
+        const { path: indexPath, patterns, excludePatterns } = args as {
+          path?: string;
+          patterns?: string[];
+          excludePatterns?: string[];
+        };
+        const projectPath = indexPath || ctx.projectPath;
+
+        const stats = await uploadFiles(ctx, projectPath, {
+          patterns,
+          excludePatterns,
+          force: true,
+        });
+        _statusCache = null; // Invalidate status cache after reindex
+
+        let result = `## Reindex: ${projectName}\n\n`;
+        result += `- **Total files found:** ${stats.totalFiles}\n`;
+        result += `- **Files indexed:** ${stats.indexedFiles}\n`;
+        result += `- **Chunks created:** ${stats.totalChunks}\n`;
+        result += `- **Errors:** ${stats.errors}\n`;
+        result += `- **Duration:** ${stats.duration}ms\n`;
+
+        return result;
       },
     },
     {
       name: "list_aliases",
       description: "List all collection aliases and their mappings.",
-      inputSchema: {
-        type: "object" as const,
-        properties: {},
+      schema: z.object({}),
+      annotations: TOOL_ANNOTATIONS["list_aliases"],
+      handler: async (_args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
+        const response = await ctx.api.get("/api/aliases");
+        const aliases = response.data.aliases || response.data;
+
+        if (!aliases || (Array.isArray(aliases) && aliases.length === 0)) {
+          return "No aliases configured.";
+        }
+
+        let result = `## Collection Aliases\n\n`;
+        if (Array.isArray(aliases)) {
+          for (const a of aliases) {
+            result += `- **${a.alias}** -> ${a.collection}\n`;
+          }
+        } else {
+          for (const [alias, collection] of Object.entries(aliases)) {
+            result += `- **${alias}** -> ${collection}\n`;
+          }
+        }
+
+        return result;
       },
     },
   ];
-
-  const handlers: Record<string, ToolHandler> = {
-    index_codebase: async (
-      args: Record<string, unknown>,
-      ctx: ToolContext
-    ): Promise<string> => {
-      const { path: indexPath, force = false } = args as {
-        path?: string;
-        force?: boolean;
-      };
-      const projectPath = indexPath || ctx.projectPath;
-
-      const stats = await uploadFiles(ctx, projectPath, { force });
-      _statusCache = null; // Invalidate status cache after indexing
-
-      let result = `## Indexing ${projectName}\n\n`;
-      result += `- **Total files found:** ${stats.totalFiles}\n`;
-      result += `- **Files indexed:** ${stats.indexedFiles}\n`;
-      result += `- **Chunks created:** ${stats.totalChunks}\n`;
-      result += `- **Errors:** ${stats.errors}\n`;
-      result += `- **Duration:** ${stats.duration}ms\n`;
-
-      return result;
-    },
-
-    get_index_status: async (
-      _args: Record<string, unknown>,
-      ctx: ToolContext
-    ): Promise<string> => {
-      // Return cached result if still valid
-      if (_statusCache && Date.now() < _statusCache.expiresAt) {
-        const remainingMin = Math.round((_statusCache.expiresAt - Date.now()) / 60000);
-        return _statusCache.data + `\n_Cached (expires in ${remainingMin}min)_`;
-      }
-
-      const response = await ctx.api.get(
-        `/api/index/status/${ctx.collectionPrefix}codebase`
-      );
-      const data = response.data;
-
-      let result = `## Index Status: ${projectName}\n\n`;
-      result += `- **Status:** ${data.status || "unknown"}\n`;
-      result += `- **Total Files:** ${data.totalFiles ?? "N/A"}\n`;
-      result += `- **Indexed Files:** ${data.indexedFiles ?? "N/A"}\n`;
-      result += `- **Last Updated:** ${data.lastUpdated ? new Date(data.lastUpdated).toLocaleString() : "Never"}\n`;
-      result += `- **Vector Count:** ${data.vectorCount ?? "N/A"}\n`;
-
-      // Cache for 30 minutes
-      _statusCache = { data: result, expiresAt: Date.now() + STATUS_CACHE_TTL };
-
-      return result;
-    },
-
-    reindex_zero_downtime: async (
-      args: Record<string, unknown>,
-      ctx: ToolContext
-    ): Promise<string> => {
-      const { path: indexPath, patterns, excludePatterns } = args as {
-        path?: string;
-        patterns?: string[];
-        excludePatterns?: string[];
-      };
-      const projectPath = indexPath || ctx.projectPath;
-
-      const stats = await uploadFiles(ctx, projectPath, {
-        patterns,
-        excludePatterns,
-        force: true,
-      });
-      _statusCache = null; // Invalidate status cache after reindex
-
-      let result = `## Reindex: ${projectName}\n\n`;
-      result += `- **Total files found:** ${stats.totalFiles}\n`;
-      result += `- **Files indexed:** ${stats.indexedFiles}\n`;
-      result += `- **Chunks created:** ${stats.totalChunks}\n`;
-      result += `- **Errors:** ${stats.errors}\n`;
-      result += `- **Duration:** ${stats.duration}ms\n`;
-
-      return result;
-    },
-
-    list_aliases: async (
-      _args: Record<string, unknown>,
-      ctx: ToolContext
-    ): Promise<string> => {
-      const response = await ctx.api.get("/api/aliases");
-      const aliases = response.data.aliases || response.data;
-
-      if (!aliases || (Array.isArray(aliases) && aliases.length === 0)) {
-        return "No aliases configured.";
-      }
-
-      let result = `## Collection Aliases\n\n`;
-      if (Array.isArray(aliases)) {
-        for (const a of aliases) {
-          result += `- **${a.alias}** -> ${a.collection}\n`;
-        }
-      } else {
-        for (const [alias, collection] of Object.entries(aliases)) {
-          result += `- **${alias}** -> ${collection}\n`;
-        }
-      }
-
-      return result;
-    },
-  };
-
-  return { tools, handlers };
 }

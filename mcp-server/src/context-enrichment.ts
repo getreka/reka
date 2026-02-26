@@ -133,11 +133,19 @@ export class ContextEnricher {
         !result.includes("not found") &&
         !result.includes("No relevant context found")
       ) {
+        // Count approximate results for weighted feedback
+        const numbered = result.match(/^\d+\./gm);
+        const bullets = result.match(/^[-*] /gm);
+        const resultCount = numbered?.length ?? bullets?.length ?? 1;
+
         ctx.api
           .post("/api/feedback/search", {
             projectName: ctx.projectName,
             query,
             feedbackType: "helpful",
+            toolName: name,
+            resultCount,
+            sessionId: ctx.activeSessionId,
           })
           .catch(() => {});
       }
