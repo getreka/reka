@@ -11,6 +11,85 @@ import { z } from "zod";
 import { TOOL_ANNOTATIONS } from "../annotations.js";
 
 /**
+ * Format smart dispatch result into readable markdown.
+ */
+function formatSmartDispatchResult(task: string, data: any): string {
+  let result = `# Context Briefing: ${task}\n`;
+  result += `_Routing: ${data.reasoning} (${data.plan?.join(", ")}) [${data.timing?.totalMs}ms]_\n\n`;
+
+  const ctx = data.context || {};
+
+  if (ctx.memories?.length > 0) {
+    result += `## Memories (${ctx.memories.length})\n`;
+    for (const m of ctx.memories) {
+      const mem = m.memory || m;
+      result += `- [${mem.type || "note"}] ${(mem.content || "").slice(0, 150)}\n`;
+    }
+    result += "\n";
+  }
+
+  if (ctx.codeResults?.length > 0) {
+    result += `## Related Code (${ctx.codeResults.length})\n`;
+    for (const r of ctx.codeResults) {
+      result += `- \`${r.file}\``;
+      if (r.symbols?.length) result += ` — ${r.symbols.join(", ")}`;
+      result += "\n";
+    }
+    result += "\n";
+  }
+
+  if (ctx.patterns?.length > 0) {
+    result += `## Patterns (${ctx.patterns.length})\n`;
+    for (const p of ctx.patterns) {
+      const mem = p.memory || p;
+      const name = mem.metadata?.patternName || mem.relatedTo || "Pattern";
+      result += `- **${name}**: ${(mem.content || "").slice(0, 120)}\n`;
+    }
+    result += "\n";
+  }
+
+  if (ctx.adrs?.length > 0) {
+    result += `## ADRs (${ctx.adrs.length})\n`;
+    for (const a of ctx.adrs) {
+      const mem = a.memory || a;
+      const title = mem.metadata?.adrTitle || mem.relatedTo || "ADR";
+      result += `- **${title}**: ${(mem.content || "").slice(0, 120)}\n`;
+    }
+    result += "\n";
+  }
+
+  if (ctx.graphDeps?.length > 0) {
+    result += `## Dependencies (${ctx.graphDeps.length})\n`;
+    for (const g of ctx.graphDeps) {
+      result += `- \`${g.file}\`\n`;
+    }
+    result += "\n";
+  }
+
+  if (ctx.docs?.length > 0) {
+    result += `## Docs (${ctx.docs.length})\n`;
+    for (const d of ctx.docs) {
+      result += `- \`${d.file}\`: ${(d.content || "").slice(0, 100)}\n`;
+    }
+    result += "\n";
+  }
+
+  if (ctx.symbols?.length > 0) {
+    result += `## Symbols (${ctx.symbols.length})\n`;
+    for (const s of ctx.symbols) {
+      result += `- \`${s.name || s.symbol}\` [${s.kind || "unknown"}] in \`${s.file || "?"}\`\n`;
+    }
+    result += "\n";
+  }
+
+  if (result.endsWith(`_Routing: ${data.reasoning} (${data.plan?.join(", ")}) [${data.timing?.totalMs}ms]_\n\n`)) {
+    result += "_No relevant context found. Proceed with implementation._\n";
+  }
+
+  return result;
+}
+
+/**
  * Create the suggestions tools module with project-specific descriptions.
  */
 export function createSuggestionTools(projectName: string): ToolSpec[] {
@@ -29,10 +108,23 @@ export function createSuggestionTools(projectName: string): ToolSpec[] {
           files?: string[];
         };
 
-        // 5 parallel lookups
+        // Use smart_dispatch for intelligent routing
+        try {
+          const dispatchRes = await ctx.api.post("/api/smart-dispatch", {
+            projectName: ctx.projectName,
+            task,
+            files,
+          });
+
+          const data = dispatchRes.data;
+          return formatSmartDispatchResult(task, data);
+        } catch {
+          // Fallback to legacy 5-parallel-lookups if smart-dispatch unavailable
+        }
+
+        // Legacy fallback: 5 parallel lookups
         const [memoriesRes, searchRes, patternsRes, adrsRes, graphRes] =
           await Promise.all([
-            // 1. Recall relevant memories
             ctx.api
               .post("/api/memory/recall", {
                 projectName: ctx.projectName,
@@ -41,7 +133,6 @@ export function createSuggestionTools(projectName: string): ToolSpec[] {
                 type: "all",
               })
               .catch(() => null),
-            // 2. Hybrid search for related code
             ctx.api
               .post("/api/search-hybrid", {
                 projectName: ctx.projectName,
@@ -50,7 +141,6 @@ export function createSuggestionTools(projectName: string): ToolSpec[] {
                 mode: "navigate",
               })
               .catch(() => null),
-            // 3. Architectural patterns
             ctx.api
               .post("/api/memory/recall", {
                 projectName: ctx.projectName,
@@ -60,7 +150,6 @@ export function createSuggestionTools(projectName: string): ToolSpec[] {
                 tag: "pattern",
               })
               .catch(() => null),
-            // 4. ADRs
             ctx.api
               .post("/api/memory/recall", {
                 projectName: ctx.projectName,
@@ -70,7 +159,6 @@ export function createSuggestionTools(projectName: string): ToolSpec[] {
                 tag: "adr",
               })
               .catch(() => null),
-            // 5. Graph dependencies (if files specified)
             files && files.length > 0
               ? ctx.api
                   .post("/api/search-graph", {
@@ -85,7 +173,6 @@ export function createSuggestionTools(projectName: string): ToolSpec[] {
 
         let result = `# Context Briefing: ${task}\n\n`;
 
-        // Memories
         const memories = memoriesRes?.data?.results || memoriesRes?.data?.memories || [];
         if (memories.length > 0) {
           result += `## Memories (${memories.length})\n`;
@@ -96,7 +183,6 @@ export function createSuggestionTools(projectName: string): ToolSpec[] {
           result += "\n";
         }
 
-        // Related code
         const codeResults = searchRes?.data?.results || [];
         if (codeResults.length > 0) {
           result += `## Related Code (${codeResults.length})\n`;
@@ -108,7 +194,6 @@ export function createSuggestionTools(projectName: string): ToolSpec[] {
           result += "\n";
         }
 
-        // Patterns
         const patterns = (patternsRes?.data?.results || []).filter(
           (r: any) => r.memory?.tags?.includes("pattern")
         );
@@ -121,7 +206,6 @@ export function createSuggestionTools(projectName: string): ToolSpec[] {
           result += "\n";
         }
 
-        // ADRs
         const adrs = (adrsRes?.data?.results || []).filter(
           (r: any) => r.memory?.tags?.includes("adr")
         );
@@ -134,7 +218,6 @@ export function createSuggestionTools(projectName: string): ToolSpec[] {
           result += "\n";
         }
 
-        // Graph dependencies
         const graphResults = graphRes?.data?.results || graphRes?.data?.directResults || [];
         const connectedFiles = graphRes?.data?.connectedFiles || graphRes?.data?.expandedResults || [];
         if (graphResults.length > 0 || connectedFiles.length > 0) {
@@ -153,6 +236,33 @@ export function createSuggestionTools(projectName: string): ToolSpec[] {
         }
 
         return result;
+      },
+    },
+
+    {
+      name: "smart_dispatch",
+      description: `Intelligent task routing for ${projectName}. LLM analyzes your task and runs only the needed lookups (2-5 of 7 available) in parallel. More efficient than context_briefing for narrow tasks.`,
+      schema: z.object({
+        task: z.string().describe("What you will implement/change"),
+        files: z.array(z.string()).optional().describe("Files you plan to modify"),
+        intent: z.enum(["code", "research", "debug", "review", "architecture"]).optional().describe("Task intent for better routing"),
+      }),
+      annotations: TOOL_ANNOTATIONS["context_briefing"], // Same annotations as context_briefing
+      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
+        const { task, files, intent } = args as {
+          task: string;
+          files?: string[];
+          intent?: string;
+        };
+
+        const response = await ctx.api.post("/api/smart-dispatch", {
+          projectName: ctx.projectName,
+          task,
+          files,
+          intent,
+        });
+
+        return formatSmartDispatchResult(task, response.data);
       },
     },
 

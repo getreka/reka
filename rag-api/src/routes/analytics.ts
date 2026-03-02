@@ -5,17 +5,13 @@
 import { Router, Request, Response } from 'express';
 import { conversationAnalyzer } from '../services/conversation-analyzer';
 import { usageTracker } from '../services/usage-tracker';
-import { predictiveLoader } from '../services/predictive-loader';
-import { sessionContext } from '../services/session-context';
+// predictiveLoader removed — 0 calls in production audit
 import { asyncHandler } from '../middleware/async-handler';
 import {
   validate,
   validateProjectName,
   analyzeConversationSchema,
   trackUsageSchema,
-  prefetchSchema,
-  predictionStatsSchema,
-  trackPredictionSchema,
 } from '../utils/validation';
 
 const router = Router();
@@ -162,61 +158,7 @@ router.get('/behavior-patterns', validateProjectName, asyncHandler(async (req: R
   res.json(patterns);
 }));
 
-// ============================================
-// Prediction Routes
-// ============================================
-
-/**
- * Trigger predictive prefetch for a session
- * POST /api/predictions/prefetch
- */
-router.post('/predictions/prefetch', validateProjectName, validate(prefetchSchema), asyncHandler(async (req: Request, res: Response) => {
-  const { projectName, sessionId } = req.body;
-
-  // Get session context for predictions
-  const session = await sessionContext.getSession(projectName, sessionId);
-  if (!session) {
-    return res.status(404).json({ error: 'Session not found' });
-  }
-
-  const predictions = await predictiveLoader.predict(projectName, sessionId, {
-    currentFiles: session.currentFiles,
-    recentQueries: session.recentQueries,
-    toolsUsed: session.toolsUsed,
-    activeFeatures: session.activeFeatures,
-  });
-
-  const result = await predictiveLoader.prefetch(projectName, sessionId, predictions);
-  res.json(result);
-}));
-
-/**
- * Get prediction accuracy stats
- * GET /api/predictions/stats
- */
-router.get('/predictions/stats', validateProjectName, asyncHandler(async (req: Request, res: Response) => {
-  const { projectName } = req.body;
-  const sessionId = req.query.sessionId as string | undefined;
-
-  const stats = await predictiveLoader.getStats(projectName, sessionId);
-  res.json(stats);
-}));
-
-/**
- * Track a prediction hit or miss
- * POST /api/predictions/track
- */
-router.post('/predictions/track', validateProjectName, validate(trackPredictionSchema), asyncHandler(async (req: Request, res: Response) => {
-  const { projectName, sessionId, resource, hit } = req.body;
-
-  if (hit) {
-    await predictiveLoader.trackHit(projectName, sessionId, resource);
-  } else {
-    await predictiveLoader.trackMiss(projectName, sessionId, resource);
-  }
-
-  res.json({ success: true });
-}));
+// Prediction Routes REMOVED — 0 calls in production audit
 
 // ============================================
 // Enrichment Tracking (from MCP server)

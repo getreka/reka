@@ -38,6 +38,7 @@ import { createCacheTools } from "./tools/cache.js";
 import { createGuidelinesTools } from "./tools/guidelines.js";
 import { createAdvancedTools } from "./tools/advanced.js";
 import { createAgentTools } from "./tools/agents.js";
+import { createQualityTools } from "./tools/quality.js";
 
 // Configuration from environment
 const PROJECT_NAME = process.env.PROJECT_NAME || "default";
@@ -85,16 +86,70 @@ const allSpecs: ToolSpec[] = [
   ...createGuidelinesTools(PROJECT_NAME),
   ...createAdvancedTools(PROJECT_NAME),
   ...createAgentTools(PROJECT_NAME),
+  ...createQualityTools(PROJECT_NAME),
 ];
+
+// Core tools exposed directly to Claude (~35 tools).
+// Hidden tools remain accessible via run_agent (agent runtime calls API directly).
+const CORE_TOOLS = new Set([
+  // Search (6)
+  "search_codebase",
+  "hybrid_search",
+  "search_graph",
+  "find_symbol",
+  "search_docs",
+  "find_feature",
+  // Ask (2)
+  "ask_codebase",
+  "explain_code",
+  // Index (3)
+  "index_codebase",
+  "get_index_status",
+  "get_project_stats",
+  // Memory (7)
+  "remember",
+  "recall",
+  "list_memories",
+  "forget",
+  "batch_remember",
+  "promote_memory",
+  "review_memories",
+  // Architecture (6)
+  "record_adr",
+  "get_adrs",
+  "record_pattern",
+  "get_patterns",
+  "record_tech_debt",
+  "get_tech_debt",
+  // Context (3)
+  "context_briefing",
+  "smart_dispatch",
+  "setup_project",
+  // Session (2)
+  "start_session",
+  "end_session",
+  // Confluence (2)
+  "search_confluence",
+  "index_confluence",
+  // DB (4)
+  "record_table",
+  "get_table_info",
+  "check_db_schema",
+  "get_db_rules",
+  // Agents (1)
+  "run_agent",
+]);
+
+const coreSpecs = allSpecs.filter((s) => CORE_TOOLS.has(s.name));
 
 // MCP Server (modern McpServer API with native Zod validation)
 const server = new McpServer(
-  { name: `${PROJECT_NAME}-rag`, version: "1.0.5" },
+  { name: `${PROJECT_NAME}-rag`, version: "1.1.0" },
   { capabilities: { tools: {} } }
 );
 
-// Register all tools with McpServer using wrapHandler middleware
-for (const spec of allSpecs) {
+// Register core tools with McpServer using wrapHandler middleware
+for (const spec of coreSpecs) {
   const wrapped = wrapHandler(spec.name, spec.handler, { enricher, ctx });
 
   server.registerTool(spec.name, {
@@ -137,7 +192,7 @@ async function main() {
   const transport = new StdioServerTransport();
   await server.connect(transport);
   console.error(`${PROJECT_NAME} RAG MCP server running (collection prefix: ${COLLECTION_PREFIX})`);
-  console.error(`Registered ${allSpecs.length} tools from 18 modules`);
+  console.error(`Registered ${coreSpecs.length}/${allSpecs.length} core tools (${allSpecs.length - coreSpecs.length} hidden, accessible via run_agent)`);
 }
 
 main().catch(console.error);

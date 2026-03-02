@@ -122,11 +122,32 @@ Key settings:
 
 ## RAG Integration
 
-You MUST call `context_briefing` before making any code changes.
-This single tool performs all RAG lookups in parallel (recall, search, patterns, ADRs, graph).
+### Before ANY code change (REQUIRED):
+```
+context_briefing(task: "describe your change", files: ["path/to/file.ts"])
+```
 
-Example: `context_briefing(task: "describe your change", files: ["path/to/file.ts"])`
+### After completing changes (REQUIRED):
+```
+remember(content: "summary of what changed and why")
+```
 
-After completing significant changes:
-- `remember` — save important context for future sessions
-- `record_adr` — document architectural decisions
+### After architectural decisions:
+```
+record_adr(title, context, decision)
+```
+
+### Workflows (slash commands):
+- `/rag-start` — session init with cache + profile (use at start of work)
+- `/rag-end` — save context + end session (use when done)
+- `/rag-implement` — full 5-phase implementation with RAG context
+- `/rag-review` — architecture-aware code review
+- `/rag-debug` — debug investigation with graph tracing
+- `/rag-research` — multi-strategy codebase research
+
+### Search priority:
+1. **Grep/Glob** — exact strings, file names, known symbols
+2. **find_symbol** — function/class/type lookup by name
+3. **hybrid_search** — semantic/conceptual ("how does X work")
+4. **search_graph** — dependencies, blast radius
+5. **context_briefing** — does all above in parallel (before code changes)

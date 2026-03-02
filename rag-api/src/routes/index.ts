@@ -18,8 +18,7 @@ import { confluenceService } from '../services/confluence';
 import { usagePatterns } from '../services/usage-patterns';
 import { proactiveSuggestions } from '../services/proactive-suggestions';
 import { sessionContext } from '../services/session-context';
-import { feedbackService } from '../services/feedback';
-import { queryLearning } from '../services/query-learning';
+// feedbackService and queryLearning removed — 0 calls in production audit
 import { codeSuggestions } from '../services/code-suggestions';
 import { cacheService } from '../services/cache';
 import { embeddingService } from '../services/embedding';
@@ -32,8 +31,6 @@ import {
   indexUploadSchema,
   indexConfluenceSchema,
   confluenceSearchSchema,
-  searchFeedbackSchema,
-  memoryFeedbackSchema,
   completionContextSchema,
   importSuggestionsSchema,
   typeContextSchema,
@@ -668,148 +665,9 @@ router.get('/sessions', validateProjectName, asyncHandler(async (req: Request, r
   res.json({ sessions });
 }));
 
-// ============================================
-// Feedback & Quality Routes
-// ============================================
+// Feedback & Quality Routes REMOVED — 0 calls in production audit (no data source)
 
-/**
- * Submit search feedback
- * POST /api/feedback/search
- */
-router.post('/feedback/search', validateProjectName, validate(searchFeedbackSchema), asyncHandler(async (req: Request, res: Response) => {
-  const { projectName, queryId, query, resultId, resultFile, feedbackType, betterQuery, comment, sessionId } = req.body;
-
-  const feedback = await feedbackService.submitSearchFeedback({
-    projectName,
-    queryId,
-    query,
-    resultId,
-    resultFile,
-    feedbackType,
-    betterQuery,
-    comment,
-    sessionId,
-  });
-
-  res.json({ success: true, feedback });
-}));
-
-/**
- * Submit memory feedback
- * POST /api/feedback/memory
- */
-router.post('/feedback/memory', validateProjectName, validate(memoryFeedbackSchema), asyncHandler(async (req: Request, res: Response) => {
-  const { projectName, memoryId, memoryContent, feedbackType, correction, comment, sessionId } = req.body;
-
-  const feedback = await feedbackService.submitMemoryFeedback({
-    projectName,
-    memoryId,
-    memoryContent,
-    feedbackType,
-    correction,
-    comment,
-    sessionId,
-  });
-
-  res.json({ success: true, feedback });
-}));
-
-/**
- * Get feedback statistics
- * GET /api/feedback/stats/:project
- */
-router.get('/feedback/stats/:project', asyncHandler(async (req: Request, res: Response) => {
-  const { project } = req.params;
-  const days = parseInt(req.query.days as string) || 30;
-
-  const stats = await feedbackService.getStats(project, days);
-  res.json(stats);
-}));
-
-/**
- * Get quality metrics
- * GET /api/quality/:project
- */
-router.get('/quality/:project', asyncHandler(async (req: Request, res: Response) => {
-  const { project } = req.params;
-
-  const metrics = await feedbackService.getQualityMetrics(project);
-  res.json(metrics);
-}));
-
-// ============================================
-// Query Learning Routes
-// ============================================
-
-/**
- * Suggest better queries
- * POST /api/query/suggest
- */
-router.post('/query/suggest', validateProjectName, asyncHandler(async (req: Request, res: Response) => {
-  const { projectName, query, context } = req.body;
-
-  if (!query) {
-    return res.status(400).json({ error: 'query is required' });
-  }
-
-  const suggestions = await queryLearning.suggestBetterQuery({
-    projectName,
-    query,
-    context,
-  });
-
-  res.json({ suggestions });
-}));
-
-/**
- * Learn a query pattern
- * POST /api/query/learn
- */
-router.post('/query/learn', validateProjectName, asyncHandler(async (req: Request, res: Response) => {
-  const { projectName, originalQuery, betterQuery, wasHelpful } = req.body;
-
-  if (!originalQuery || !betterQuery || wasHelpful === undefined) {
-    return res.status(400).json({
-      error: 'originalQuery, betterQuery, and wasHelpful are required',
-    });
-  }
-
-  await queryLearning.learnPattern({
-    projectName,
-    originalQuery,
-    betterQuery,
-    wasHelpful,
-  });
-
-  res.json({ success: true });
-}));
-
-/**
- * Get learned query patterns
- * GET /api/query/patterns/:project
- */
-router.get('/query/patterns/:project', asyncHandler(async (req: Request, res: Response) => {
-  const { project } = req.params;
-  const limit = parseInt(req.query.limit as string) || 20;
-
-  const patterns = await queryLearning.getPatterns(project, limit);
-  res.json({ patterns });
-}));
-
-/**
- * Analyze a query for issues
- * POST /api/query/analyze
- */
-router.post('/query/analyze', asyncHandler(async (req: Request, res: Response) => {
-  const { query } = req.body;
-
-  if (!query) {
-    return res.status(400).json({ error: 'query is required' });
-  }
-
-  const analysis = queryLearning.analyzeQuery(query);
-  res.json(analysis);
-}));
+// Query Learning Routes REMOVED — 0 calls in production audit (cold start, no data)
 
 // ============================================
 // Code Suggestions Routes

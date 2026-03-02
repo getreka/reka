@@ -45,12 +45,14 @@ export const searchSimilarSchema = z.object({
 export const askSchema = z.object({
   collection: collectionNameSchema,
   question: z.string().min(1).max(5000),
+  includeThinking: z.boolean().optional(),
 });
 
 export const explainSchema = z.object({
   code: z.string().min(1).max(50000),
   collection: collectionNameSchema.optional(),
   filePath: z.string().optional(),
+  includeThinking: z.boolean().optional(),
 });
 
 export const findFeatureSchema = z.object({
@@ -194,6 +196,7 @@ export const reviewSchema = z.object({
   diff: z.string().max(100000).optional(),
   filePath: z.string().optional(),
   reviewType: z.string().default('general'),
+  includeThinking: z.boolean().optional(),
 });
 
 export const securityReviewSchema = z.object({
@@ -386,6 +389,18 @@ export const behaviorPatternsSchema = z.object({
 });
 
 // ============================================
+// PM Schemas
+// ============================================
+
+export const estimateFeatureSchema = z.object({
+  projectName: projectNameSchema.optional(),
+  feature: z.string().min(1).max(5000),
+  includeSubtasks: z.boolean().default(true),
+});
+
+export type EstimateFeatureInput = z.infer<typeof estimateFeatureSchema>;
+
+// ============================================
 // Agent Schemas
 // ============================================
 
@@ -396,6 +411,7 @@ export const runAgentSchema = z.object({
   context: z.string().max(50000).optional(),
   maxIterations: z.number().int().min(1).max(20).optional(),
   timeout: z.number().int().min(5000).max(300000).optional(),
+  includeThinking: z.boolean().optional(),
 });
 
 export type RunAgentInput = z.infer<typeof runAgentSchema>;
@@ -415,6 +431,15 @@ export const contextPackSchema = z.object({
 });
 
 export type ContextPackInput = z.infer<typeof contextPackSchema>;
+
+export const smartDispatchSchema = z.object({
+  projectName: projectNameSchema.optional(),
+  task: z.string().min(1).max(5000),
+  files: z.array(z.string()).optional(),
+  intent: z.enum(['code', 'research', 'debug', 'review', 'architecture']).optional(),
+});
+
+export type SmartDispatchInput = z.infer<typeof smartDispatchSchema>;
 
 // Type exports for use in routes
 export type SearchInput = z.infer<typeof searchSchema>;
