@@ -9,6 +9,7 @@ import { vectorStore, VectorPoint } from './vector-store';
 import { embeddingService } from './embedding';
 import { llm } from './llm';
 import { logger } from '../utils/logger';
+import config from '../config';
 
 export type MemoryType = 'decision' | 'insight' | 'context' | 'todo' | 'conversation' | 'note';
 export type MemorySource = 'manual' | 'auto_conversation' | 'auto_pattern' | 'auto_feedback';
@@ -181,9 +182,9 @@ class MemoryService {
             const promoted = !!(r.payload.metadata as Record<string, unknown> | undefined)?.promotedAt;
             // Validated/promoted memories keep their score; others decay
             if (!validated && !promoted) {
-              // Decay: 5% per 30 days past the first 30, max 25% penalty
+              // Decay: configurable rate per 30 days past the first 30
               const periodsOld = Math.floor(ageMs / THIRTY_DAYS) - 1;
-              const decay = Math.min(0.25, periodsOld * 0.05);
+              const decay = Math.min(config.MEMORY_DECAY_MAX, periodsOld * config.MEMORY_DECAY_RATE);
               score *= (1 - decay);
             }
           }
@@ -286,6 +287,55 @@ class MemoryService {
     } catch (error) {
       logger.error(`Failed to delete memories by type: ${type}`, { error });
       return 0;
+    }
+  }
+
+  /**
+   * Delete memories older than N days (client-side date filtering).
+   * tier: 'durable' (default) or 'quarantine' to target the pending collection.
+   */
+  async forgetOlderThan(projectName: string, olderThanDays: number, tier: 'durable' | 'quarantine' = 'durable'): Promise<number> {
+    const collectionName = tier === 'quarantine'
+      ? `${projectName}_memory_pending`
+      : this.getCollectionName(projectName);
+    const cutoff = new Date(Date.now() - olderThanDays * 24 * 60 * 60 * 1000).toISOString();
+    let deleted = 0;
+
+    try {
+      let offset: string | number | undefined = undefined;
+
+      do {
+        const response = await vectorStore['client'].scroll(collectionName, {
+          limit: 500,
+          offset,
+          with_payload: true,
+          with_vector: false,
+        });
+
+        const idsToDelete: string[] = [];
+        for (const point of response.points) {
+          const createdAt = (point.payload as Record<string, unknown>).createdAt as string;
+          if (createdAt && createdAt < cutoff) {
+            idsToDelete.push(point.id as string);
+          }
+        }
+
+        // Batch delete in chunks of 100
+        for (let i = 0; i < idsToDelete.length; i += 100) {
+          const chunk = idsToDelete.slice(i, i + 100);
+          await vectorStore.delete(collectionName, chunk);
+          deleted += chunk.length;
+        }
+
+        offset = response.next_page_offset as string | number | undefined;
+      } while (offset);
+
+      logger.info(`Deleted ${deleted} memories older than ${olderThanDays} days`, { project: projectName });
+      return deleted;
+    } catch (error: any) {
+      if (error.status === 404) return 0;
+      logger.error(`Failed to delete old memories`, { error: error.message, project: projectName });
+      throw error;
     }
   }
 
@@ -680,6 +730,7 @@ class MemoryService {
           systemPrompt: 'You are a memory consolidation assistant. Merge related memories into one concise entry. Preserve all unique facts, decisions, and insights. Remove redundancy. Output only the merged text, nothing else.',
           maxTokens: 500,
           temperature: 0.3,
+          think: false,
         }
       );
       return result.text.trim();

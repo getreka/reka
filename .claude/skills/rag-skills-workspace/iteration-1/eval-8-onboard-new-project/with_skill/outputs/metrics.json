@@ -1,0 +1,79 @@
+{
+  "eval_id": 8,
+  "eval_name": "onboard-new-project",
+  "skill": "rag-onboard",
+  "project_path": "/home/ake/myapp",
+  "project_name": "myapp",
+  "project_exists": false,
+  "onboarding_complete": false,
+  "tool_calls": {
+    "total": 11,
+    "breakdown": {
+      "Glob": 1,
+      "setup_project": 1,
+      "Bash_curl_health": 3,
+      "index_codebase": 1,
+      "get_index_status": 1,
+      "analyze_project_structure": 1,
+      "hybrid_search": 1,
+      "get_project_stats": 1,
+      "find_duplicates": 1
+    },
+    "by_step": {
+      "step_0_prereqs": {
+        "tools": ["Glob"],
+        "count": 1,
+        "result": "project directory does not exist"
+      },
+      "step_1_configure_project": {
+        "tools": ["setup_project"],
+        "count": 1,
+        "result": "ENOENT error - directory not found"
+      },
+      "step_2_verify_infrastructure": {
+        "tools": ["Bash (curl x3)"],
+        "count": 3,
+        "result": "all 3 services healthy"
+      },
+      "step_3_index_codebase": {
+        "tools": ["index_codebase"],
+        "count": 1,
+        "result": "0 files indexed (empty directory)"
+      },
+      "step_4_verify_index": {
+        "tools": ["get_index_status", "analyze_project_structure", "hybrid_search"],
+        "count": 3,
+        "result": "index empty for myapp, search returns rag project results"
+      },
+      "step_5_initial_analysis": {
+        "tools": ["get_project_stats", "find_duplicates"],
+        "count": 2,
+        "result": "stats from rag project, no duplicates"
+      }
+    }
+  },
+  "rag_tool_calls": {
+    "total": 7,
+    "tools_used": [
+      "setup_project",
+      "index_codebase",
+      "get_index_status",
+      "analyze_project_structure",
+      "hybrid_search",
+      "get_project_stats",
+      "find_duplicates"
+    ]
+  },
+  "infrastructure_health": {
+    "rag_api": true,
+    "qdrant": true,
+    "bge_m3": true
+  },
+  "assertions_met": {
+    "calls_setup_project_with_projectPath": true,
+    "checks_infrastructure_health": true,
+    "calls_index_codebase": true,
+    "calls_get_index_status": true,
+    "presents_report_with_stats_and_next_steps": true
+  }
+}

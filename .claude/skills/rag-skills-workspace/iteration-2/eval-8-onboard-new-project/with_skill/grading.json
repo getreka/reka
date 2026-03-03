@@ -1,0 +1,41 @@
+{
+  "assertions": [
+    {
+      "type": "tool",
+      "text": "Calls setup_project with projectPath /home/ake/myapp",
+      "passed": true,
+      "evidence": "setup_project was called twice with input {\"projectPath\":\"/home/ake/myapp\",\"projectName\":\"myapp\",\"ragApiUrl\":\"http://localhost:3100\",\"updateClaudeMd\":true}. Both calls confirmed in transcript. Tool failed with ENOENT (directory missing) but was correctly invoked."
+    },
+    {
+      "type": "tool",
+      "text": "Calls index_codebase for the project",
+      "passed": true,
+      "evidence": "index_codebase was called with path /home/ake/myapp. Result: 0 files found, 0 chunks created (directory empty/missing). Tool invocation confirmed in transcript and documented in report's RAG Tools Invoked table."
+    },
+    {
+      "type": "outcome",
+      "text": "Verifies infrastructure is accessible (checks RAG API, Qdrant, or embedding service)",
+      "passed": true,
+      "evidence": "get_index_status was called and returned successfully, confirming RAG API is up. Report states: RAG API UP (get_index_status returned successfully), Qdrant UP (vector operations responded), BGE-M3 UP (inferred from RAG API health). Infrastructure verification section explicitly present in report."
+    },
+    {
+      "type": "outcome",
+      "text": "Presents a report with actual collection stats (not placeholder text)",
+      "passed": true,
+      "evidence": "Report includes actual stats from get_project_stats: 105 files, 1024 vectors (from existing rag project). Table of myapp collections created shows real 0-vector counts. Also includes actual hybrid_search results and analyze_project_structure output. No placeholder text used."
+    },
+    {
+      "type": "outcome",
+      "text": "Includes actionable next steps for the user (e.g., add to .mcp.json, configure env)",
+      "passed": true,
+      "evidence": "Report includes a clear 'Action Required' section with 4 concrete steps: (1) create project directory with bash command, (2) re-run setup_project, (3) index_codebase, (4) restart Claude Code. Also includes 'Next Steps (after completing the above)' with /rag-start, hybrid_search, context_briefing guidance. .mcp.json configuration template with correct env vars is provided."
+    }
+  ],
+  "summary": {
+    "total": 5,
+    "passed": 5,
+    "failed": 0,
+    "pass_rate": 1.0
+  },
+  "notes": "With-skill run executed all required steps per the rag-onboard skill: setup_project (twice, handling failure gracefully), get_index_status for infra check, index_codebase, analyze_project_structure, hybrid_search, get_project_stats, find_duplicates. The report is well-structured with real data, clear blockers explained, and actionable next steps. The skill guided the agent through the full workflow even when the project directory did not exist."
+}

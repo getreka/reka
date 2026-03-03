@@ -1,0 +1,28 @@
+[
+  {
+    "id": "review-001",
+    "endpoint": "/api/review",
+    "input": {
+      "code": "app.get('/users/:id', (req, res) => {\n  const query = `SELECT * FROM users WHERE id = ${req.params.id}`;\n  db.query(query).then(r => res.json(r));\n});",
+      "reviewType": "security"
+    },
+    "assertions": [
+      { "type": "json_parseable", "params": {} },
+      { "type": "matches_regex", "params": { "pattern": "injection|SQL|security" } },
+      { "type": "thinking_present", "params": {} },
+      { "type": "max_latency_ms", "params": { "max": 30000 } }
+    ]
+  },
+  {
+    "id": "review-002",
+    "endpoint": "/api/review",
+    "input": {
+      "code": "class UserService {\n  async getUser(id: string) {\n    return this.repo.findById(id);\n  }\n}",
+      "reviewType": "general"
+    },
+    "assertions": [
+      { "type": "json_parseable", "params": {} },
+      { "type": "max_latency_ms", "params": { "max": 30000 } }
+    ]
+  }
+]

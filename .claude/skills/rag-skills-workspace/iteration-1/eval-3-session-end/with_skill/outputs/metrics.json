@@ -1,0 +1,100 @@
+{
+  "task": "Session end - save context",
+  "user_request": "Все, закінчив роботу на сьогодні, зберіжи контекст",
+  "skill_used": "/home/ake/shared-ai-infra/.claude/skills/rag-end/SKILL.md",
+  "timestamp": "2026-02-26T17:44:00Z",
+  "tool_calls": {
+    "total": 14,
+    "successful": 12,
+    "failed": 2,
+    "breakdown": {
+      "Read": 1,
+      "Glob": 1,
+      "Bash": 3,
+      "mcp__rag__summarize_context": 1,
+      "mcp__rag__list_memories": 1,
+      "mcp__rag__summarize_changes": 1,
+      "mcp__rag__get_session_context": 1,
+      "mcp__rag__analyze_conversation": 1,
+      "mcp__rag__auto_remember": 1,
+      "mcp__rag__remember": 2,
+      "mcp__rag__end_session": 1
+    },
+    "rag_tool_calls": {
+      "total": 8,
+      "successful": 6,
+      "failed": 2,
+      "tools_used": [
+        "summarize_context",
+        "list_memories",
+        "summarize_changes",
+        "get_session_context",
+        "analyze_conversation",
+        "auto_remember",
+        "remember",
+        "end_session"
+      ]
+    },
+    "non_rag_tool_calls": {
+      "total": 6,
+      "successful": 6,
+      "failed": 0,
+      "tools_used": [
+        "Read",
+        "Glob",
+        "Bash (git status)",
+        "Bash (git diff --stat)",
+        "Bash (git log)"
+      ]
+    }
+  },
+  "workflow_steps": {
+    "step_1_summarize_changes": {
+      "status": "completed",
+      "tools_used": ["summarize_context", "list_memories", "summarize_changes", "get_session_context", "git status", "git diff", "git log"]
+    },
+    "step_2_extract_learnings": {
+      "status": "completed_with_retry",
+      "note": "analyze_conversation and auto_remember timed out, fell back to remember tool",
+      "tools_used": ["analyze_conversation (timeout)", "auto_remember (timeout)", "remember x2"]
+    },
+    "step_3_architecture_capture": {
+      "status": "skipped",
+      "reason": "No architectural decisions made during session"
+    },
+    "step_4_end_session": {
+      "status": "completed",
+      "tools_used": ["end_session"],
+      "session_id": "2026-02-26-optimize-vector-store-search"
+    },
+    "step_5_report": {
+      "status": "completed",
+      "language": "Ukrainian"
+    }
+  },
+  "memories_saved": {
+    "total": 2,
+    "details": [
+      {
+        "id": "0b669a0b-f490-4554-9337-562331d9ad8e",
+        "type": "context",
+        "topic": "Session summary with uncommitted changes"
+      },
+      {
+        "id": "ec585dc6-4d40-45e8-a8b8-3a5f7718f5d5",
+        "type": "todo",
+        "topic": "Files needing attention in next session"
+      }
+    ]
+  },
+  "errors": [
+    {
+      "tool": "analyze_conversation",
+      "error": "timeout of 120000ms exceeded"
+    },
+    {
+      "tool": "auto_remember",
+      "error": "timeout of 120000ms exceeded"
+    }
+  ]
+}

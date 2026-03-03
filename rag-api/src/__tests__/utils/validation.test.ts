@@ -10,6 +10,8 @@ import {
   searchHybridSchema,
   mergeMemoriesSchema,
   indexSchema,
+  maintenanceSchema,
+  forgetOlderThanSchema,
 } from '../../utils/validation';
 
 describe('projectNameSchema', () => {
@@ -205,5 +207,56 @@ describe('indexSchema', () => {
   it('accepts patterns array', () => {
     const result = indexSchema.parse({ patterns: ['**/*.ts'] });
     expect(result.patterns).toEqual(['**/*.ts']);
+  });
+});
+
+describe('maintenanceSchema', () => {
+  it('accepts empty body (all optional)', () => {
+    const result = maintenanceSchema.parse({});
+    expect(result.operations).toBeUndefined();
+  });
+
+  it('applies defaults when operations object is provided empty', () => {
+    const result = maintenanceSchema.parse({ operations: {} });
+    expect(result.operations!.quarantine_cleanup).toBe(true);
+    expect(result.operations!.feedback_maintenance).toBe(true);
+    expect(result.operations!.compaction).toBe(false);
+    expect(result.operations!.compaction_dry_run).toBe(true);
+  });
+
+  it('respects explicit overrides', () => {
+    const result = maintenanceSchema.parse({
+      operations: { quarantine_cleanup: false, compaction: true, compaction_dry_run: false },
+    });
+    expect(result.operations!.quarantine_cleanup).toBe(false);
+    expect(result.operations!.compaction).toBe(true);
+    expect(result.operations!.compaction_dry_run).toBe(false);
+  });
+
+  it('validates projectName format', () => {
+    expect(() => maintenanceSchema.parse({ projectName: 'INVALID NAME!' })).toThrow();
+  });
+});
+
+describe('forgetOlderThanSchema', () => {
+  it('accepts valid olderThanDays', () => {
+    const result = forgetOlderThanSchema.parse({ olderThanDays: 30 });
+    expect(result.olderThanDays).toBe(30);
+  });
+
+  it('rejects olderThanDays < 1', () => {
+    expect(() => forgetOlderThanSchema.parse({ olderThanDays: 0 })).toThrow();
+  });
+
+  it('rejects olderThanDays > 365', () => {
+    expect(() => forgetOlderThanSchema.parse({ olderThanDays: 500 })).toThrow();
+  });
+
+  it('rejects non-integer', () => {
+    expect(() => forgetOlderThanSchema.parse({ olderThanDays: 30.5 })).toThrow();
+  });
+
+  it('requires olderThanDays', () => {
+    expect(() => forgetOlderThanSchema.parse({})).toThrow();
   });
 });

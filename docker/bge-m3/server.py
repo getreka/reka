@@ -21,9 +21,10 @@ app = Flask(__name__)
 
 MODEL_NAME = os.environ.get("MODEL_NAME", "BAAI/bge-m3")
 MAX_LENGTH = int(os.environ.get("MAX_LENGTH", "8192"))
+USE_GPU = os.environ.get("USE_GPU", "true").lower() in ("true", "1", "yes")
 
-logger.info(f"Loading model: {MODEL_NAME} (max_length={MAX_LENGTH})")
-model = BGEM3FlagModel(MODEL_NAME, use_fp16=True)
+logger.info(f"Loading model: {MODEL_NAME} (max_length={MAX_LENGTH}, gpu={USE_GPU})")
+model = BGEM3FlagModel(MODEL_NAME, use_fp16=USE_GPU, device="cuda" if USE_GPU else "cpu")
 logger.info("Model loaded successfully")
 
 

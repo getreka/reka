@@ -1,0 +1,41 @@
+{
+  "eval_id": 3,
+  "eval_name": "session-end",
+  "run": "without_skill",
+  "assertions": [
+    {
+      "type": "tool",
+      "text": "Calls summarize_changes to capture what was done",
+      "passed": false,
+      "evidence": "mcp__rag__summarize_changes was never called. Without-skill transcript only called: recall, list_memories, and remember. The agent built its summary manually from recalled memories rather than using summarize_changes."
+    },
+    {
+      "type": "tool",
+      "text": "Calls end_session with a summary",
+      "passed": false,
+      "evidence": "mcp__rag__end_session was never called. The agent acknowledged this gap itself at the end of its transcript: 'Did not call end_session to formally close the session lifecycle'."
+    },
+    {
+      "type": "outcome",
+      "text": "Presents a summary that mentions specific files or changes (not just generic 'session ended')",
+      "passed": true,
+      "evidence": "summary.md does mention specific files: mcp-server/src/index.ts, tool-middleware.ts, tool-registry.ts, tools/database.ts, tools/indexing.ts, tools/pm.ts, tools/search.ts, types.ts, rag-api/src/server.ts, validation.ts, routes/pm.ts, feature-estimator.ts. It also lists specific Sprint 1 improvements with file names and performance numbers."
+    },
+    {
+      "type": "outcome",
+      "text": "Saves at least one memory with meaningful content (not empty or trivial)",
+      "passed": true,
+      "evidence": "mcp__rag__remember was called once with type 'context', substantial content covering what was done, current state (including Sprint 1 status, uncommitted changes, performance baseline), and next steps. Memory saved with ID 0bc560d9-e11e-4b02-8e4a-75cf15c0701b."
+    },
+    {
+      "type": "outcome",
+      "text": "Summary is structured with clear sections (what was done, what was saved, next steps)",
+      "passed": true,
+      "evidence": "summary.md has sections: '## Session Focus', '## What Was Done', '## Current Performance Baseline', '## Uncommitted Changes', '## Remaining Optimization Opportunities' (Tier 1/2/3), '## Memories Saved'. Structure is clear, though the section naming differs slightly from the expected pattern — 'Memories Saved' covers the 'what was saved' requirement and optimization tiers cover next steps."
+    }
+  ],
+  "total_passed": 3,
+  "total_assertions": 5,
+  "pass_rate": 0.6,
+  "notes": "Without-skill run skipped the two most critical tool assertions: summarize_changes and end_session. The agent self-reported these gaps at the end of execution. Despite that, the output summary was reasonably detailed with specific files and structured sections, leading to 3/5 assertions passing. The skill adds disciplined session lifecycle management (summarize_changes → analyze_conversation → remember × N → end_session) that the baseline run omits entirely."
+}

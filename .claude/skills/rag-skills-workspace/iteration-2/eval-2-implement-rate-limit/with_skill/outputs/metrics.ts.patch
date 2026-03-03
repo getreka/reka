@@ -1,0 +1,20 @@
+--- a/rag-api/src/utils/metrics.ts
++++ b/rag-api/src/utils/metrics.ts
+@@ -340,6 +340,16 @@
+   registers: [registry],
+ });
+
++// ============================================
++// Rate Limiting Metrics
++// ============================================
++
++export const rateLimitedRequestsTotal = new Counter({
++  name: 'rate_limited_requests_total',
++  help: 'Total number of rate-limited requests (HTTP 429)',
++  labelNames: ['ip', 'project'],
++  registers: [registry],
++});
++
+ // ============================================
+ // Helper Functions
+ // ============================================

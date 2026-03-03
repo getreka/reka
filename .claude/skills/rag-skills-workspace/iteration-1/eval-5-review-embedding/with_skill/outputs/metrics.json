@@ -1,0 +1,39 @@
+{
+  "total_tool_calls": 17,
+  "rag_tool_calls": {
+    "get_patterns": 1,
+    "get_adrs": 1,
+    "get_tech_debt": 1,
+    "review_code": 1,
+    "check_architecture": 1,
+    "get_code_context": 2,
+    "search_graph": 1,
+    "suggest_tests": 1,
+    "total": 9
+  },
+  "file_operations": {
+    "read": 4,
+    "write": 3,
+    "total": 7
+  },
+  "search_operations": {
+    "grep": 1,
+    "total": 1
+  },
+  "errors": {
+    "timeout": 1,
+    "api_error_400": 1,
+    "total": 2
+  },
+  "review_results": {
+    "verdict": "Needs changes",
+    "issues_found": 8,
+    "critical": 0,
+    "warning": 5,
+    "info": 3,
+    "patterns_checked": 3,
+    "adrs_checked": 2,
+    "downstream_files": 31,
+    "test_coverage_gaps": 7
+  }
+}

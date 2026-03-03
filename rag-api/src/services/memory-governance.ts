@@ -10,7 +10,8 @@ import { memoryService, Memory, MemoryType, MemorySource, CreateMemoryOptions, S
 import { qualityGates } from './quality-gates';
 import { feedbackService } from './feedback';
 import { logger } from '../utils/logger';
-import { memoryGovernanceTotal } from '../utils/metrics';
+import { memoryGovernanceTotal, maintenanceDuration } from '../utils/metrics';
+import config from '../config';
 
 export type PromoteReason = 'human_validated' | 'pr_merged' | 'tests_passed';
 
@@ -22,6 +23,8 @@ export interface IngestOptions extends CreateMemoryOptions {
 class MemoryGovernanceService {
   // Cache adaptive thresholds per project (refresh every 30 min)
   private thresholdCache = new Map<string, { value: number; expiresAt: number }>();
+  // Per-project compaction lock to prevent concurrent compaction races
+  private compactionLocks = new Set<string>();
 
   private getQuarantineCollection(projectName: string): string {
     return `${projectName}_memory_pending`;
@@ -50,7 +53,13 @@ class MemoryGovernanceService {
       try {
         const durableResults = await vectorStore['client'].scroll(durable, {
           limit: 200, with_payload: true, with_vector: false,
-          filter: { must: [{ key: 'metadata.originalSource', match: { text: 'auto_' } }] },
+          filter: {
+            should: [
+              { key: 'metadata.originalSource', match: { value: 'auto_conversation' } },
+              { key: 'metadata.originalSource', match: { value: 'auto_pattern' } },
+              { key: 'metadata.originalSource', match: { value: 'auto_feedback' } },
+            ],
+          },
         });
         promoted = durableResults.points.length;
       } catch { /* collection may not exist */ }
@@ -296,12 +305,13 @@ class MemoryGovernanceService {
   /**
    * List quarantine memories (non-semantic, for review UI).
    */
-  async listQuarantine(projectName: string, limit: number = 20): Promise<Memory[]> {
+  async listQuarantine(projectName: string, limit: number = 20, offset?: string | number): Promise<Memory[]> {
     const collectionName = this.getQuarantineCollection(projectName);
 
     try {
       const results = await vectorStore['client'].scroll(collectionName, {
         limit,
+        offset: offset || undefined,
         with_payload: true,
         with_vector: false,
       });
@@ -422,6 +432,215 @@ class MemoryGovernanceService {
       pruned: pruneResult.pruned,
       errors: [...promoteResult.errors, ...pruneResult.errors],
     };
+  }
+
+  /**
+   * Cleanup expired quarantine memories (older than TTL).
+   */
+  async cleanupExpiredQuarantine(projectName: string): Promise<{ rejected: string[]; errors: string[] }> {
+    const end = maintenanceDuration.startTimer({ operation: 'quarantine_cleanup', project: projectName });
+    const rejected: string[] = [];
+    const errors: string[] = [];
+
+    try {
+      const collectionName = this.getQuarantineCollection(projectName);
+      const cutoff = new Date(Date.now() - config.MEMORY_QUARANTINE_TTL_DAYS * 24 * 60 * 60 * 1000).toISOString();
+
+      let offset: string | number | undefined = undefined;
+
+      do {
+        const response = await vectorStore['client'].scroll(collectionName, {
+          limit: 500,
+          offset,
+          with_payload: true,
+          with_vector: false,
+        });
+
+        const idsToDelete: string[] = [];
+        for (const point of response.points) {
+          const createdAt = (point.payload as Record<string, unknown>).createdAt as string;
+          if (createdAt && createdAt < cutoff) {
+            idsToDelete.push(point.id as string);
+          }
+        }
+
+        for (let i = 0; i < idsToDelete.length; i += 100) {
+          const chunk = idsToDelete.slice(i, i + 100);
+          try {
+            await vectorStore.delete(collectionName, chunk);
+            rejected.push(...chunk);
+            memoryGovernanceTotal.inc({ operation: 'quarantine_expired', tier: 'quarantine', project: projectName }, chunk.length);
+          } catch (err: any) {
+            errors.push(`Batch delete failed: ${err.message}`);
+          }
+        }
+
+        offset = response.next_page_offset as string | number | undefined;
+      } while (offset);
+
+      logger.info(`Quarantine cleanup: ${rejected.length} expired memories removed`, { project: projectName });
+    } catch (error: any) {
+      if (error.status !== 404) {
+        errors.push(`Quarantine cleanup failed: ${error.message}`);
+        logger.error('Quarantine cleanup failed', { error: error.message, project: projectName });
+      }
+    } finally {
+      end();
+    }
+
+    return { rejected, errors };
+  }
+
+  /**
+   * Run compaction on durable memories — detect clusters of similar memories,
+   * merge them, and mark originals as superseded.
+   */
+  async runCompaction(
+    projectName: string,
+    options: { dryRun?: boolean; limit?: number } = {}
+  ): Promise<{
+    clusters: Array<{ originalIds: string[]; mergedId?: string; mergedContent: string }>;
+    totalClusters: number;
+    dryRun: boolean;
+  }> {
+    const { dryRun = true, limit = 20 } = options;
+
+    if (this.compactionLocks.has(projectName)) {
+      throw new Error(`Compaction already running for project: ${projectName}`);
+    }
+    this.compactionLocks.add(projectName);
+
+    const end = maintenanceDuration.startTimer({ operation: 'compaction', project: projectName });
+    const collectionName = this.getDurableCollection(projectName);
+
+    const result: {
+      clusters: Array<{ originalIds: string[]; mergedId?: string; mergedContent: string }>;
+      totalClusters: number;
+      dryRun: boolean;
+    } = { clusters: [], totalClusters: 0, dryRun };
+
+    try {
+      // Use existing mergeMemories to detect clusters (always dry-run first)
+      const mergeResult = await memoryService.mergeMemories({
+        projectName,
+        threshold: config.MEMORY_COMPACTION_THRESHOLD,
+        dryRun: true,
+        limit,
+      });
+
+      result.totalClusters = mergeResult.totalMerged;
+
+      if (mergeResult.merged.length === 0) {
+        end();
+        return result;
+      }
+
+      for (const cluster of mergeResult.merged) {
+        const originalIds = cluster.original.map(m => m.id);
+        const mergedContent = cluster.merged.content;
+
+        if (!dryRun) {
+          // Create the merged memory
+          const newMemory = await memoryService.remember({
+            projectName,
+            content: mergedContent,
+            type: cluster.merged.type,
+            tags: cluster.merged.tags,
+            relatedTo: cluster.merged.relatedTo,
+            metadata: {
+              ...cluster.merged.metadata,
+              compactedAt: new Date().toISOString(),
+            },
+          });
+
+          // Mark originals as superseded (NOT deleted — preserves audit trail)
+          for (const origId of originalIds) {
+            try {
+              await vectorStore['client'].setPayload(collectionName, {
+                points: [origId],
+                payload: {
+                  supersededBy: newMemory.id,
+                  updatedAt: new Date().toISOString(),
+                },
+              });
+              memoryGovernanceTotal.inc({ operation: 'compaction_superseded', tier: 'durable', project: projectName });
+            } catch (err: any) {
+              logger.debug('Failed to mark superseded during compaction', { origId, error: err.message });
+            }
+          }
+
+          memoryGovernanceTotal.inc({ operation: 'compaction_merged', tier: 'durable', project: projectName });
+          result.clusters.push({ originalIds, mergedId: newMemory.id, mergedContent });
+        } else {
+          result.clusters.push({ originalIds, mergedContent });
+        }
+      }
+
+      logger.info(`Compaction: ${result.clusters.length} clusters${dryRun ? ' (dry run)' : ' merged'}`, { project: projectName });
+    } catch (error: any) {
+      if (error.status !== 404) {
+        logger.error('Compaction failed', { error: error.message, project: projectName });
+        throw error;
+      }
+    } finally {
+      this.compactionLocks.delete(projectName);
+      end();
+    }
+
+    return result;
+  }
+
+  /**
+   * Orchestrator: run selected maintenance operations.
+   * Quarantine cleanup + feedback maintenance run in parallel,
+   * then compaction runs sequentially (avoids race on durable).
+   */
+  async runMaintenance(
+    projectName: string,
+    operations?: {
+      quarantine_cleanup?: boolean;
+      feedback_maintenance?: boolean;
+      compaction?: boolean;
+      compaction_dry_run?: boolean;
+    }
+  ): Promise<{
+    quarantine_cleanup?: { rejected: string[]; errors: string[] };
+    feedback_maintenance?: { promoted: string[]; pruned: string[]; errors: string[] };
+    compaction?: {
+      clusters: Array<{ originalIds: string[]; mergedId?: string; mergedContent: string }>;
+      totalClusters: number;
+      dryRun: boolean;
+    };
+  }> {
+    // Default: quarantine_cleanup + feedback_maintenance
+    const ops = operations || { quarantine_cleanup: true, feedback_maintenance: true };
+    const result: Record<string, unknown> = {};
+
+    // Phase 1: quarantine_cleanup + feedback_maintenance in parallel
+    const parallelTasks: Array<Promise<void>> = [];
+
+    if (ops.quarantine_cleanup) {
+      parallelTasks.push(
+        this.cleanupExpiredQuarantine(projectName).then(r => { result.quarantine_cleanup = r; })
+      );
+    }
+
+    if (ops.feedback_maintenance) {
+      parallelTasks.push(
+        this.runFeedbackMaintenance(projectName).then(r => { result.feedback_maintenance = r; })
+      );
+    }
+
+    await Promise.all(parallelTasks);
+
+    // Phase 2: compaction (sequential — writes to durable)
+    if (ops.compaction) {
+      result.compaction = await this.runCompaction(projectName, {
+        dryRun: ops.compaction_dry_run !== false,
+      });
+    }
+
+    return result as any;
   }
 }
 

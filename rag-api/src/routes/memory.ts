@@ -16,6 +16,8 @@ import {
   analyzeConversationSchema,
   mergeMemoriesSchema,
   promoteMemorySchema,
+  maintenanceSchema,
+  forgetOlderThanSchema,
 } from '../utils/validation';
 
 const router = Router();
@@ -115,6 +117,21 @@ router.delete('/memory/type/:type', validateProjectName, asyncHandler(async (req
 
   const count = await memoryService.forgetByType(projectName, type as MemoryType);
   res.json({ success: true, deleted: count });
+}));
+
+/**
+ * Delete memories older than N days (both durable and quarantine)
+ * POST /api/memory/forget-older
+ */
+router.post('/memory/forget-older', validateProjectName, validate(forgetOlderThanSchema), asyncHandler(async (req: Request, res: Response) => {
+  const { projectName, olderThanDays } = req.body;
+
+  const [durableDeleted, quarantineDeleted] = await Promise.all([
+    memoryService.forgetOlderThan(projectName, olderThanDays),
+    memoryService.forgetOlderThan(projectName, olderThanDays, 'quarantine'),
+  ]);
+
+  res.json({ success: true, deleted: durableDeleted + quarantineDeleted, durable: durableDeleted, quarantine: quarantineDeleted, olderThanDays });
 }));
 
 /**
@@ -221,8 +238,9 @@ router.post('/memory/promote', validateProjectName, validate(promoteMemorySchema
 router.get('/memory/quarantine', validateProjectName, asyncHandler(async (req: Request, res: Response) => {
   const { projectName } = req.body;
   const limit = parseInt(req.query.limit as string) || 20;
+  const offset = req.query.offset as string | undefined;
 
-  const memories = await memoryGovernance.listQuarantine(projectName, limit);
+  const memories = await memoryGovernance.listQuarantine(projectName, limit, offset);
   res.json({ memories, count: memories.length });
 }));
 
@@ -352,12 +370,12 @@ router.post('/quality/blast-radius', validateProjectName, asyncHandler(async (re
 // ============================================
 
 /**
- * Run feedback-based memory maintenance (auto-promote + auto-prune)
+ * Run memory maintenance (quarantine cleanup, feedback, compaction)
  * POST /api/memory/maintenance
  */
-router.post('/memory/maintenance', validateProjectName, asyncHandler(async (req: Request, res: Response) => {
-  const { projectName } = req.body;
-  const result = await memoryGovernance.runFeedbackMaintenance(projectName);
+router.post('/memory/maintenance', validateProjectName, validate(maintenanceSchema), asyncHandler(async (req: Request, res: Response) => {
+  const { projectName, operations } = req.body;
+  const result = await memoryGovernance.runMaintenance(projectName, operations);
   res.json(result);
 }));
 

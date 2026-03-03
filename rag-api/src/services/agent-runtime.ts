@@ -29,6 +29,7 @@ import { factExtractor } from './fact-extractor';
 export interface AgentStep {
   iteration: number;
   thought: string;
+  thinking?: string;  // Raw reasoning trace from thinking mode
   action?: { tool: string; input: Record<string, unknown>; reasoning: string };
   observation?: { tool: string; result: string; truncated: boolean };
   timestamp: string;
@@ -59,7 +60,7 @@ interface ChatMessage {
 }
 
 interface OllamaResponse {
-  message?: { content: string };
+  message?: { content: string; thinking?: string };
   prompt_eval_count?: number;
   eval_count?: number;
 }
@@ -207,6 +208,7 @@ class AgentRuntime {
       const step: AgentStep = {
         iteration,
         thought: parsed.thought,
+        thinking: response.thinking,
         timestamp: new Date().toISOString(),
       };
 
@@ -284,31 +286,70 @@ class AgentRuntime {
     messages: ChatMessage[],
     temperature: number,
     remainingMs?: number
-  ): Promise<{ text: string; promptTokens: number; completionTokens: number }> {
+  ): Promise<{ text: string; thinking?: string; promptTokens: number; completionTokens: number }> {
     try {
       const timeout = remainingMs
-        ? Math.min(60000, remainingMs - 1000)
-        : 60000;
+        ? Math.min(90000, remainingMs - 1000)
+        : 90000;
+
+      const body: Record<string, unknown> = {
+        model: config.AGENT_OLLAMA_MODEL,
+        messages,
+        stream: false,
+        options: {
+          temperature,
+          num_predict: 4096,
+          num_ctx: 2048,
+        },
+      };
+
+      if (config.OLLAMA_THINK) {
+        body.think = true;
+      }
+
       const response = await axios.post<OllamaResponse>(
         `${config.OLLAMA_URL}/api/chat`,
-        {
-          model: config.AGENT_OLLAMA_MODEL,
-          messages,
-          stream: false,
-          options: {
-            temperature,
-            num_predict: 4096,
-          },
-        },
+        body,
         { timeout }
       );
 
+      const thinking = response.data.message?.thinking;
+      if (thinking) {
+        logger.debug('Agent thinking trace', {
+          thinkingChars: thinking.length,
+          preview: thinking.slice(0, 200),
+        });
+      }
+
       return {
         text: response.data.message?.content || '',
+        thinking,
         promptTokens: response.data.prompt_eval_count || 0,
         completionTokens: response.data.eval_count || 0,
       };
     } catch (error: any) {
+      // Fallback: retry without thinking on 400 error
+      if (config.OLLAMA_THINK && error.response?.status === 400) {
+        logger.warn('Agent think mode failed, retrying without thinking');
+        const timeout = remainingMs
+          ? Math.min(60000, remainingMs - 1000)
+          : 60000;
+        const response = await axios.post<OllamaResponse>(
+          `${config.OLLAMA_URL}/api/chat`,
+          {
+            model: config.AGENT_OLLAMA_MODEL,
+            messages,
+            stream: false,
+            options: { temperature, num_predict: 4096, num_ctx: 2048 },
+          },
+          { timeout }
+        );
+        return {
+          text: response.data.message?.content || '',
+          promptTokens: response.data.prompt_eval_count || 0,
+          completionTokens: response.data.eval_count || 0,
+        };
+      }
       logger.error('Agent Ollama chat failed', { error: error.message });
       throw new Error(`LLM call failed: ${error.message}`);
     }

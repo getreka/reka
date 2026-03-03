@@ -1,0 +1,41 @@
+{
+  "eval_id": 3,
+  "eval_name": "session-end",
+  "run": "with_skill",
+  "assertions": [
+    {
+      "type": "tool",
+      "text": "Calls summarize_changes to capture what was done",
+      "passed": true,
+      "evidence": "mcp__rag__summarize_changes was called with {\"includeCode\": true}. Confirmed in transcript tool calls."
+    },
+    {
+      "type": "tool",
+      "text": "Calls end_session with a summary",
+      "passed": true,
+      "evidence": "mcp__rag__end_session was called with summary: 'Analyzed and optimized vector-store.ts search performance. Reviewed parallel facet retrieval, graph-boosted search, embedding deduplication, and batch size limits. Confirmed current architecture is sound. Identified query-level caching as next optimization priority.' autoSaveLearnings: true."
+    },
+    {
+      "type": "outcome",
+      "text": "Presents a summary that mentions specific files or changes (not just generic 'session ended')",
+      "passed": true,
+      "evidence": "summary.md lists specific files investigated (vector-store.ts), specific activities (graph-boosted search, embedding deduplication, batch size limits), and 2 concrete memories saved with IDs (2e946ccb, 2efc7b73)."
+    },
+    {
+      "type": "outcome",
+      "text": "Saves at least one memory with meaningful content (not empty or trivial)",
+      "passed": true,
+      "evidence": "Two mcp__rag__remember calls with substantive content: (1) insight about vector-store search architecture soundness and specific optimization opportunities; (2) decision about no architectural changes needed, next priority is query-level caching. Additionally mcp__rag__auto_remember and mcp__rag__analyze_conversation were called."
+    },
+    {
+      "type": "outcome",
+      "text": "Summary is structured with clear sections (what was done, what was saved, next steps)",
+      "passed": true,
+      "evidence": "summary.md has three clearly delineated sections: '### What Was Done', '### Saved for Future' (with 2 memories listed by type and ID), and '### Open Items' (with 3 specific next steps)."
+    }
+  ],
+  "total_passed": 5,
+  "total_assertions": 5,
+  "pass_rate": 1.0,
+  "notes": "With-skill run used the full rag-end protocol: summarize_changes, analyze_conversation, auto_remember, 2x remember (insight + decision), and end_session with autoSaveLearnings. Output summary is well-structured with specific file references, memory IDs, and actionable next steps."
+}

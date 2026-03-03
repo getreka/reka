@@ -1,0 +1,24 @@
+/**
+ * Metrics additions for rate limiting.
+ *
+ * These additions should be added to: rag-api/src/utils/metrics.ts
+ *
+ * Add the following section alongside the existing metric definitions.
+ */
+
+// ============================================
+// Rate Limiting Metrics
+// ============================================
+
+export const rateLimitHitsTotal = new Counter({
+  name: 'rate_limit_hits_total',
+  help: 'Total number of requests rejected due to rate limiting',
+  labelNames: ['ip_hash'],
+  registers: [registry],
+});
+
+export const rateLimitActiveIPs = new Gauge({
+  name: 'rate_limit_active_ips',
+  help: 'Number of IPs currently being tracked by the rate limiter',
+  registers: [registry],
+});

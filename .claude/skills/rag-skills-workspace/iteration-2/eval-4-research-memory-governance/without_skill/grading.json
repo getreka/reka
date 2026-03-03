@@ -1,0 +1,35 @@
+{
+  "assertions": [
+    {
+      "text": "Uses at least 3 different RAG search tools",
+      "passed": false,
+      "evidence": "Used zero RAG search tools. Only non-RAG tools were used: Grep (5x), Read (13x), Bash (1x), Write (1x). No mcp__rag__* tools invoked at all."
+    },
+    {
+      "text": "Reads at least 2 source files to verify findings",
+      "passed": true,
+      "evidence": "Read 13 source files: memory-governance.ts, memory.ts, routes/memory.ts, quality-gates.ts, context-enrichment.ts, conversation-analyzer.ts, tools/memory.ts, feedback.ts, memory-governance.test.ts, metrics.ts, fact-extractor.ts (twice), tools/ask.ts."
+    },
+    {
+      "text": "Explains the quarantine-to-promotion flow with specific file:line references",
+      "passed": false,
+      "evidence": "The answer describes the flow in detail but provides NO specific file:line references. File paths are given as absolute paths (e.g., '/home/ake/shared-ai-infra/rag-api/src/services/memory-governance.ts') but no line numbers are cited anywhere in the answer."
+    },
+    {
+      "text": "Identifies at least 2 files involved in memory governance",
+      "passed": true,
+      "evidence": "Identifies 10+ files with roles in a table: memory-governance.ts, memory.ts, quality-gates.ts, feedback.ts, conversation-analyzer.ts, fact-extractor.ts, session-context.ts, routes/memory.ts, mcp-server/tools/memory.ts, context-enrichment.ts, memory-governance.test.ts."
+    },
+    {
+      "text": "Answer distinguishes between auto-memories (quarantine) and manual memories (durable)",
+      "passed": true,
+      "evidence": "Clearly explains: 'Manual memories (from remember, record_adr, etc.) stored immediately in {project}_agent_memory (durable)' vs 'Auto-generated memories ... stored in {project}_memory_pending (quarantine)'. The core principle section explicitly makes this distinction."
+    }
+  ],
+  "summary": {
+    "total": 5,
+    "passed": 3,
+    "failed": 2,
+    "pass_rate": 0.6
+  }
+}

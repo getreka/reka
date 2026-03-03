@@ -1,0 +1,35 @@
+{
+  "assertions": [
+    {
+      "text": "Uses at least 3 different RAG search tools",
+      "passed": true,
+      "evidence": "Used 5 distinct RAG search tools: mcp__rag__hybrid_search, mcp__rag__search_graph, mcp__rag__get_patterns, mcp__rag__find_feature, mcp__rag__find_symbol. All confirmed in transcript tool_use blocks."
+    },
+    {
+      "text": "Reads at least 2 source files to verify findings",
+      "passed": true,
+      "evidence": "Read 9 source files: memory-governance.ts, routes/memory.ts, mcp-server/tools/memory.ts, quality-gates.ts, feedback.ts, validation.ts, memory.ts (twice), context-enrichment.ts."
+    },
+    {
+      "text": "Explains the quarantine-to-promotion flow with specific file:line references",
+      "passed": true,
+      "evidence": "Answer includes multiple file:line references: 'rag-api/src/services/memory-governance.ts:39-85' (adaptive threshold), ':168-231' (promote), ':236-248' (reject), ':333-425' (feedback maintenance), 'memory.ts:167-190' (aging), 'context-enrichment.ts:196-221'. Flow is explained with code snippets showing exact routing logic."
+    },
+    {
+      "text": "Identifies at least 2 files involved in memory governance",
+      "passed": true,
+      "evidence": "Identifies 8 files with roles: memory-governance.ts, memory.ts, quality-gates.ts, feedback.ts, routes/memory.ts, mcp-server/tools/memory.ts, context-enrichment.ts, validation.ts."
+    },
+    {
+      "text": "Answer distinguishes between auto-memories (quarantine) and manual memories (durable)",
+      "passed": true,
+      "evidence": "Clearly explains: source.startsWith('auto_') routes to quarantine (_memory_pending), absent/manual source routes directly to durable (_agent_memory). Described in flow diagram and text: 'Якщо source вiдсутнiй або manual -- пам'ять йде прямо в durable'."
+    }
+  ],
+  "summary": {
+    "total": 5,
+    "passed": 5,
+    "failed": 0,
+    "pass_rate": 1.0
+  }
+}

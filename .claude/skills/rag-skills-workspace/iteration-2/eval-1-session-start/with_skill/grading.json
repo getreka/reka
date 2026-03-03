@@ -1,0 +1,37 @@
+{
+  "eval_id": 1,
+  "eval_name": "session-start",
+  "configuration": "with_skill",
+  "expectations": [
+    {
+      "text": "Calls start_session with a descriptive sessionId",
+      "passed": true,
+      "evidence": "Called mcp__rag__start_session with sessionId='2026-02-26-optimize-vector-store-search' — date-prefixed and task-descriptive, matching the skill's format guideline (e.g., '2024-01-15-fix-auth')"
+    },
+    {
+      "text": "Calls context_briefing with task mentioning vector-store.ts",
+      "passed": true,
+      "evidence": "Called mcp__rag__context_briefing with task='Оптимізація пошуку в vector-store.ts — покращення продуктивності пошукових запитів, кешування, фільтрація, batch операції' and files=['rag-api/src/services/vector-store.ts']"
+    },
+    {
+      "text": "Runs at least 2 tool calls in parallel (any combination)",
+      "passed": true,
+      "evidence": "Two parallel batches observed: (1) message msg_01X7yVV8... launched start_session + get_developer_profile simultaneously; (2) message msg_01927AC... launched context_briefing + warm_cache simultaneously"
+    },
+    {
+      "text": "Briefing mentions specific file paths relevant to vector-store.ts (e.g., vector-store.ts, qdrant, search)",
+      "passed": true,
+      "evidence": "briefing.md lists: 'rag-api/src/services/vector-store.ts', 'rag-api/src/services/embedding.ts', 'rag-api/src/services/context-pack.ts', 'rag-api/src/services/graph-store.ts', 'rag-api/src/services/indexer.ts' — all directly relevant to vector-store search"
+    },
+    {
+      "text": "Output contains at least 3 distinct sections (e.g., context, patterns, dependencies, profile)",
+      "passed": true,
+      "evidence": "briefing.md contains 5 distinct sections: '### Previous Context', '### Relevant Code', '### Active Patterns & ADRs', '### Dependencies', '### Developer Profile'"
+    },
+    {
+      "text": "Briefing references project-specific concepts (Qdrant, embeddings, collections) not generic boilerplate",
+      "passed": true,
+      "evidence": "briefing.md references: Binary Quantization (Qdrant 1.15+), BGE-M3 1024-dimensional embeddings, {project}_codebase/_code/_config/_docs collections, Cross-Encoder Reranking, HNSW, facet retrieval in context-pack.ts:100-116 — all project-specific"
+    }
+  ]
+}

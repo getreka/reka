@@ -78,6 +78,7 @@ router.post('/generate-test-cases', asyncHandler(async (req: Request, res: Respo
     systemPrompt: TEST_CASES_SYSTEM_PROMPT,
     maxTokens: 2000,
     temperature: 0.3,
+    format: 'json',
   });
 
   let testCases;
@@ -114,6 +115,7 @@ router.post('/analyze-tests', asyncHandler(async (req: Request, res: Response) =
       systemPrompt: TEST_ANALYSIS_SYSTEM_PROMPT,
       maxTokens: 2000,
       temperature: 0.3,
+      format: 'json',
     }
   );
 

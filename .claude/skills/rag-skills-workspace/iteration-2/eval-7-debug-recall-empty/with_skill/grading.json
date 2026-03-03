@@ -1,0 +1,12 @@
+{
+  "eval_id": 7,
+  "eval_name": "debug-recall-empty",
+  "configuration": "with_skill",
+  "expectations": [
+    {"text": "Calls context_briefing with debug task description", "passed": true, "evidence": "Called with task='debug: recall returns empty array even when memories exist in collection' and files=[memory.ts, tools/memory.ts, routes/memory.ts]"},
+    {"text": "Uses search_graph or find_symbol to trace the recall implementation", "passed": true, "evidence": "Both search_graph(expandHops=2) and find_symbol(recall) called in parallel in Step 3"},
+    {"text": "Identifies the specific files in the recall chain (e.g., memory.ts, vector-store.ts, routes)", "passed": true, "evidence": "Complete chain traced: MCP recall tool -> API route -> memoryService.recall -> embeddingService.embed -> vectorStore.search with exact line numbers"},
+    {"text": "Proposes at least one plausible root cause with evidence from code", "passed": true, "evidence": "3 root causes: supersededBy filter at memory.ts:171, wrong field in context-enrichment.ts:227/241, silent 404 in vector-store.ts:522-525"},
+    {"text": "Suggests a specific code fix (not just 'add logging')", "passed": true, "evidence": "4 fixes: raise supersede threshold 0.85->0.92, change field 'memories'->'results', add warn log for all-superseded, add debug log for 404"}
+  ]
+}

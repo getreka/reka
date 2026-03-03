@@ -333,6 +333,7 @@ If the query is already good, respond with "NONE".`;
         systemPrompt: 'You are a search query optimizer. Suggest clearer, more specific queries.',
         maxTokens: 100,
         temperature: 0.3,
+        think: false,
       });
 
       const suggested = result.text.trim();

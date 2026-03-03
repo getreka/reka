@@ -1,0 +1,16 @@
+[
+  {
+    "id": "agent-001",
+    "endpoint": "/api/agent/run",
+    "input": {
+      "agentType": "research",
+      "task": "How is the vector store service implemented?",
+      "maxIterations": 3
+    },
+    "assertions": [
+      { "type": "min_length", "params": { "min": 100 } },
+      { "type": "contains_key", "params": { "key": "result" } },
+      { "type": "max_latency_ms", "params": { "max": 90000 } }
+    ]
+  }
+]

@@ -17,7 +17,7 @@ const router = Router();
  * POST /api/review
  */
 router.post('/review', validateProjectName, validate(reviewSchema), asyncHandler(async (req: Request, res: Response) => {
-  const { projectName, code, diff, filePath, reviewType } = req.body;
+  const { projectName, code, diff, filePath, reviewType, includeThinking } = req.body;
 
   if (!code && !diff) {
     return res.status(400).json({ error: 'code or diff is required' });
@@ -66,6 +66,7 @@ router.post('/review', validateProjectName, validate(reviewSchema), asyncHandler
     systemPrompt: CODE_REVIEW_SYSTEM_PROMPT,
     maxTokens: 3000,
     temperature: 0.3,
+    format: 'json',
   });
 
   // Parse structured response
@@ -88,6 +89,7 @@ router.post('/review', validateProjectName, validate(reviewSchema), asyncHandler
       adrsUsed: adrs.length,
       similarFilesFound: similarCode.length,
     },
+    ...(includeThinking && result.thinking ? { thinking: result.thinking } : {}),
   });
 }));
 
@@ -104,6 +106,7 @@ router.post('/review/security', validate(securityReviewSchema), asyncHandler(asy
       systemPrompt: SECURITY_REVIEW_SYSTEM_PROMPT,
       maxTokens: 2000,
       temperature: 0.2,
+      format: 'json',
     }
   );
 
@@ -138,6 +141,7 @@ router.post('/review/complexity', asyncHandler(async (req: Request, res: Respons
       systemPrompt: COMPLEXITY_REVIEW_SYSTEM_PROMPT,
       maxTokens: 2000,
       temperature: 0.3,
+      format: 'json',
     }
   );
 

@@ -1,0 +1,45 @@
+{
+  "eval_id": 6,
+  "eval_name": "arch-caching",
+  "run": "without_skill",
+  "assertions": [
+    {
+      "type": "tool",
+      "text": "Calls get_adrs to find existing caching decisions",
+      "passed": true,
+      "evidence": "mcp__rag__get_adrs was called twice (1st and 2nd tool calls). The output analysis.md section '1. Existing ADRs Related to Caching' correctly identifies 6 ADRs and notes none directly address caching strategy."
+    },
+    {
+      "type": "tool",
+      "text": "Calls get_patterns or get_tech_debt for additional context",
+      "passed": true,
+      "evidence": "mcp__rag__get_patterns was called (10th tool call). However mcp__rag__get_tech_debt was NOT called. The assertion is satisfied by get_patterns alone since the assertion uses 'or'. The output references patterns implicitly via codebase reading (cache.ts, embedding.ts)."
+    },
+    {
+      "type": "outcome",
+      "text": "Presents at least 2 options with explicit pros and cons for each",
+      "passed": true,
+      "evidence": "analysis.md presents 2 main options (Option A: In-Memory LRU, Option B: Increase Redis TTLs/Tune Redis Memory) plus a Hybrid recommendation (Section 6). Each option has explicit Pros and Cons sections with 4-6 bullet points each. The minimum threshold of 2 options is met."
+    },
+    {
+      "type": "outcome",
+      "text": "Options reference the actual project stack (Qdrant, BGE-M3, existing Redis on :6380)",
+      "passed": true,
+      "evidence": "analysis.md explicitly references: BGE-M3 1024d embeddings (~8KB per vector), Redis 7 Alpine on port 6380 (appendonly, no maxmemory), ioredis, cache.ts (684 lines), docker-compose.yml. Qdrant is mentioned via ADR context (Qdrant as sole vector database). All three required stack elements are referenced."
+    },
+    {
+      "type": "outcome",
+      "text": "Does not auto-record ADR -- waits for user to choose an option",
+      "passed": true,
+      "evidence": "mcp__rag__record_adr was NOT called (0 actual invocations). The analysis.md section '8. Gap: Missing ADR' explicitly notes 'This analysis provides the context needed for that ADR decision' -- framing it as input for a future decision rather than recording one. The run correctly deferred ADR recording."
+    }
+  ],
+  "summary": {
+    "total": 5,
+    "passed": 5,
+    "failed": 0,
+    "pass_rate": 1.0
+  },
+  "overall_passed": true,
+  "notes": "Solid run that passes all assertions despite lacking skill guidance. Used get_adrs (twice) and get_patterns correctly, supplemented with direct codebase reading (cache.ts, embedding.ts, graph-store.ts, config.ts). Output quality is good: 2 clear options with pros/cons, accurate stack references, performance tables, risk/mitigation table, and a correct decision gate. Relative weakness vs. with_skill: did not call get_tech_debt (missing Redis single-connection scalability debt context found by with_skill), fewer RAG context tools used overall (no recall, no hybrid_search, no suggest_architecture). Options are slightly less structured (no 'Fits patterns / Conflicts with' subsections) but content is accurate and thorough."
+}

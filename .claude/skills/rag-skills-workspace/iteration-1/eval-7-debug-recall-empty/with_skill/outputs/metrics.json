@@ -1,0 +1,36 @@
+{
+  "tool_calls": {
+    "context_briefing": 1,
+    "recall": 1,
+    "search_graph": 1,
+    "find_symbol": 1,
+    "hybrid_search": 1,
+    "search_codebase": 1,
+    "suggest_related_code": 2,
+    "Read": 13,
+    "Grep": 7,
+    "Write": 3
+  },
+  "total_tool_calls": 31,
+  "rag_tool_calls": 7,
+  "read_tool_calls": 13,
+  "grep_tool_calls": 7,
+  "write_tool_calls": 3,
+  "issues_found": 3,
+  "primary_issue": "silent_404_in_vectorStore_search",
+  "confirmed_bugs": 2,
+  "files_analyzed": 11,
+  "key_files": [
+    "rag-api/src/services/memory.ts",
+    "rag-api/src/services/memory-governance.ts",
+    "rag-api/src/services/vector-store.ts",
+    "rag-api/src/routes/memory.ts",
+    "rag-api/src/utils/validation.ts",
+    "mcp-server/src/tools/memory.ts",
+    "mcp-server/src/tools/suggestions.ts",
+    "mcp-server/src/context-enrichment.ts",
+    "mcp-server/src/index.ts",
+    "mcp-server/src/api-client.ts",
+    "rag-api/src/routes/index.ts"
+  ]
+}

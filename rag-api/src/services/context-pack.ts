@@ -331,10 +331,10 @@ class ContextPackBuilder {
   private async rerank(query: string, chunks: RankedChunk[]): Promise<RankedChunk[]> {
     const startTime = Date.now();
 
-    // Prepare candidates for reranking (top 15 by score)
+    // Prepare candidates for reranking (top 20 by score)
     const candidates = chunks
       .sort((a, b) => b.score - a.score)
-      .slice(0, 15);
+      .slice(0, 20);
 
     const candidateList = candidates
       .map((c, i) => `[${i}] ${c.file}: ${c.content.slice(0, 200)}`)
@@ -347,6 +347,8 @@ class ContextPackBuilder {
           systemPrompt: 'You are a code relevance ranker. Return only a JSON array of snippet indices ordered by relevance.',
           maxTokens: 256,
           temperature: 0,
+          think: false,
+          format: 'json',
         }
       );
 

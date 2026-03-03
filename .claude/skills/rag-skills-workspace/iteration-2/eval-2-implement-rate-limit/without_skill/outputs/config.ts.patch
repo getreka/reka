@@ -1,0 +1,23 @@
+/**
+ * Config additions for rate limiting.
+ *
+ * These changes should be applied to: rag-api/src/config.ts
+ *
+ * 1. Add to the Config interface:
+ */
+
+// --- Add to Config interface ---
+
+// Rate Limiting
+RATE_LIMIT_ENABLED: boolean;
+RATE_LIMIT_MAX: number;
+RATE_LIMIT_WINDOW_MS: number;
+RATE_LIMIT_SKIP_PATHS: string[];
+
+// --- Add to config object ---
+
+// Rate Limiting
+RATE_LIMIT_ENABLED: process.env.RATE_LIMIT_ENABLED !== 'false',
+RATE_LIMIT_MAX: parseInt(process.env.RATE_LIMIT_MAX || '100', 10),
+RATE_LIMIT_WINDOW_MS: parseInt(process.env.RATE_LIMIT_WINDOW_MS || '60000', 10),
+RATE_LIMIT_SKIP_PATHS: (process.env.RATE_LIMIT_SKIP_PATHS || '/health,/metrics').split(',').map(p => p.trim()),

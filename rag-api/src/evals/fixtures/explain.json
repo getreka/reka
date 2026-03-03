@@ -1,0 +1,16 @@
+[
+  {
+    "id": "explain-001",
+    "endpoint": "/api/explain",
+    "input": {
+      "code": "async function embed(text: string): Promise<number[]> {\n  const response = await axios.post(`${url}/embed`, { text });\n  return response.data.embedding;\n}"
+    },
+    "assertions": [
+      { "type": "json_parseable", "params": {} },
+      { "type": "contains_key", "params": { "key": "summary" } },
+      { "type": "min_length", "params": { "min": 50 } },
+      { "type": "thinking_present", "params": {} },
+      { "type": "max_latency_ms", "params": { "max": 30000 } }
+    ]
+  }
+]

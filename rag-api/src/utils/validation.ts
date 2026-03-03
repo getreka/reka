@@ -358,6 +358,21 @@ export const mergeMemoriesSchema = z.object({
   limit: z.number().int().min(1).max(200).default(50),
 });
 
+export const maintenanceSchema = z.object({
+  projectName: projectNameSchema.optional(),
+  operations: z.object({
+    quarantine_cleanup: z.boolean().default(true),
+    feedback_maintenance: z.boolean().default(true),
+    compaction: z.boolean().default(false),
+    compaction_dry_run: z.boolean().default(true),
+  }).optional(),
+});
+
+export const forgetOlderThanSchema = z.object({
+  projectName: projectNameSchema.optional(),
+  olderThanDays: z.number().int().min(1).max(365),
+});
+
 export const completionContextSchema = z.object({
   projectName: projectNameSchema.optional(),
   currentFile: z.string().min(1),

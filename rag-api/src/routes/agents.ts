@@ -19,7 +19,7 @@ router.post(
   validateProjectName,
   validate(runAgentSchema),
   asyncHandler(async (req: Request, res: Response) => {
-    const { projectName, agentType, task, context, maxIterations, timeout } = req.body;
+    const { projectName, agentType, task, context, maxIterations, timeout, includeThinking } = req.body;
 
     const result = await agentRuntime.run({
       projectName,
@@ -29,6 +29,14 @@ router.post(
       maxIterations,
       timeout,
     });
+
+    // Strip thinking from steps if not requested
+    if (!includeThinking && result.steps) {
+      result.steps = result.steps.map(step => {
+        const { thinking, ...rest } = step;
+        return rest;
+      });
+    }
 
     res.json(result);
   })

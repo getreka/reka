@@ -274,6 +274,14 @@ export const memoryGovernanceTotal = new Counter({
   registers: [registry],
 });
 
+export const maintenanceDuration = new Histogram({
+  name: 'memory_maintenance_duration_seconds',
+  help: 'Duration of memory maintenance operations',
+  labelNames: ['operation', 'project'],
+  buckets: [0.5, 1, 5, 10, 30, 60, 120],
+  registers: [registry],
+});
+
 // ============================================
 // Graph Metrics
 // ============================================

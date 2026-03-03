@@ -10,10 +10,13 @@ export interface CompletionOptions {
   maxTokens?: number;
   temperature?: number;
   systemPrompt?: string;
+  think?: boolean;          // Override global thinking (default: config.OLLAMA_THINK)
+  format?: 'json' | null;  // Ollama native JSON mode
 }
 
 export interface CompletionResult {
   text: string;
+  thinking?: string;        // Reasoning trace from thinking mode
   usage?: {
     promptTokens: number;
     completionTokens: number;
@@ -42,30 +45,51 @@ class LLMService {
   }
 
   private async completeWithOllama(prompt: string, options: CompletionOptions): Promise<CompletionResult> {
+    const enableThink = options.think ?? config.OLLAMA_THINK;
+    const timeout = enableThink ? 180000 : 120000;
+
+    const messages: Array<{ role: string; content: string }> = [];
+    if (options.systemPrompt) {
+      messages.push({ role: 'system', content: options.systemPrompt });
+    }
+    messages.push({ role: 'user', content: prompt });
+
+    const body: Record<string, unknown> = {
+      model: config.OLLAMA_MODEL,
+      messages,
+      stream: false,
+      options: {
+        temperature: options.temperature ?? 0.7,
+        num_predict: options.maxTokens ?? 2048,
+        num_ctx: 4096,
+      },
+    };
+
+    if (enableThink) {
+      body.think = true;
+    }
+    if (options.format === 'json') {
+      body.format = 'json';
+    }
+
     try {
-      const messages = [];
-
-      if (options.systemPrompt) {
-        messages.push({ role: 'system', content: options.systemPrompt });
-      }
-      messages.push({ role: 'user', content: prompt });
-
       const response = await axios.post(
         `${config.OLLAMA_URL}/api/chat`,
-        {
-          model: config.OLLAMA_MODEL,
-          messages,
-          stream: false,
-          options: {
-            temperature: options.temperature ?? 0.7,
-            num_predict: options.maxTokens ?? 2048,
-          },
-        },
-        { timeout: 120000 }
+        body,
+        { timeout }
       );
+
+      const thinking = response.data.message?.thinking;
+      if (thinking) {
+        logger.debug('Thinking trace', {
+          thinkingChars: thinking.length,
+          preview: thinking.slice(0, 200),
+        });
+      }
 
       return {
         text: response.data.message?.content || '',
+        thinking,
         usage: response.data.eval_count
           ? {
               promptTokens: response.data.prompt_eval_count || 0,
@@ -75,6 +99,26 @@ class LLMService {
           : undefined,
       };
     } catch (error: any) {
+      // Fallback: if 400/500 error with think, retry without it (500 = OOM crash with thinking)
+      if (enableThink && [400, 500].includes(error.response?.status)) {
+        logger.warn('Ollama think mode failed, retrying without thinking');
+        delete body.think;
+        const response = await axios.post(
+          `${config.OLLAMA_URL}/api/chat`,
+          body,
+          { timeout: 120000 }
+        );
+        return {
+          text: response.data.message?.content || '',
+          usage: response.data.eval_count
+            ? {
+                promptTokens: response.data.prompt_eval_count || 0,
+                completionTokens: response.data.eval_count || 0,
+                totalTokens: (response.data.prompt_eval_count || 0) + (response.data.eval_count || 0),
+              }
+            : undefined,
+        };
+      }
       logger.error('Ollama completion failed', { error: error.message });
       throw error;
     }

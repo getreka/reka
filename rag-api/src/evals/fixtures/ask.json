@@ -1,0 +1,29 @@
+[
+  {
+    "id": "ask-001",
+    "endpoint": "/api/ask",
+    "input": {
+      "collection": "rag_codebase",
+      "question": "How does the embedding service work?"
+    },
+    "assertions": [
+      { "type": "min_length", "params": { "min": 100 } },
+      { "type": "matches_regex", "params": { "pattern": "embed|BGE|vector" } },
+      { "type": "max_latency_ms", "params": { "max": 30000 } },
+      { "type": "thinking_present", "params": {} }
+    ]
+  },
+  {
+    "id": "ask-002",
+    "endpoint": "/api/ask",
+    "input": {
+      "collection": "rag_codebase",
+      "question": "What is the memory governance system?"
+    },
+    "assertions": [
+      { "type": "min_length", "params": { "min": 80 } },
+      { "type": "matches_regex", "params": { "pattern": "memory|govern|quarantine|durable" } },
+      { "type": "max_latency_ms", "params": { "max": 30000 } }
+    ]
+  }
+]

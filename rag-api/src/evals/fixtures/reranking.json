@@ -1,0 +1,15 @@
+[
+  {
+    "id": "rerank-001",
+    "endpoint": "/api/context-pack",
+    "input": {
+      "query": "How does the embedding service work?",
+      "maxTokens": 4000
+    },
+    "assertions": [
+      { "type": "contains_key", "params": { "key": "assembled" } },
+      { "type": "min_length", "params": { "min": 50 } },
+      { "type": "max_latency_ms", "params": { "max": 30000 } }
+    ]
+  }
+]

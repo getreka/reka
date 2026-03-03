@@ -1,0 +1,38 @@
+## Changes to: rag-api/src/server.ts
+
+### 1. Add import (after line 16, the auth import):
+
+```typescript
+import { rateLimiterMiddleware } from './middleware/rate-limiter';
+```
+
+### 2. Add middleware registration (after line 66, the authMiddleware use):
+
+```typescript
+// Rate limiting (per-IP, applied after auth so /health and /metrics are also skipped)
+app.use(rateLimiterMiddleware);
+```
+
+### Full diff:
+
+```diff
+--- a/rag-api/src/server.ts
++++ b/rag-api/src/server.ts
+@@ -14,6 +14,7 @@ import { vectorStore } from './services/vector-store';
+ import { cacheService } from './services/cache';
+ import { errorHandler } from './middleware/error-handler';
+ import { authMiddleware } from './middleware/auth';
++import { rateLimiterMiddleware } from './middleware/rate-limiter';
+ import searchRoutes from './routes/search';
+ import indexRoutes from './routes/index';
+ import memoryRoutes from './routes/memory';
+@@ -65,6 +66,9 @@ app.use((req: Request, res: Response, next: NextFunction) => {
+ // API key authentication (skips /health and /metrics)
+ app.use(authMiddleware);
+
++// Rate limiting (per-IP, max 100 req/min by default)
++app.use(rateLimiterMiddleware);
++
+ // Health check
+ app.get('/health', async (req: Request, res: Response) => {
+```

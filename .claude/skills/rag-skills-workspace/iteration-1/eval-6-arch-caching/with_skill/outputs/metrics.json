@@ -1,0 +1,32 @@
+{
+  "total_tool_calls": 17,
+  "tool_breakdown": {
+    "mcp_rag_tools": {
+      "get_adrs": 1,
+      "get_patterns": 1,
+      "get_tech_debt": 1,
+      "analyze_project_structure": 1,
+      "recall": 1,
+      "search_docs": 1,
+      "hybrid_search": 1,
+      "suggest_architecture": 1,
+      "search_graph": 1
+    },
+    "file_tools": {
+      "Read": 3,
+      "Grep": 4,
+      "Write": 3
+    }
+  },
+  "rag_tool_calls": 9,
+  "file_tool_calls": 7,
+  "output_files_written": 3,
+  "skill_steps_completed": {
+    "step_1_understand_state": true,
+    "step_2_architectural_guidance": true,
+    "step_3_present_analysis": true,
+    "step_4_record_decision": false,
+    "step_5_confirm": false
+  },
+  "step_4_note": "Waiting for user decision before recording ADR (per SKILL.md workflow)"
+}

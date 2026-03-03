@@ -1,6 +1,10 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mockEmbedding, mockSearchResult } from '../helpers/fixtures';
 
+const mockQdrantClient = vi.hoisted(() => ({
+  scroll: vi.fn(),
+}));
+
 // Mock dependencies
 vi.mock('../../services/vector-store', () => ({
   vectorStore: {
@@ -11,6 +15,7 @@ vi.mock('../../services/vector-store', () => ({
     getCollectionInfo: vi.fn(),
     aggregateByField: vi.fn(),
     recommend: vi.fn(),
+    client: mockQdrantClient,
   },
   default: {
     upsert: vi.fn(),
@@ -20,6 +25,7 @@ vi.mock('../../services/vector-store', () => ({
     getCollectionInfo: vi.fn(),
     aggregateByField: vi.fn(),
     recommend: vi.fn(),
+    client: mockQdrantClient,
   },
 }));
 
@@ -171,7 +177,7 @@ describe('MemoryService', () => {
     });
 
     it('applies aging decay to old unvalidated memories', async () => {
-      // Memory 90 days old → 2 periods past first 30 → 10% decay
+      // Memory 90 days old → 2 periods past first 30 → decay = min(0.50, 2 * 0.10) = 0.20
       const old = new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString();
       mockedVS.search.mockResolvedValue([
         mockSearchResult({
@@ -195,7 +201,8 @@ describe('MemoryService', () => {
       });
 
       expect(results[0].score).toBeLessThan(1.0);
-      expect(results[0].score).toBeCloseTo(0.9, 1);
+      // rate=0.10, 2 periods → 20% decay → score = 0.80
+      expect(results[0].score).toBeCloseTo(0.8, 1);
     });
 
     it('does not apply aging decay to validated memories', async () => {
@@ -317,6 +324,349 @@ describe('MemoryService', () => {
       expect(result.saved).toHaveLength(0);
       expect(result.errors).toHaveLength(1);
       expect(result.errors[0]).toContain('embed failed');
+    });
+  });
+
+  describe('forgetOlderThan', () => {
+    it('deletes memories older than cutoff from durable', async () => {
+      const old = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString(); // 60 days ago
+      const recent = new Date().toISOString();
+
+      mockQdrantClient.scroll.mockResolvedValue({
+        points: [
+          { id: 'old-1', payload: { createdAt: old } },
+          { id: 'old-2', payload: { createdAt: old } },
+          { id: 'recent-1', payload: { createdAt: recent } },
+        ],
+        next_page_offset: undefined,
+      });
+      mockedVS.delete.mockResolvedValue(undefined);
+
+      const deleted = await memoryService.forgetOlderThan('test', 30);
+
+      expect(deleted).toBe(2);
+      expect(mockedVS.delete).toHaveBeenCalledWith('test_agent_memory', ['old-1', 'old-2']);
+      expect(mockQdrantClient.scroll).toHaveBeenCalledWith('test_agent_memory', expect.anything());
+    });
+
+    it('targets quarantine collection when tier is quarantine', async () => {
+      mockQdrantClient.scroll.mockResolvedValue({
+        points: [
+          { id: 'q-old', payload: { createdAt: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString() } },
+        ],
+        next_page_offset: undefined,
+      });
+      mockedVS.delete.mockResolvedValue(undefined);
+
+      const deleted = await memoryService.forgetOlderThan('test', 30, 'quarantine');
+
+      expect(deleted).toBe(1);
+      expect(mockQdrantClient.scroll).toHaveBeenCalledWith('test_memory_pending', expect.anything());
+      expect(mockedVS.delete).toHaveBeenCalledWith('test_memory_pending', ['q-old']);
+    });
+
+    it('returns 0 when collection does not exist (404)', async () => {
+      const err = new Error('Not found') as any;
+      err.status = 404;
+      mockQdrantClient.scroll.mockRejectedValue(err);
+
+      const deleted = await memoryService.forgetOlderThan('test', 30);
+
+      expect(deleted).toBe(0);
+    });
+
+    it('paginates through large collections', async () => {
+      const old = new Date(Date.now() - 60 * 24 * 60 * 60 * 1000).toISOString();
+
+      mockQdrantClient.scroll
+        .mockResolvedValueOnce({
+          points: [{ id: 'p1', payload: { createdAt: old } }],
+          next_page_offset: 'next-1',
+        })
+        .mockResolvedValueOnce({
+          points: [{ id: 'p2', payload: { createdAt: old } }],
+          next_page_offset: undefined,
+        });
+      mockedVS.delete.mockResolvedValue(undefined);
+
+      const deleted = await memoryService.forgetOlderThan('test', 30);
+
+      expect(deleted).toBe(2);
+      expect(mockQdrantClient.scroll).toHaveBeenCalledTimes(2);
+    });
+  });
+
+  describe('forgetByType', () => {
+    it('deletes memories by type filter', async () => {
+      mockedVS.deleteByFilter.mockResolvedValue(undefined);
+
+      const result = await memoryService.forgetByType('test', 'note');
+
+      expect(result).toBe(1);
+      expect(mockedVS.deleteByFilter).toHaveBeenCalledWith(
+        'test_agent_memory',
+        { must: [{ key: 'type', match: { value: 'note' } }] }
+      );
+    });
+
+    it('returns 0 on error', async () => {
+      mockedVS.deleteByFilter.mockRejectedValue(new Error('fail'));
+
+      const result = await memoryService.forgetByType('test', 'note');
+      expect(result).toBe(0);
+    });
+  });
+
+  describe('updateTodoStatus', () => {
+    it('updates todo status and statusHistory', async () => {
+      const now = new Date().toISOString();
+      mockedVS.search.mockResolvedValue([
+        mockSearchResult({
+          id: 'todo-1',
+          score: 0.95,
+          payload: {
+            type: 'todo',
+            content: 'fix the bug',
+            tags: [],
+            createdAt: now,
+            updatedAt: now,
+            status: 'pending',
+            statusHistory: [{ status: 'pending', timestamp: now }],
+          },
+        }),
+      ]);
+      mockedVS.upsert.mockResolvedValue(undefined);
+
+      const result = await memoryService.updateTodoStatus('test', 'todo-1', 'done', 'completed');
+
+      expect(result).not.toBeNull();
+      expect(result!.status).toBe('done');
+      expect(result!.statusHistory).toHaveLength(2);
+      expect(result!.statusHistory![1].status).toBe('done');
+      expect(result!.statusHistory![1].note).toBe('completed');
+      expect(mockedVS.upsert).toHaveBeenCalled();
+    });
+
+    it('returns null when todo not found', async () => {
+      mockedVS.search.mockResolvedValue([
+        mockSearchResult({
+          id: 'other-id',
+          score: 0.5,
+          payload: { type: 'todo', content: 'different', tags: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+        }),
+      ]);
+
+      const result = await memoryService.updateTodoStatus('test', 'todo-missing', 'done');
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('getStats', () => {
+    it('returns total and byType counts', async () => {
+      mockedVS.getCollectionInfo.mockResolvedValue({
+        vectorsCount: 50,
+        segmentsCount: 1,
+        indexedFields: ['type'],
+      } as any);
+      mockedVS.aggregateByField.mockResolvedValue({
+        decision: 10,
+        insight: 15,
+        note: 20,
+        todo: 5,
+      });
+
+      const stats = await memoryService.getStats('test');
+
+      expect(stats.total).toBe(50);
+      expect(stats.byType.decision).toBe(10);
+      expect(stats.byType.insight).toBe(15);
+      expect(stats.byType.note).toBe(20);
+      expect(stats.byType.todo).toBe(5);
+      expect(stats.byType.context).toBe(0);
+      expect(stats.byType.conversation).toBe(0);
+    });
+  });
+
+  describe('validateMemory', () => {
+    it('marks memory as validated', async () => {
+      const now = new Date().toISOString();
+      mockedVS.search.mockResolvedValue([
+        mockSearchResult({
+          id: 'mem-v',
+          score: 0.95,
+          payload: {
+            type: 'insight',
+            content: 'auto-extracted fact',
+            tags: ['auto'],
+            createdAt: now,
+            updatedAt: now,
+            validated: false,
+          },
+        }),
+      ]);
+      mockedVS.upsert.mockResolvedValue(undefined);
+
+      const result = await memoryService.validateMemory('test', 'mem-v', true);
+
+      expect(result).not.toBeNull();
+      expect(result!.validated).toBe(true);
+      expect(result!.metadata?.validatedAt).toBeDefined();
+      expect(mockedVS.upsert).toHaveBeenCalled();
+    });
+
+    it('returns null when memory not found', async () => {
+      mockedVS.search.mockResolvedValue([]);
+
+      const result = await memoryService.validateMemory('test', 'missing', true);
+      expect(result).toBeNull();
+    });
+  });
+
+  describe('mergeMemories', () => {
+    it('returns empty result when fewer than 2 memories', async () => {
+      mockQdrantClient.scroll.mockResolvedValue({
+        points: [{ id: 'm1', payload: { type: 'note', content: 'only one', tags: [] } }],
+        next_page_offset: undefined,
+      });
+
+      const result = await memoryService.mergeMemories({ projectName: 'test' });
+
+      expect(result.totalMerged).toBe(0);
+      expect(result.merged).toHaveLength(0);
+    });
+
+    it('dry run finds clusters without modifying', async () => {
+      const now = new Date().toISOString();
+      mockQdrantClient.scroll.mockResolvedValue({
+        points: [
+          { id: 'm1', payload: { type: 'note', content: 'memory one', tags: [], createdAt: now, updatedAt: now } },
+          { id: 'm2', payload: { type: 'note', content: 'memory two', tags: [], createdAt: now, updatedAt: now } },
+        ],
+        next_page_offset: undefined,
+      });
+
+      mockedVS.recommend.mockResolvedValue([
+        { id: 'm2', score: 0.95, payload: { type: 'note', content: 'memory two', tags: [], createdAt: now, updatedAt: now } },
+      ]);
+
+      const { llm } = await import('../../services/llm');
+      vi.mocked(llm.complete).mockResolvedValue({ text: 'merged content', usage: {} as any });
+
+      const result = await memoryService.mergeMemories({
+        projectName: 'test',
+        dryRun: true,
+        threshold: 0.9,
+      });
+
+      expect(result.totalMerged).toBe(1);
+      expect(result.merged).toHaveLength(1);
+      // Dry run should NOT upsert or delete
+      expect(mockedVS.upsert).not.toHaveBeenCalled();
+      expect(mockedVS.delete).not.toHaveBeenCalled();
+    });
+
+    it('returns empty on 404', async () => {
+      const err = new Error('Not found') as any;
+      err.status = 404;
+      mockQdrantClient.scroll.mockRejectedValue(err);
+
+      const result = await memoryService.mergeMemories({ projectName: 'test' });
+      expect(result.totalMerged).toBe(0);
+    });
+  });
+
+  describe('getUnvalidatedMemories', () => {
+    it('returns unvalidated auto-extracted memories', async () => {
+      const now = new Date().toISOString();
+      mockedVS.search.mockResolvedValue([
+        mockSearchResult({
+          id: 'unval-1',
+          score: 0.8,
+          payload: {
+            type: 'insight',
+            content: 'auto fact',
+            tags: ['auto'],
+            createdAt: now,
+            updatedAt: now,
+            validated: false,
+            source: 'auto_conversation',
+          },
+        }),
+      ]);
+
+      const memories = await memoryService.getUnvalidatedMemories('test');
+
+      expect(memories).toHaveLength(1);
+      expect(memories[0].validated).toBe(false);
+      expect(mockedVS.search).toHaveBeenCalledWith(
+        'test_agent_memory',
+        fakeVector,
+        40, // limit * 2
+        expect.objectContaining({
+          must: expect.arrayContaining([
+            { key: 'validated', match: { value: false } },
+          ]),
+        })
+      );
+    });
+  });
+
+  describe('list with filters', () => {
+    it('applies type filter', async () => {
+      mockedVS.search.mockResolvedValue([]);
+
+      await memoryService.list({
+        projectName: 'test',
+        type: 'decision',
+        limit: 5,
+      });
+
+      expect(mockedVS.search).toHaveBeenCalledWith(
+        'test_agent_memory',
+        fakeVector,
+        5,
+        { must: [{ key: 'type', match: { value: 'decision' } }] }
+      );
+    });
+
+    it('applies tag filter', async () => {
+      mockedVS.search.mockResolvedValue([]);
+
+      await memoryService.list({
+        projectName: 'test',
+        tag: 'important',
+        limit: 5,
+      });
+
+      expect(mockedVS.search).toHaveBeenCalledWith(
+        'test_agent_memory',
+        fakeVector,
+        5,
+        { must: [{ key: 'tags', match: { any: ['important'] } }] }
+      );
+    });
+
+    it('applies both type and tag filters', async () => {
+      mockedVS.search.mockResolvedValue([]);
+
+      await memoryService.list({
+        projectName: 'test',
+        type: 'decision',
+        tag: 'important',
+        limit: 5,
+      });
+
+      expect(mockedVS.search).toHaveBeenCalledWith(
+        'test_agent_memory',
+        fakeVector,
+        5,
+        {
+          must: [
+            { key: 'type', match: { value: 'decision' } },
+            { key: 'tags', match: { any: ['important'] } },
+          ],
+        }
+      );
     });
   });
 });

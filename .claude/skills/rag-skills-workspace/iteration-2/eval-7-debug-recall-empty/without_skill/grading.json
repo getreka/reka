@@ -1,0 +1,12 @@
+{
+  "eval_id": 7,
+  "eval_name": "debug-recall-empty",
+  "configuration": "without_skill",
+  "expectations": [
+    {"text": "Calls context_briefing with debug task description", "passed": false, "evidence": "Never called context_briefing. Started with recall and list_memories, then Grep/Read-based file exploration"},
+    {"text": "Uses search_graph or find_symbol to trace the recall implementation", "passed": false, "evidence": "No search_graph or find_symbol calls. Used Grep to find files containing 'recall', then Read to examine them directly"},
+    {"text": "Identifies the specific files in the recall chain (e.g., memory.ts, vector-store.ts, routes)", "passed": true, "evidence": "All key files identified: tools/memory.ts, memory.ts, memory-governance.ts, vector-store.ts, routes/memory.ts, context-enrichment.ts"},
+    {"text": "Proposes at least one plausible root cause with evidence from code", "passed": true, "evidence": "6 root causes with code evidence: quarantine routing, adaptive threshold skip, supersededBy filter, silent 404, embedding mismatch, context-enrichment field bug"},
+    {"text": "Suggests a specific code fix (not just 'add logging')", "passed": true, "evidence": "6 specific fixes: search both collections, change log level, add guard for supersede, fix field name, fix validated index type"}
+  ]
+}

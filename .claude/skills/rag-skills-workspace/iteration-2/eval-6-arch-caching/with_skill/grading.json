@@ -1,0 +1,45 @@
+{
+  "eval_id": 6,
+  "eval_name": "arch-caching",
+  "run": "with_skill",
+  "assertions": [
+    {
+      "type": "tool",
+      "text": "Calls get_adrs to find existing caching decisions",
+      "passed": true,
+      "evidence": "mcp__rag__get_adrs was invoked as the 4th tool call in the transcript. The output analysis.md section 'Relevant ADRs' correctly reports 0 caching-specific ADRs and names the two related ADRs found (BGE-M3 model, Qdrant typed collections)."
+    },
+    {
+      "type": "tool",
+      "text": "Calls get_patterns or get_tech_debt for additional context",
+      "passed": true,
+      "evidence": "Both mcp__rag__get_patterns AND mcp__rag__get_tech_debt were called (5th and 6th tool calls). The output references the scalability audit findings (Redis single connection) and Sprint 1 completed items from recalled memories."
+    },
+    {
+      "type": "outcome",
+      "text": "Presents at least 2 options with explicit pros and cons for each",
+      "passed": true,
+      "evidence": "analysis.md presents 3 options (A: In-Memory LRU, B: Optimize Redis L2, C: Hybrid), each with dedicated Pros and Cons sections. Options A and B each have 5+ distinct pros and cons; Option C also has structured pros/cons."
+    },
+    {
+      "type": "outcome",
+      "text": "Options reference the actual project stack (Qdrant, BGE-M3, existing Redis on :6380)",
+      "passed": true,
+      "evidence": "analysis.md explicitly references: BGE-M3 (~4KB per embedding serialized), Redis 7 Alpine port 6380 (no maxmemory policy), rag-api/src/services/cache.ts L1/L2/L3 structure, CacheService, EmbeddingService. Qdrant ADR also mentioned in context."
+    },
+    {
+      "type": "outcome",
+      "text": "Does not auto-record ADR -- waits for user to choose an option",
+      "passed": true,
+      "evidence": "mcp__rag__record_adr was NOT called (0 actual invocations). The analysis.md ends with an explicit 'Decision Gate: Waiting for user decision before recording ADR.' The skill template instructs to wait, and the run complied."
+    }
+  ],
+  "summary": {
+    "total": 5,
+    "passed": 5,
+    "failed": 0,
+    "pass_rate": 1.0
+  },
+  "overall_passed": true,
+  "notes": "Strong run. The skill drove thorough RAG context gathering (get_adrs, get_patterns, get_tech_debt, recall, hybrid_search, suggest_architecture). Output quality is high: 3 well-structured options with explicit pros/cons, concrete implementation sketches, accurate project-stack references, and a correct decision gate. The record_adr was correctly withheld pending user confirmation."
+}

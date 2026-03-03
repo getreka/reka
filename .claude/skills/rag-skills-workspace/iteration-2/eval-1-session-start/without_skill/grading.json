@@ -1,0 +1,37 @@
+{
+  "eval_id": 1,
+  "eval_name": "session-start",
+  "configuration": "without_skill",
+  "expectations": [
+    {
+      "text": "Calls start_session with a descriptive sessionId",
+      "passed": false,
+      "evidence": "Called mcp__rag__start_session with only initialContext parameter — no sessionId was provided at all. The session received an auto-generated UUID '5bb7299c-d483-437a-86e9-b3c0df31310c' rather than a human-readable descriptive ID"
+    },
+    {
+      "text": "Calls context_briefing with task mentioning vector-store.ts",
+      "passed": false,
+      "evidence": "context_briefing was never called in the without_skill run. Instead, the agent used separate individual calls: recall, hybrid_search, get_patterns, get_adrs, search_graph — all as individual sequential/parallel tool calls rather than the unified context_briefing tool"
+    },
+    {
+      "text": "Runs at least 2 tool calls in parallel (any combination)",
+      "passed": true,
+      "evidence": "Multiple parallel batches found: (1) start_session + recall in same message msg_016sSpXk...; (2) hybrid_search + get_patterns + get_adrs in same message msg_018q4az...; (3) Read + get_developer_profile in same message msg_01Ky8q7q...; (4) search_graph + Read in same message msg_012dDKe..."
+    },
+    {
+      "text": "Briefing mentions specific file paths relevant to vector-store.ts (e.g., vector-store.ts, qdrant, search)",
+      "passed": true,
+      "evidence": "briefing.md includes: '/home/ake/shared-ai-infra/rag-api/src/services/vector-store.ts' with detailed method inventory (search(), searchHybridNative(), searchHybridClientSideRRF(), searchGroups(), findClusters(), findDuplicates()), plus connected files like context-pack.ts, embedding.ts, graph-store.ts, query-learning.ts"
+    },
+    {
+      "text": "Output contains at least 3 distinct sections (e.g., context, patterns, dependencies, profile)",
+      "passed": true,
+      "evidence": "briefing.md contains 7 distinct sections: 'Session Info', 'Target File', 'Current Search Methods', 'Recalled Context: Known Optimization Opportunities', 'Architecture Context', 'Current Performance Baseline', 'Suggested Focus Areas', 'Developer Profile'"
+    },
+    {
+      "text": "Briefing references project-specific concepts (Qdrant, embeddings, collections) not generic boilerplate",
+      "passed": true,
+      "evidence": "briefing.md references: Qdrant Query API with RRF fusion, BGE-M3 batch endpoint at /embed/batch, {project}_graph collection, binary quantization with 3x oversampling + rescoring, HNSW tuning (m=16, ef_construct=200), Recall@10 91.9%, MRR 0.846, P50 46ms — all project-specific data"
+    }
+  ]
+}

@@ -37,6 +37,12 @@ vi.mock('../config', () => ({
     OPENAI_MODEL: 'gpt-4-turbo-preview',
     ANTHROPIC_MODEL: 'claude-3-sonnet-20240229',
     VECTOR_SIZE: 1024,
+    MEMORY_QUARANTINE_TTL_DAYS: 7,
+    MEMORY_DECAY_RATE: 0.10,
+    MEMORY_DECAY_MAX: 0.50,
+    MEMORY_COMPACTION_THRESHOLD: 0.85,
+    MEMORY_COMPACTION_CYCLE_DAYS: 90,
     LOG_LEVEL: 'error',
+    AGENT_TIMEOUT: 180000,
   },
 }));

@@ -1,0 +1,46 @@
+## Changes to: rag-api/src/config.ts
+
+### 1. Add to Config interface (after line 51, the API_KEY field):
+
+```typescript
+  // Rate Limiting
+  RATE_LIMIT_MAX?: number;
+  RATE_LIMIT_WINDOW_MS?: number;
+```
+
+### 2. Add to config object (after line 98, the API_KEY assignment):
+
+```typescript
+  // Rate Limiting
+  RATE_LIMIT_MAX: process.env.RATE_LIMIT_MAX ? parseInt(process.env.RATE_LIMIT_MAX, 10) : 100,
+  RATE_LIMIT_WINDOW_MS: process.env.RATE_LIMIT_WINDOW_MS ? parseInt(process.env.RATE_LIMIT_WINDOW_MS, 10) : 60000,
+```
+
+### Full diff:
+
+```diff
+--- a/rag-api/src/config.ts
++++ b/rag-api/src/config.ts
+@@ -49,6 +49,10 @@ export interface Config {
+   // Authentication
+   API_KEY?: string;
+
++  // Rate Limiting
++  RATE_LIMIT_MAX?: number;
++  RATE_LIMIT_WINDOW_MS?: number;
++
+   // Logging
+   LOG_LEVEL: string;
+ }
+@@ -96,6 +100,10 @@ const config: Config = {
+   // Authentication
+   API_KEY: process.env.API_KEY,
+
++  // Rate Limiting
++  RATE_LIMIT_MAX: process.env.RATE_LIMIT_MAX ? parseInt(process.env.RATE_LIMIT_MAX, 10) : 100,
++  RATE_LIMIT_WINDOW_MS: process.env.RATE_LIMIT_WINDOW_MS ? parseInt(process.env.RATE_LIMIT_WINDOW_MS, 10) : 60000,
++
+   // Logging
+   LOG_LEVEL: process.env.LOG_LEVEL || 'info',
+ };
+```

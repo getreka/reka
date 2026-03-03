@@ -20,15 +20,15 @@ export interface AgentProfile {
 
 const REACT_FORMAT_INSTRUCTIONS = `You are an AI agent using the ReAct (Reasoning + Acting) framework.
 
-For each step, you MUST output in EXACTLY this format:
+For each step, output in EXACTLY this format:
 
-THOUGHT: <your reasoning about what to do next>
+THOUGHT: <brief plan for next action>
 ACTION: <tool_name>
 ACTION_INPUT: <JSON input for the tool>
 
-After receiving an observation, continue reasoning.
+After receiving an observation, continue with the next step.
 
-When you have enough information to answer, output:
+When you have enough information, output:
 
 THOUGHT: <final reasoning>
 FINAL_ANSWER: <your complete answer>
@@ -46,13 +46,7 @@ export const agentProfiles: Record<string, AgentProfile> = {
     description: 'Investigates the codebase, finds patterns, and synthesizes analysis. Best for understanding how things work.',
     systemPrompt: `${REACT_FORMAT_INSTRUCTIONS}
 
-You are a Research Agent. Your job is to thoroughly investigate the codebase to answer questions.
-
-Strategy:
-1. Start by searching for the most relevant code
-2. Check for related patterns and architectural decisions
-3. Look for similar implementations
-4. Synthesize findings into a clear analysis
+You are a Research Agent. Thoroughly investigate the codebase to answer questions.
 
 Your answer should include:
 - Key findings with file references
@@ -70,13 +64,7 @@ Your answer should include:
     description: 'Reviews code against project patterns, ADRs, and best practices. Identifies issues and improvements.',
     systemPrompt: `${REACT_FORMAT_INSTRUCTIONS}
 
-You are a Code Review Agent. Your job is to review code against project standards.
-
-Strategy:
-1. First, recall project patterns and ADRs relevant to this code
-2. Search for similar implementations in the codebase
-3. Compare against established conventions
-4. Identify issues, violations, and improvements
+You are a Code Review Agent. Review code against project standards and conventions.
 
 Your answer should include:
 - Pattern compliance assessment
@@ -95,13 +83,7 @@ Your answer should include:
     description: 'Analyzes code and generates documentation. Understands context through codebase exploration.',
     systemPrompt: `${REACT_FORMAT_INSTRUCTIONS}
 
-You are a Documentation Agent. Your job is to analyze code and produce documentation.
-
-Strategy:
-1. Search the codebase to understand the code's context
-2. Check for existing patterns and conventions
-3. Examine similar code for documentation style
-4. Generate clear, useful documentation
+You are a Documentation Agent. Analyze code and produce clear documentation.
 
 Your answer should include:
 - Overview of what the code does
@@ -120,14 +102,7 @@ Your answer should include:
     description: 'Finds code smells and suggests refactoring based on project patterns and best practices.',
     systemPrompt: `${REACT_FORMAT_INSTRUCTIONS}
 
-You are a Refactoring Agent. Your job is to identify code smells and suggest improvements.
-
-Strategy:
-1. Search for similar code to understand patterns
-2. Check architectural decisions (ADRs) for context
-3. Recall any known patterns or conventions
-4. Identify code smells: duplication, complexity, violations
-5. Suggest concrete refactoring steps
+You are a Refactoring Agent. Identify code smells and suggest improvements.
 
 Your answer should include:
 - Code smells identified (with locations)
@@ -146,13 +121,7 @@ Your answer should include:
     description: 'Generates test strategies based on codebase patterns. Identifies what and how to test.',
     systemPrompt: `${REACT_FORMAT_INSTRUCTIONS}
 
-You are a Testing Agent. Your job is to create test strategies based on project patterns.
-
-Strategy:
-1. Search for existing test patterns in the codebase
-2. Recall testing conventions and patterns
-3. Search for similar code to understand what needs testing
-4. Design a comprehensive test strategy
+You are a Testing Agent. Create test strategies based on project patterns.
 
 Your answer should include:
 - Test types needed (unit, integration, e2e)

@@ -1,0 +1,75 @@
+{
+  "task": "Research: Як працює система memory governance? Де знаходиться логіка quarantine та promotion?",
+  "skill": "rag-research",
+  "tool_calls": {
+    "rag_tools": {
+      "hybrid_search": 1,
+      "find_feature": 1,
+      "search_graph": 1,
+      "get_patterns": 1,
+      "find_symbol": 2,
+      "get_adrs": 1,
+      "subtotal": 7
+    },
+    "file_tools": {
+      "read": 9,
+      "grep": 2,
+      "glob": 1,
+      "write": 3,
+      "subtotal": 15
+    },
+    "total": 22
+  },
+  "files_read": [
+    "/home/ake/shared-ai-infra/.claude/skills/rag-research/SKILL.md",
+    "/home/ake/shared-ai-infra/rag-api/src/services/memory-governance.ts",
+    "/home/ake/shared-ai-infra/rag-api/src/routes/memory.ts",
+    "/home/ake/shared-ai-infra/mcp-server/src/tools/memory.ts",
+    "/home/ake/shared-ai-infra/rag-api/src/services/quality-gates.ts",
+    "/home/ake/shared-ai-infra/rag-api/src/services/feedback.ts",
+    "/home/ake/shared-ai-infra/mcp-server/src/tool-middleware.ts",
+    "/home/ake/shared-ai-infra/mcp-server/src/context-enrichment.ts",
+    "/home/ake/shared-ai-infra/rag-api/src/services/memory.ts"
+  ],
+  "files_grepped": [
+    "/home/ake/shared-ai-infra/rag-api/src/utils/validation.ts",
+    "/home/ake/shared-ai-infra/rag-api/src/utils/metrics.ts"
+  ],
+  "key_findings": {
+    "primary_file": "/home/ake/shared-ai-infra/rag-api/src/services/memory-governance.ts",
+    "related_files": [
+      "/home/ake/shared-ai-infra/rag-api/src/routes/memory.ts",
+      "/home/ake/shared-ai-infra/rag-api/src/services/quality-gates.ts",
+      "/home/ake/shared-ai-infra/rag-api/src/services/feedback.ts",
+      "/home/ake/shared-ai-infra/rag-api/src/services/memory.ts",
+      "/home/ake/shared-ai-infra/mcp-server/src/tools/memory.ts",
+      "/home/ake/shared-ai-infra/mcp-server/src/context-enrichment.ts"
+    ],
+    "collections": {
+      "quarantine": "{project}_memory_pending",
+      "durable": "{project}_agent_memory"
+    },
+    "governance_methods": [
+      "ingest",
+      "promote",
+      "reject",
+      "recallDurable",
+      "recallQuarantine",
+      "listQuarantine",
+      "autoPromoteByFeedback",
+      "autoPruneByFeedback",
+      "runFeedbackMaintenance"
+    ],
+    "promote_reasons": ["human_validated", "pr_merged", "tests_passed"],
+    "quality_gates": ["typecheck", "test", "blast_radius"],
+    "adaptive_threshold_range": [0.4, 0.8],
+    "auto_promote_threshold": "3+ accurate feedback",
+    "auto_prune_threshold": "2+ incorrect feedback"
+  },
+  "errors": [
+    {
+      "tool": "find_feature",
+      "error": "timeout of 120000ms exceeded"
+    }
+  ]
+}

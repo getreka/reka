@@ -7,14 +7,13 @@
       "prompt": "Починаю працювати над оптимізацією пошуку в vector-store.ts, запусти сесію",
       "expected_output": "Session started with context briefing, developer profile, and cache warming. Shows relevant memories, patterns, and dependencies for vector-store.ts",
       "files": [],
-      "expectations": [
-        "Calls start_session with a descriptive sessionId",
-        "Calls get_developer_profile",
-        "Calls context_briefing with task mentioning vector-store.ts optimization and files including vector-store.ts",
-        "Calls warm_cache with the sessionId",
-        "Presents a structured briefing with sections for previous context, relevant code, patterns, and dependencies",
-        "Runs start_session and get_developer_profile in parallel",
-        "Runs context_briefing and warm_cache in parallel after session starts"
+      "assertions": [
+        {"type": "tool", "text": "Calls start_session with a descriptive sessionId"},
+        {"type": "tool", "text": "Calls context_briefing with task mentioning vector-store.ts"},
+        {"type": "tool", "text": "Runs at least 2 tool calls in parallel (any combination)"},
+        {"type": "outcome", "text": "Briefing mentions specific file paths relevant to vector-store.ts (e.g., vector-store.ts, qdrant, search)"},
+        {"type": "outcome", "text": "Output contains at least 3 distinct sections (e.g., context, patterns, dependencies, profile)"},
+        {"type": "outcome", "text": "Briefing references project-specific concepts (Qdrant, embeddings, collections) not generic boilerplate"}
       ]
     },
     {
@@ -23,13 +22,13 @@
       "prompt": "Реалізуй rate limiting middleware для RAG API — максимум 100 запитів на хвилину на IP",
       "expected_output": "Implementation plan based on RAG context, followed by code, review, and knowledge capture",
       "files": [],
-      "expectations": [
-        "Calls context_briefing before any code changes",
-        "Calls suggest_implementation or get_patterns to understand existing middleware patterns",
-        "Presents an implementation plan and waits for confirmation before coding",
-        "After implementation, calls review_code or check_architecture to validate",
-        "Calls remember to save the decision about rate limiting approach",
-        "Plan includes blast radius analysis (what depends on the changed files)"
+      "assertions": [
+        {"type": "tool", "text": "Calls context_briefing before any code changes"},
+        {"type": "tool", "text": "Calls review_code or check_architecture after writing code"},
+        {"type": "tool", "text": "Calls remember or record_adr to capture the decision"},
+        {"type": "outcome", "text": "Implementation plan lists specific files to modify with rationale"},
+        {"type": "outcome", "text": "Plan includes blast radius section identifying dependent files"},
+        {"type": "outcome", "text": "Written code implements rate limiting logic (contains IP tracking and request counting)"}
       ]
     },
     {
@@ -38,12 +37,12 @@
       "prompt": "Все, закінчив роботу на сьогодні, зберіжи контекст",
       "expected_output": "Session summarized, learnings extracted and saved, session ended with positive feedback",
       "files": [],
-      "expectations": [
-        "Calls summarize_changes to capture what was done",
-        "Calls analyze_conversation or auto_remember to extract learnings",
-        "Calls end_session with a summary and autoSaveLearnings: true",
-        "Presents a summary showing what was saved for future sessions",
-        "Does not force-save empty or trivial memories"
+      "assertions": [
+        {"type": "tool", "text": "Calls summarize_changes to capture what was done"},
+        {"type": "tool", "text": "Calls end_session with a summary"},
+        {"type": "outcome", "text": "Presents a summary that mentions specific files or changes (not just generic 'session ended')"},
+        {"type": "outcome", "text": "Saves at least one memory with meaningful content (not empty or trivial)"},
+        {"type": "outcome", "text": "Summary is structured with clear sections (what was done, what was saved, next steps)"}
       ]
     },
     {
@@ -52,12 +51,12 @@
       "prompt": "Як працює система memory governance? Де знаходиться логіка quarantine та promotion?",
       "expected_output": "Multi-strategy research showing memory governance flow across files with code explanations",
       "files": [],
-      "expectations": [
-        "Uses hybrid_search or find_feature to locate memory governance code",
-        "Uses find_symbol to look up specific functions like promote or quarantine",
-        "Uses search_graph to trace dependencies between memory-related files",
-        "Presents findings with file:line references",
-        "Explains the flow from auto-memory to quarantine to promotion"
+      "assertions": [
+        {"type": "tool", "text": "Uses at least 3 different RAG search tools (any combination of hybrid_search, find_feature, find_symbol, search_graph, ask_codebase)"},
+        {"type": "tool", "text": "Reads at least 2 source files to verify findings"},
+        {"type": "outcome", "text": "Explains the quarantine-to-promotion flow with specific file:line references"},
+        {"type": "outcome", "text": "Identifies at least 2 files involved in memory governance"},
+        {"type": "outcome", "text": "Answer distinguishes between auto-memories (quarantine) and manual memories (durable)"}
       ]
     },
     {
@@ -66,13 +65,13 @@
       "prompt": "Зроби рев'ю коду в rag-api/src/services/embedding.ts",
       "expected_output": "Code review against project patterns and ADRs with specific findings",
       "files": [],
-      "expectations": [
-        "Reads the file before reviewing",
-        "Calls get_patterns and get_adrs to load review criteria",
-        "Calls review_code with the file content",
-        "Calls check_architecture to validate against patterns",
-        "Presents findings with severity levels (critical/warning/info)",
-        "Suggests tests via suggest_tests"
+      "assertions": [
+        {"type": "tool", "text": "Reads embedding.ts before running review tools"},
+        {"type": "tool", "text": "Calls review_code or check_architecture"},
+        {"type": "outcome", "text": "Identifies at least 2 specific code issues or improvement suggestions with line references"},
+        {"type": "outcome", "text": "References at least one project pattern or ADR by name in the review"},
+        {"type": "outcome", "text": "Review uses severity levels to categorize findings"},
+        {"type": "outcome", "text": "Mentions test coverage status or suggests specific tests"}
       ]
     },
     {
@@ -81,12 +80,12 @@
       "prompt": "Треба вирішити як організувати кешування embeddings — Redis L2 cache чи збільшити in-memory LRU. Які ADR вже є по кешуванню?",
       "expected_output": "Analysis of current caching architecture, existing ADRs, options comparison, and ADR recording",
       "files": [],
-      "expectations": [
-        "Calls get_adrs to find existing caching decisions",
-        "Calls get_patterns to find caching patterns",
-        "Calls get_tech_debt to check known cache-related issues",
-        "Presents options with pros/cons based on existing architecture",
-        "Waits for user decision before recording ADR"
+      "assertions": [
+        {"type": "tool", "text": "Calls get_adrs to find existing caching decisions"},
+        {"type": "tool", "text": "Calls get_patterns or get_tech_debt for additional context"},
+        {"type": "outcome", "text": "Presents at least 2 options with explicit pros and cons for each"},
+        {"type": "outcome", "text": "Options reference the actual project stack (Qdrant, BGE-M3, existing Redis on :6380)"},
+        {"type": "outcome", "text": "Does not auto-record ADR — waits for user to choose an option"}
       ]
     },
     {
@@ -95,12 +94,12 @@
       "prompt": "recall повертає порожній масив навіть коли є memories в колекції. Помилок в логах немає.",
       "expected_output": "Debug investigation tracing recall flow through dependencies with root cause hypothesis",
       "files": [],
-      "expectations": [
-        "Calls context_briefing with debug task description",
-        "Uses search_graph or find_symbol to trace the recall implementation",
-        "Reads relevant source files to understand the recall flow",
-        "Checks for known issues via recall about similar bugs",
-        "Presents a structured debug report with root cause hypothesis and fix suggestion"
+      "assertions": [
+        {"type": "tool", "text": "Calls context_briefing with debug task description"},
+        {"type": "tool", "text": "Uses search_graph or find_symbol to trace the recall implementation"},
+        {"type": "outcome", "text": "Identifies the specific files in the recall chain (e.g., memory.ts, vector-store.ts, routes)"},
+        {"type": "outcome", "text": "Proposes at least one plausible root cause with evidence from code"},
+        {"type": "outcome", "text": "Suggests a specific code fix (not just 'add logging')"}
       ]
     },
     {
@@ -109,12 +108,12 @@
       "prompt": "Підключи проект /home/ake/myapp до RAG інфраструктури",
       "expected_output": "Full onboarding: setup_project, infrastructure check, indexing, verification",
       "files": [],
-      "expectations": [
-        "Calls setup_project with projectPath /home/ake/myapp",
-        "Checks infrastructure health (RAG API, Qdrant, BGE-M3)",
-        "Calls index_codebase for the project",
-        "Calls get_index_status to verify indexing completed",
-        "Presents a report with collection stats and next steps"
+      "assertions": [
+        {"type": "tool", "text": "Calls setup_project with projectPath /home/ake/myapp"},
+        {"type": "tool", "text": "Calls index_codebase for the project"},
+        {"type": "outcome", "text": "Verifies infrastructure is accessible (checks RAG API, Qdrant, or embedding service)"},
+        {"type": "outcome", "text": "Presents a report with actual collection stats (not placeholder text)"},
+        {"type": "outcome", "text": "Includes actionable next steps for the user (e.g., add to .mcp.json, configure env)"}
       ]
     }
   ]

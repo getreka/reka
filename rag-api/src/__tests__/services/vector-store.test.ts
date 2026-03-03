@@ -291,4 +291,218 @@ describe('VectorStoreService', () => {
       expect(results.length).toBeGreaterThan(0);
     });
   });
+
+  describe('searchGroups', () => {
+    it('returns grouped results from searchPointGroups', async () => {
+      mockQdrantClient.searchPointGroups.mockResolvedValue({
+        groups: [
+          {
+            id: 'src/a.ts',
+            hits: [{ id: 'p1', score: 0.9, payload: { file: 'src/a.ts' } }],
+          },
+        ],
+      });
+
+      const results = await vectorStore.searchGroups('col', [0.1], 'file', 10);
+
+      expect(results).toHaveLength(1);
+      expect(results[0].group).toBe('src/a.ts');
+      expect(results[0].results[0].id).toBe('p1');
+    });
+
+    it('returns empty on 404', async () => {
+      const err = new Error('Not found') as any;
+      err.status = 404;
+      mockQdrantClient.searchPointGroups.mockRejectedValue(err);
+
+      const results = await vectorStore.searchGroups('col', [0.1], 'file');
+      expect(results).toEqual([]);
+    });
+
+    it('falls back to client-side grouping on non-404 error', async () => {
+      mockQdrantClient.searchPointGroups.mockRejectedValue(new Error('unsupported'));
+      mockQdrantClient.search.mockResolvedValue([
+        { id: 'p1', score: 0.9, payload: { file: 'a.ts' } },
+        { id: 'p2', score: 0.8, payload: { file: 'a.ts' } },
+        { id: 'p3', score: 0.7, payload: { file: 'b.ts' } },
+      ]);
+
+      const results = await vectorStore.searchGroups('col', [0.1], 'file', 10, 1);
+
+      expect(results.length).toBeGreaterThanOrEqual(2);
+      // Each group should have at most groupSize=1 result
+      for (const group of results) {
+        expect(group.results.length).toBeLessThanOrEqual(1);
+      }
+    });
+  });
+
+  describe('aggregateByField', () => {
+    it('counts field values from scroll', async () => {
+      mockQdrantClient.scroll.mockResolvedValue({
+        points: [
+          { id: '1', payload: { type: 'note' } },
+          { id: '2', payload: { type: 'note' } },
+          { id: '3', payload: { type: 'decision' } },
+        ],
+        next_page_offset: undefined,
+      });
+
+      const counts = await vectorStore.aggregateByField('col', 'type');
+
+      expect(counts.note).toBe(2);
+      expect(counts.decision).toBe(1);
+    });
+
+    it('returns empty on 404', async () => {
+      const err = new Error('Not found') as any;
+      err.status = 404;
+      mockQdrantClient.scroll.mockRejectedValue(err);
+
+      const counts = await vectorStore.aggregateByField('missing', 'type');
+      expect(counts).toEqual({});
+    });
+  });
+
+  describe('scrollCollection', () => {
+    it('returns mapped points with nextOffset', async () => {
+      mockQdrantClient.scroll.mockResolvedValue({
+        points: [
+          { id: 'p1', payload: { file: 'a.ts' } },
+        ],
+        next_page_offset: 'next-1',
+      });
+
+      const result = await vectorStore.scrollCollection('col', 100);
+
+      expect(result.points).toHaveLength(1);
+      expect(result.points[0].id).toBe('p1');
+      expect(result.nextOffset).toBe('next-1');
+    });
+
+    it('returns empty on 404', async () => {
+      const err = new Error('Not found') as any;
+      err.status = 404;
+      mockQdrantClient.scroll.mockRejectedValue(err);
+
+      const result = await vectorStore.scrollCollection('missing');
+      expect(result.points).toEqual([]);
+    });
+  });
+
+  describe('recommend', () => {
+    it('returns recommendations from positive IDs', async () => {
+      mockQdrantClient.recommend.mockResolvedValue([
+        { id: 'r1', score: 0.95, payload: { file: 'related.ts' } },
+      ]);
+
+      const results = await vectorStore.recommend('col', ['id-1']);
+
+      expect(results).toHaveLength(1);
+      expect(results[0].id).toBe('r1');
+      expect(mockQdrantClient.recommend).toHaveBeenCalledWith(
+        'col',
+        expect.objectContaining({
+          positive: ['id-1'],
+          negative: [],
+          limit: 10,
+        })
+      );
+    });
+
+    it('returns empty on 404', async () => {
+      const err = new Error('Not found') as any;
+      err.status = 404;
+      mockQdrantClient.recommend.mockRejectedValue(err);
+
+      const results = await vectorStore.recommend('col', ['id-1']);
+      expect(results).toEqual([]);
+    });
+  });
+
+  describe('quantization', () => {
+    it('enableQuantization calls updateCollection with scalar config', async () => {
+      mockQdrantClient.updateCollection.mockResolvedValue(true);
+
+      await vectorStore.enableQuantization('col');
+
+      expect(mockQdrantClient.updateCollection).toHaveBeenCalledWith(
+        'col',
+        expect.objectContaining({
+          quantization_config: expect.objectContaining({
+            scalar: expect.objectContaining({ type: 'int8' }),
+          }),
+        })
+      );
+    });
+
+    it('disableQuantization calls updateCollection with null config', async () => {
+      mockQdrantClient.updateCollection.mockResolvedValue(true);
+
+      await vectorStore.disableQuantization('col');
+
+      expect(mockQdrantClient.updateCollection).toHaveBeenCalledWith(
+        'col',
+        expect.objectContaining({ quantization_config: null })
+      );
+    });
+  });
+
+  describe('snapshots', () => {
+    it('createSnapshot returns snapshot info', async () => {
+      mockQdrantClient.createSnapshot.mockResolvedValue({ name: 'snap-1' });
+
+      const result = await vectorStore.createSnapshot('col');
+
+      expect(result.name).toBe('snap-1');
+      expect(result.createdAt).toBeDefined();
+    });
+
+    it('listSnapshots returns mapped snapshots', async () => {
+      mockQdrantClient.listSnapshots.mockResolvedValue([
+        { name: 'snap-1', size: 1024, creation_time: '2025-01-01T00:00:00Z' },
+      ]);
+
+      const result = await vectorStore.listSnapshots('col');
+
+      expect(result).toHaveLength(1);
+      expect(result[0].name).toBe('snap-1');
+      expect(result[0].size).toBe(1024);
+    });
+
+    it('listSnapshots returns empty on error', async () => {
+      mockQdrantClient.listSnapshots.mockRejectedValue(new Error('fail'));
+
+      const result = await vectorStore.listSnapshots('col');
+      expect(result).toEqual([]);
+    });
+
+    it('deleteSnapshot calls client', async () => {
+      mockQdrantClient.deleteSnapshot.mockResolvedValue(true);
+
+      await vectorStore.deleteSnapshot('col', 'snap-1');
+
+      expect(mockQdrantClient.deleteSnapshot).toHaveBeenCalledWith('col', 'snap-1');
+    });
+  });
+
+  describe('getCollectionInfo', () => {
+    it('returns collection info with indexed fields', async () => {
+      mockQdrantClient.getCollection.mockResolvedValue({
+        points_count: 100,
+        segments_count: 2,
+        config: { params: { vectors: { size: 1024 } } },
+        payload_schema: {
+          type: { data_type: 'keyword' },
+          file: { data_type: 'keyword' },
+        },
+      });
+
+      const info = await vectorStore.getCollectionInfo('col');
+
+      expect(info.vectorsCount).toBe(100);
+      expect(info.indexedFields).toContain('type');
+      expect(info.indexedFields).toContain('file');
+    });
+  });
 });

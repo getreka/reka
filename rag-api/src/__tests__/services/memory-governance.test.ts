@@ -1,11 +1,14 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { mockEmbedding } from '../helpers/fixtures';
 
-// Hoist the mock Qdrant client so it's available in vi.mock factories
+// Hoist mocks so they're available in vi.mock factories
 const mockQdrantClient = vi.hoisted(() => ({
   scroll: vi.fn(),
   setPayload: vi.fn(),
 }));
+
+const mockTimerEnd = vi.hoisted(() => vi.fn());
+const mockStartTimer = vi.hoisted(() => vi.fn(() => mockTimerEnd));
 
 // Mock dependencies
 vi.mock('../../services/vector-store', () => ({
@@ -35,6 +38,8 @@ vi.mock('../../services/memory', () => ({
   memoryService: {
     remember: vi.fn(),
     recall: vi.fn(),
+    mergeMemories: vi.fn(),
+    forgetOlderThan: vi.fn(),
   },
 }));
 
@@ -52,6 +57,7 @@ vi.mock('../../services/feedback', () => ({
 
 vi.mock('../../utils/metrics', () => ({
   memoryGovernanceTotal: { inc: vi.fn() },
+  maintenanceDuration: { startTimer: mockStartTimer },
   qualityGateResults: { inc: vi.fn() },
   qualityGateDuration: { observe: vi.fn() },
 }));
@@ -72,8 +78,11 @@ describe('MemoryGovernanceService', () => {
 
   beforeEach(() => {
     vi.resetAllMocks();
-    // Clear the governance service's internal threshold cache to prevent cross-test leaks
+    // Re-set hoisted mocks that resetAllMocks clears
+    mockStartTimer.mockImplementation(() => mockTimerEnd);
+    // Clear the governance service's internal caches to prevent cross-test leaks
     (memoryGovernance as any).thresholdCache.clear();
+    (memoryGovernance as any).compactionLocks.clear();
     mockedEmbed.embed.mockResolvedValue(fakeVector);
     mockedEmbed.embedBatch.mockResolvedValue([fakeVector, fakeVector]);
     // Default: no existing memories for relationship detection
@@ -289,6 +298,193 @@ describe('MemoryGovernanceService', () => {
       expect(threshold).toBeGreaterThanOrEqual(0.4);
       expect(threshold).toBeLessThanOrEqual(0.8);
       expect(threshold).toBeCloseTo(0.48, 1);
+    });
+  });
+
+  describe('cleanupExpiredQuarantine', () => {
+    it('deletes quarantine memories older than TTL', async () => {
+      const expired = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(); // 14 days (> 7 TTL)
+      const fresh = new Date().toISOString();
+
+      mockQdrantClient.scroll.mockResolvedValue({
+        points: [
+          { id: 'exp-1', payload: { createdAt: expired } },
+          { id: 'exp-2', payload: { createdAt: expired } },
+          { id: 'fresh-1', payload: { createdAt: fresh } },
+        ],
+        next_page_offset: undefined,
+      });
+      mockedVS.delete.mockResolvedValue(undefined);
+
+      const result = await memoryGovernance.cleanupExpiredQuarantine('test');
+
+      expect(result.rejected).toEqual(['exp-1', 'exp-2']);
+      expect(result.errors).toHaveLength(0);
+      expect(mockedVS.delete).toHaveBeenCalledWith('test_memory_pending', ['exp-1', 'exp-2']);
+    });
+
+    it('returns empty when quarantine collection does not exist', async () => {
+      const err = new Error('Not found') as any;
+      err.status = 404;
+      mockQdrantClient.scroll.mockRejectedValue(err);
+
+      const result = await memoryGovernance.cleanupExpiredQuarantine('test');
+
+      expect(result.rejected).toHaveLength(0);
+      expect(result.errors).toHaveLength(0);
+    });
+
+    it('returns empty when no expired memories', async () => {
+      const fresh = new Date().toISOString();
+      mockQdrantClient.scroll.mockResolvedValue({
+        points: [
+          { id: 'f-1', payload: { createdAt: fresh } },
+        ],
+        next_page_offset: undefined,
+      });
+
+      const result = await memoryGovernance.cleanupExpiredQuarantine('test');
+
+      expect(result.rejected).toHaveLength(0);
+      expect(mockedVS.delete).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('runCompaction', () => {
+    it('returns clusters in dry-run mode without writing', async () => {
+      mockedMemory.mergeMemories.mockResolvedValue({
+        merged: [
+          {
+            original: [
+              { id: 'a', type: 'note', content: 'foo', tags: [], createdAt: '', updatedAt: '' },
+              { id: 'b', type: 'note', content: 'bar', tags: [], createdAt: '', updatedAt: '' },
+            ],
+            merged: { id: 'merged-1', type: 'note', content: 'foo + bar', tags: [], createdAt: '', updatedAt: '', metadata: {} },
+          },
+        ],
+        totalFound: 10,
+        totalMerged: 1,
+      });
+
+      const result = await memoryGovernance.runCompaction('test', { dryRun: true });
+
+      expect(result.dryRun).toBe(true);
+      expect(result.clusters).toHaveLength(1);
+      expect(result.clusters[0].originalIds).toEqual(['a', 'b']);
+      expect(result.clusters[0].mergedContent).toBe('foo + bar');
+      expect(result.clusters[0].mergedId).toBeUndefined();
+      // Should NOT write anything
+      expect(mockedMemory.remember).not.toHaveBeenCalled();
+      expect(mockQdrantClient.setPayload).not.toHaveBeenCalled();
+    });
+
+    it('creates merged memory and marks originals as superseded when not dry-run', async () => {
+      mockedMemory.mergeMemories.mockResolvedValue({
+        merged: [
+          {
+            original: [
+              { id: 'a', type: 'note', content: 'foo', tags: [], createdAt: '', updatedAt: '' },
+              { id: 'b', type: 'note', content: 'bar', tags: [], createdAt: '', updatedAt: '' },
+            ],
+            merged: { id: 'tmp', type: 'note', content: 'foo + bar', tags: ['test'], createdAt: '', updatedAt: '', metadata: {} },
+          },
+        ],
+        totalFound: 10,
+        totalMerged: 1,
+      });
+      mockedMemory.remember.mockResolvedValue({
+        id: 'new-merged',
+        type: 'note',
+        content: 'foo + bar',
+        tags: ['test'],
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+      });
+      mockQdrantClient.setPayload.mockResolvedValue(undefined);
+
+      const result = await memoryGovernance.runCompaction('test', { dryRun: false });
+
+      expect(result.dryRun).toBe(false);
+      expect(result.clusters).toHaveLength(1);
+      expect(result.clusters[0].mergedId).toBe('new-merged');
+      expect(mockedMemory.remember).toHaveBeenCalledWith(
+        expect.objectContaining({
+          projectName: 'test',
+          content: 'foo + bar',
+        })
+      );
+      // Both originals marked superseded
+      expect(mockQdrantClient.setPayload).toHaveBeenCalledTimes(2);
+      expect(mockQdrantClient.setPayload).toHaveBeenCalledWith(
+        'test_agent_memory',
+        expect.objectContaining({
+          points: ['a'],
+          payload: expect.objectContaining({ supersededBy: 'new-merged' }),
+        })
+      );
+    });
+
+    it('throws when compaction already running for same project', async () => {
+      // Simulate a long-running compaction by making mergeMemories hang
+      let resolveHang: () => void;
+      const hangPromise = new Promise<void>(resolve => { resolveHang = resolve; });
+      mockedMemory.mergeMemories.mockImplementation(() => hangPromise.then(() => ({
+        merged: [],
+        totalFound: 0,
+        totalMerged: 0,
+      })));
+
+      // Start first compaction (will hang)
+      const first = memoryGovernance.runCompaction('test');
+
+      // Second attempt should throw immediately
+      await expect(memoryGovernance.runCompaction('test')).rejects.toThrow(
+        'Compaction already running for project: test'
+      );
+
+      // Cleanup: resolve the hanging promise
+      resolveHang!();
+      await first;
+    });
+  });
+
+  describe('runMaintenance', () => {
+    it('defaults to quarantine_cleanup + feedback_maintenance', async () => {
+      const fresh = new Date().toISOString();
+      // quarantine_cleanup scroll
+      mockQdrantClient.scroll.mockResolvedValue({
+        points: [{ id: 'f-1', payload: { createdAt: fresh } }],
+        next_page_offset: undefined,
+      });
+      // feedback: no feedback data
+      const { feedbackService } = await import('../../services/feedback');
+      vi.mocked(feedbackService.getMemoryFeedbackCounts).mockResolvedValue(new Map());
+
+      const result = await memoryGovernance.runMaintenance('test');
+
+      expect(result.quarantine_cleanup).toBeDefined();
+      expect(result.feedback_maintenance).toBeDefined();
+      expect(result.compaction).toBeUndefined();
+    });
+
+    it('runs compaction when requested', async () => {
+      mockedMemory.mergeMemories.mockResolvedValue({
+        merged: [],
+        totalFound: 0,
+        totalMerged: 0,
+      });
+
+      const result = await memoryGovernance.runMaintenance('test', {
+        quarantine_cleanup: false,
+        feedback_maintenance: false,
+        compaction: true,
+        compaction_dry_run: true,
+      });
+
+      expect(result.quarantine_cleanup).toBeUndefined();
+      expect(result.feedback_maintenance).toBeUndefined();
+      expect(result.compaction).toBeDefined();
+      expect(result.compaction!.dryRun).toBe(true);
     });
   });
 });

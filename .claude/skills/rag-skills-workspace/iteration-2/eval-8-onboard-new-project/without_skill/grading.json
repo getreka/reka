@@ -1,0 +1,41 @@
+{
+  "assertions": [
+    {
+      "type": "tool",
+      "text": "Calls setup_project with projectPath /home/ake/myapp",
+      "passed": true,
+      "evidence": "setup_project was called with input {\"projectPath\":\"/home/ake/myapp\",\"projectName\":\"myapp\"} as confirmed in transcript. Tool failed with ENOENT (directory does not exist) but was correctly invoked with the right projectPath."
+    },
+    {
+      "type": "tool",
+      "text": "Calls index_codebase for the project",
+      "passed": true,
+      "evidence": "index_codebase was called for the project as confirmed in transcript tool list. The run also created /home/ake/myapp directory via Bash (mkdir -p /home/ake/myapp) before indexing, but the indexing still found 0 files. Tool invocation confirmed."
+    },
+    {
+      "type": "outcome",
+      "text": "Verifies infrastructure is accessible (checks RAG API, Qdrant, or embedding service)",
+      "passed": true,
+      "evidence": "Infrastructure was verified via: (1) curl -s http://localhost:3100/health bash call explicitly checking RAG API, (2) get_platform_stats MCP tool call returning stats for 6 projects and 50 collections, (3) get_index_status call. Report shows detailed infrastructure health table with RAG API RUNNING, Qdrant RUNNING (50 collections), Redis RUNNING (165 keys, 3.84M memory), BGE-M3 RUNNING."
+    },
+    {
+      "type": "outcome",
+      "text": "Presents a report with actual collection stats (not placeholder text)",
+      "passed": true,
+      "evidence": "Report contains a detailed platform context table with real numbers from get_platform_stats: beep (11 collections, 104,043 vectors), beep-app-engine (10, 53,753), Beep-SaaS-AppEngine (10, 53,935), rag (10, 7,779), shared-ai-infra (8, 3,491), Oranta-Expo (1, 4). Infrastructure health table shows Redis 165 keys and 3.84M memory. All real data, no placeholders."
+    },
+    {
+      "type": "outcome",
+      "text": "Includes actionable next steps for the user (e.g., add to .mcp.json, configure env)",
+      "passed": true,
+      "evidence": "Report includes a detailed .mcp.json template with correct configuration (command, args path to mcp-server/dist/index.js, env vars PROJECT_NAME=myapp, PROJECT_PATH=/home/ake/myapp, RAG_API_URL). Also includes CLAUDE.md content, step-by-step instructions for index_codebase with get_index_status and get_project_stats verification commands. Record_pattern and record_adr guidance provided. Blockers section clearly explains what needs to happen."
+    }
+  ],
+  "summary": {
+    "total": 5,
+    "passed": 5,
+    "failed": 0,
+    "pass_rate": 1.0
+  },
+  "notes": "Without-skill run also passed all assertions. The agent used a more exploratory approach: checked project existence with Bash ls, used curl for health check, called get_platform_stats for broader context, searched codebase for setup patterns. The report is more detailed in the platform context section (showing all 6 existing projects with vector counts) but slightly less structured in terms of step-by-step workflow vs. the with-skill run. Both runs produced complete, actionable reports with real data despite the project directory not existing."
+}

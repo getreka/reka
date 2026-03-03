@@ -1,0 +1,45 @@
+{
+  "task": "session-end-context-save",
+  "timestamp": "2026-02-26T17:40:00Z",
+  "tool_calls": {
+    "total": 19,
+    "by_tool": {
+      "mcp__rag__recall": 2,
+      "mcp__rag__list_memories": 1,
+      "mcp__rag__summarize_context": 1,
+      "mcp__rag__get_developer_profile": 1,
+      "mcp__rag__get_tech_debt": 1,
+      "mcp__rag__get_adrs": 1,
+      "Grep": 2,
+      "Glob": 2,
+      "Read": 4,
+      "mcp__rag__remember": 3,
+      "Write": 1
+    },
+    "by_category": {
+      "rag_memory_read": 6,
+      "rag_memory_write": 3,
+      "file_search": 2,
+      "file_read": 4,
+      "code_search": 2,
+      "file_write": 2
+    }
+  },
+  "memories_saved": {
+    "total": 3,
+    "types": {
+      "context": 1,
+      "insight": 1,
+      "todo": 1
+    },
+    "ids": [
+      "77cbf6d8-4635-4558-97ea-5a838aead649",
+      "ae5ea89f-dc55-4307-ac17-758d4a7f0f8e",
+      "27c956a2-827d-4d97-bc48-c1942922d98a"
+    ]
+  },
+  "verification": {
+    "recall_successful": true,
+    "top_relevance_score": 0.634
+  }
+}

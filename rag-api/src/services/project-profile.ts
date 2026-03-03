@@ -216,6 +216,7 @@ Decisions: ${adrList || 'none documented'}`;
       systemPrompt: 'You are a project analyst. Provide a concise 2-3 sentence summary of the project. Focus on what it does and its key technical characteristics.',
       maxTokens: 200,
       temperature: 0.3,
+      think: false,
     });
 
     return result.text.trim();

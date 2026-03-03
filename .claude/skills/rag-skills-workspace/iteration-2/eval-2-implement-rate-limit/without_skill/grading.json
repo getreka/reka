@@ -1,0 +1,37 @@
+{
+  "eval_id": 2,
+  "eval_name": "implement-rate-limit",
+  "configuration": "without_skill",
+  "expectations": [
+    {
+      "text": "Calls context_briefing before any code changes",
+      "passed": false,
+      "evidence": "Grep on the without_skill transcript output returned no matches for 'context_briefing'. The without_skill summary.md makes no mention of any RAG tool calls. The task prompt explicitly said 'WITHOUT any skill guidance'. No context_briefing was called."
+    },
+    {
+      "text": "Calls review_code or check_architecture after writing code",
+      "passed": false,
+      "evidence": "Grep on the without_skill transcript returned no matches for 'review_code' or 'check_architecture'. The without_skill summary.md documents only files produced and integration steps — no Phase 4 verification section. No review or architecture check was performed."
+    },
+    {
+      "text": "Calls remember or record_adr to capture the decision",
+      "passed": false,
+      "evidence": "Grep on the without_skill transcript returned no matches for 'remember' or 'record_adr'. The without_skill summary.md contains no mention of knowledge capture. No memory or ADR tools were called."
+    },
+    {
+      "text": "Implementation plan lists specific files to modify with rationale",
+      "passed": true,
+      "evidence": "plan.md 'Files to Create/Modify' table explicitly lists: rag-api/src/middleware/rate-limiter.ts (CREATE - Rate limiting middleware), rag-api/src/config.ts (MODIFY - Add rate limit config fields), rag-api/src/server.ts (MODIFY - Register rate limit middleware), rag-api/src/utils/metrics.ts (MODIFY - Add rate limit Prometheus metrics), rag-api/src/__tests__/middleware/rate-limiter.test.ts (CREATE - Unit tests). Each entry has a description/rationale."
+    },
+    {
+      "text": "Plan includes blast radius section identifying dependent files",
+      "passed": false,
+      "evidence": "plan.md has no blast radius section. Grep for 'blast|Blast|dependent|impact' returned no matches in the without_skill plan.md. The plan covers Architecture Decision, Design, and Files to Create/Modify sections, but does not identify which files depend on the changed files or downstream impact analysis."
+    },
+    {
+      "text": "Written code implements rate limiting logic (contains IP tracking and request counting)",
+      "passed": true,
+      "evidence": "rate-limiter.ts implements a full SlidingWindowStore class with a private Map<string, number[]> store for per-IP timestamp tracking, hit() method that counts and records requests, binarySearchFirstValid() for pruning, and middleware that checks 'count > cfg.max' to return 429. IP extraction via extractClientIP() handles X-Forwarded-For, X-Real-IP, and req.ip. Full sliding window rate limiting with per-IP isolation is implemented."
+    }
+  ]
+}

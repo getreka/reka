@@ -32,6 +32,8 @@ services:
       - "11434:11434"
     volumes:
       - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_DEBUG=INFO
     deploy:
       resources:
         reservations:
@@ -46,7 +48,7 @@ services:
       retries: 3
     restart: unless-stopped
 
-  # Embedding Model Server (BGE-M3)
+  # Embedding Model Server (BGE-M3) — CPU mode to free GPU for LLM
   bge-m3:
     build:
       context: ./bge-m3
@@ -57,15 +59,9 @@ services:
     environment:
       - MODEL_NAME=BAAI/bge-m3
       - MAX_LENGTH=8192
+      - USE_GPU=false
     volumes:
       - bge_m3_cache:/root/.cache
-    deploy:
-      resources:
-        reservations:
-          devices:
-            - driver: nvidia
-              count: all
-              capabilities: [gpu]
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
       interval: 30s

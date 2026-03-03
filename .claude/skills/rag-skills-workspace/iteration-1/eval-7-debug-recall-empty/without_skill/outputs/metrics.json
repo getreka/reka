@@ -1,0 +1,48 @@
+{
+  "tool_calls": {
+    "Glob": 4,
+    "Grep": 11,
+    "Read": 18,
+    "Write": 2,
+    "Bash": 1,
+    "mcp_rag": 0,
+    "total": 36
+  },
+  "files_analyzed": 24,
+  "bugs_found": 4,
+  "bugs_by_severity": {
+    "high": 2,
+    "medium": 2,
+    "low": 0
+  },
+  "root_causes_identified": [
+    {
+      "id": "RC1",
+      "severity": "high",
+      "file": "rag-api/src/services/vector-store.ts",
+      "line": "522-525",
+      "description": "search() returns [] silently on 404 - if collection doesn't exist, recall returns empty with no errors"
+    },
+    {
+      "id": "RC2",
+      "severity": "high",
+      "file": "rag-api/src/services/vector-store.ts",
+      "line": "509-540",
+      "description": "Named vector search may not properly fall back to anonymous vectors on all Qdrant configurations"
+    },
+    {
+      "id": "RC3",
+      "severity": "medium",
+      "file": "mcp-server/src/context-enrichment.ts",
+      "line": "227",
+      "description": "Context enrichment accesses response.data.memories instead of response.data.results"
+    },
+    {
+      "id": "RC4",
+      "severity": "medium",
+      "file": "rag-api/src/services/vector-store.ts",
+      "line": "58",
+      "description": "validated field indexed as keyword but stores boolean values"
+    }
+  ]
+}

@@ -1,0 +1,44 @@
+{
+  "assertions": [
+    {
+      "type": "tool",
+      "text": "Reads embedding.ts before running review tools",
+      "passed": true,
+      "evidence": "Transcript shows Read on '/home/ake/shared-ai-infra/rag-api/src/services/embedding.ts' was the very first tool call, before any grep/glob/config reads."
+    },
+    {
+      "type": "tool",
+      "text": "Calls review_code or check_architecture",
+      "passed": false,
+      "evidence": "Transcript contains no calls to mcp__rag__review_code or mcp__rag__check_architecture. The run used only Read, Bash, Glob, Grep, and Write tools. No RAG review tools were invoked."
+    },
+    {
+      "type": "outcome",
+      "text": "Identifies at least 2 specific code issues or improvement suggestions with line references",
+      "passed": true,
+      "evidence": "Review identifies 13 issues with explicit line references throughout: e.g., '#1 Lines 47, 70, 92, 128, 165, 178, 215', '#2 Lines 189, 202, 230, 280, 316, 329-341', '#4 Lines 246-270', '#13 Line 248', etc."
+    },
+    {
+      "type": "outcome",
+      "text": "References at least one project pattern or ADR by name in the review",
+      "passed": false,
+      "evidence": "The review's 'Architecture Observations' section mentions generic concepts ('Singleton Pattern', 'Cache Delegation', 'Provider Abstraction') but does not reference any named project pattern stored in the RAG patterns registry or any ADR by name/ID. No get_patterns or get_adrs tools were called, so no project-specific pattern/ADR context was available."
+    },
+    {
+      "type": "outcome",
+      "text": "Review uses severity levels to categorize findings",
+      "passed": true,
+      "evidence": "Issues are organized into 'Critical Issues' (P0), 'Medium Issues' (P1-P2), and 'Low Issues' (P3) sections, and the summary table uses explicit P0/P1/P2/P3 priority labels."
+    },
+    {
+      "type": "outcome",
+      "text": "Mentions test coverage status or suggests specific tests",
+      "passed": true,
+      "evidence": "Review includes a 'Test Coverage Assessment' section referencing the actual test file (rag-api/src/__tests__/services/embedding.test.ts, 175 lines), listing what is currently covered, and enumerating 9 missing test scenarios including embedWithDetails, embedBatchFull, Ollama/OpenAI paths, edge cases, and error scenarios."
+    }
+  ],
+  "total_passed": 4,
+  "total_assertions": 6,
+  "pass_rate": 0.667,
+  "summary": "Solid code review output but missed both tool-level assertions. Without the rag-review skill, the run performed a thorough manual investigation (read file, grep dependencies, check tests) and produced detailed findings with line references and severity tiers. However, it never called review_code or check_architecture, and consequently had no access to named project patterns or ADRs -- the review's architecture section uses only generic design pattern names rather than project-specific ones."
+}

@@ -1,0 +1,37 @@
+{
+  "eval_id": 2,
+  "eval_name": "implement-rate-limit",
+  "configuration": "with_skill",
+  "expectations": [
+    {
+      "text": "Calls context_briefing before any code changes",
+      "passed": true,
+      "evidence": "Transcript line 19 shows mcp__rag__context_briefing called with task 'Implement rate limiting middleware for RAG API' and files ['rag-api/src/server.ts', 'rag-api/src/utils/validation.ts'] before any code was written. This happened in Phase 1 before any Write tool calls."
+    },
+    {
+      "text": "Calls review_code or check_architecture after writing code",
+      "passed": true,
+      "evidence": "Transcript lines 109-116 show both mcp__rag__review_code (timed out at 120s) and mcp__rag__check_architecture called after all code files were written. check_architecture completed successfully with no violations detected (line 116 shows result with 5 patterns and 5 ADRs checked). summary.md Phase 4 section explicitly documents both calls."
+    },
+    {
+      "text": "Calls remember or record_adr to capture the decision",
+      "passed": true,
+      "evidence": "Transcript line 118 shows mcp__rag__remember called with type 'insight' and content describing the full implementation details. Memory stored successfully with ID 2c636816-e7b4-47f1-8360-0b3f3ca264a7 (line 121). summary.md Phase 5 documents this call."
+    },
+    {
+      "text": "Implementation plan lists specific files to modify with rationale",
+      "passed": true,
+      "evidence": "plan.md 'Files to Create' and 'Files to Modify' sections list: rag-api/src/middleware/rate-limit.ts (new middleware), rag-api/src/config.ts (add RATE_LIMIT_MAX and RATE_LIMIT_WINDOW_MS), rag-api/src/server.ts (register rateLimitMiddleware after authMiddleware), rag-api/src/utils/metrics.ts (add Prometheus counter). Each file has clear rationale for the change."
+    },
+    {
+      "text": "Plan includes blast radius section identifying dependent files",
+      "passed": true,
+      "evidence": "plan.md has a dedicated 'Blast Radius (from search_graph)' section that states: 'server.ts connects to: all route files (search, index, memory, review, testing, analytics, agents, pm), error-handler, auth, vector-store, cache' and 'Adding middleware to server.ts affects all /api/* routes (by design)'. This came from an explicit search_graph call documented in summary.md Phase 2."
+    },
+    {
+      "text": "Written code implements rate limiting logic (contains IP tracking and request counting)",
+      "passed": true,
+      "evidence": "rate-limit.ts implements: (1) IP tracking via 'const ipRequestMap = new Map<string, number[]>()' tracking per-IP timestamps, (2) request counting via 'const currentCount = timestamps.length', (3) 429 rejection when 'currentCount >= config.RATE_LIMIT_MAX', (4) X-Forwarded-For IP extraction in getClientIp(), (5) sliding window pruning via pruneExpiredEntries(). Full sliding window rate limiting with per-IP isolation is implemented."
+    }
+  ]
+}

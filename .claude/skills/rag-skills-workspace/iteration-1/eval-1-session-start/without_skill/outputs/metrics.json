@@ -1,0 +1,37 @@
+{
+  "task": "session-start-vector-store-optimization",
+  "timestamp": "2026-02-26T17:39:44Z",
+  "sessionId": "vector-store-optimization-2026-02-26",
+  "tool_calls": {
+    "total": 9,
+    "breakdown": {
+      "mcp__rag__start_session": 1,
+      "mcp__rag__context_briefing": 1,
+      "Read": 1,
+      "mcp__rag__search_graph": 1,
+      "mcp__rag__recall": 2,
+      "mcp__rag__get_patterns": 1,
+      "mcp__rag__get_adrs": 1,
+      "mcp__rag__get_session_context": 1
+    },
+    "failed": {
+      "total": 2,
+      "breakdown": {
+        "Bash_permission_denied": 2
+      }
+    },
+    "parallel_batches": 3,
+    "notes": "Tool calls 4+5 ran in parallel, tool calls 6+7 ran in parallel, start_session had one timeout before succeeding on retry"
+  },
+  "context_loaded": {
+    "memories_recalled": 10,
+    "patterns_retrieved": 5,
+    "adrs_retrieved": 5,
+    "graph_files_discovered": 29,
+    "file_read": "rag-api/src/services/vector-store.ts (1315 lines)"
+  },
+  "session_result": {
+    "status": "started",
+    "resumed_from": "1c3dd7c8-7d71-4559-84cb-7f754fc1df25"
+  }
+}

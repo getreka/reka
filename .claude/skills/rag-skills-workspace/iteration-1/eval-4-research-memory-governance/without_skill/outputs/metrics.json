@@ -1,0 +1,40 @@
+{
+  "task": "research-memory-governance",
+  "mode": "without_skill",
+  "tool_calls": {
+    "mcp__rag__hybrid_search": 1,
+    "Grep": 6,
+    "Read": 10,
+    "Write": 3,
+    "total": 20
+  },
+  "files_read": [
+    "rag-api/src/services/memory-governance.ts",
+    "rag-api/src/routes/memory.ts",
+    "rag-api/src/services/memory.ts",
+    "rag-api/src/services/quality-gates.ts",
+    "rag-api/src/services/feedback.ts",
+    "rag-api/src/services/fact-extractor.ts",
+    "mcp-server/src/context-enrichment.ts",
+    "mcp-server/src/tools/memory.ts",
+    "mcp-server/src/tools/ask.ts",
+    "rag-api/src/__tests__/services/memory-governance.test.ts",
+    "rag-api/src/utils/metrics.ts"
+  ],
+  "key_files_found": 11,
+  "answer_completeness": {
+    "quarantine_logic": true,
+    "promotion_logic": true,
+    "adaptive_threshold": true,
+    "quality_gates": true,
+    "feedback_maintenance": true,
+    "memory_aging": true,
+    "relationship_detection": true,
+    "context_enrichment_durable_only": true,
+    "fact_extractor_auto_source": true,
+    "mcp_tools": true,
+    "api_routes": true,
+    "tests": true,
+    "metrics": true
+  }
+}

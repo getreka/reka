@@ -1,0 +1,20 @@
+{
+  "tool_calls": {
+    "mcp__rag__get_adrs": 1,
+    "mcp__rag__recall": 1,
+    "mcp__rag__hybrid_search": 1,
+    "Read": 3,
+    "Grep": 5,
+    "Glob": 3,
+    "Write": 3,
+    "total": 17
+  },
+  "rag_tool_calls": 3,
+  "non_rag_tool_calls": 14,
+  "adrs_found_relevant": 0,
+  "adrs_found_total": 6,
+  "memories_recalled": 10,
+  "search_results": 12,
+  "files_read": 3,
+  "grep_searches": 5
+}

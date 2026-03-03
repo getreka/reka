@@ -1,0 +1,44 @@
+{
+  "assertions": [
+    {
+      "type": "tool",
+      "text": "Reads embedding.ts before running review tools",
+      "passed": true,
+      "evidence": "Transcript shows Read tool called on '/home/ake/shared-ai-infra/rag-api/src/services/embedding.ts' twice before any RAG review tools (get_patterns, get_adrs, review_code, check_architecture) were invoked."
+    },
+    {
+      "type": "tool",
+      "text": "Calls review_code or check_architecture",
+      "passed": true,
+      "evidence": "Transcript shows both mcp__rag__review_code and mcp__rag__check_architecture were called with the full embedding.ts code as input."
+    },
+    {
+      "type": "outcome",
+      "text": "Identifies at least 2 specific code issues or improvement suggestions with line references",
+      "passed": true,
+      "evidence": "Review identifies 10 issues, most with explicit line references: e.g., '#1 embedding.ts:47', '#2 embedding.ts:230, 189, 280, 316, 329', '#3 embedding.ts:47-123', '#4 embedding.ts:128-140', '#5 embedding.ts:194, 208, 234, 308, 323, 344', etc."
+    },
+    {
+      "type": "outcome",
+      "text": "References at least one project pattern or ADR by name in the review",
+      "passed": true,
+      "evidence": "Review references: 'Service Layer (Singleton): Pass', 'Project Isolation via Collection Namespacing: Pass', ADRs 'Use BGE-M3 as primary embedding model (accepted): Compliant' and 'Qdrant as sole vector database with typed collections (accepted): Compliant'. These come from get_patterns and get_adrs tool calls."
+    },
+    {
+      "type": "outcome",
+      "text": "Review uses severity levels to categorize findings",
+      "passed": true,
+      "evidence": "Each finding is labeled with a severity level: 'Warning' (Issues 1-6) and 'Info' (Issues 7-10). A priority table at the end uses P1/P2/P3/P4 levels."
+    },
+    {
+      "type": "outcome",
+      "text": "Mentions test coverage status or suggests specific tests",
+      "passed": true,
+      "evidence": "Review includes a 'Test Coverage' section that lists 6 existing tests by scenario and 9 missing test cases (embedWithDetails, embedBatchFull, non-BGE batch fallback, warmSessionCache, getCacheStats, OpenAI path, Ollama path, per-provider error handling, empty input handling)."
+    }
+  ],
+  "total_passed": 6,
+  "total_assertions": 6,
+  "pass_rate": 1.0,
+  "summary": "Perfect score. The skill-guided run read embedding.ts first, invoked both review_code and check_architecture RAG tools, referenced named project patterns and ADRs (Service Layer, BGE-M3 ADR, Qdrant ADR), used Warning/Info severity labels throughout, and produced a thorough test coverage assessment with existing and missing tests called out explicitly."
+}

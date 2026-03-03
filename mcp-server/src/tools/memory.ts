@@ -168,6 +168,7 @@ export function createMemoryTools(projectName: string): ToolSpec[] {
       handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
         const memoryId = args.memoryId as string | undefined;
         const type = args.type as string | undefined;
+        const olderThanDays = args.olderThanDays as number | undefined;
 
         if (memoryId) {
           const response = await ctx.api.delete(
@@ -185,7 +186,15 @@ export function createMemoryTools(projectName: string): ToolSpec[] {
           return `\u{1F5D1}\uFE0F Deleted all memories of type: ${type}`;
         }
 
-        return "Please specify memoryId or type to delete.";
+        if (olderThanDays) {
+          const response = await ctx.api.post("/api/memory/forget-older", {
+            projectName: ctx.projectName,
+            olderThanDays,
+          });
+          return `\u{1F5D1}\uFE0F Deleted ${response.data.deleted} memories older than ${olderThanDays} days`;
+        }
+
+        return "Please specify memoryId, type, or olderThanDays to delete.";
       },
     },
 
@@ -244,6 +253,7 @@ export function createMemoryTools(projectName: string): ToolSpec[] {
         }>;
 
         const response = await ctx.api.post("/api/memory/batch", {
+          projectName: ctx.projectName,
           items,
         });
 
@@ -447,37 +457,80 @@ export function createMemoryTools(projectName: string): ToolSpec[] {
 
     {
       name: "memory_maintenance",
-      description: `Run feedback-driven memory maintenance for ${projectName}: auto-promote memories with 3+ positive feedback, auto-prune memories with 2+ incorrect feedback.`,
-      schema: z.object({}),
+      description: `Run memory maintenance for ${projectName}: quarantine cleanup (expire old auto-memories), feedback-driven promote/prune, and compaction (merge similar durable memories).`,
+      schema: z.object({
+        operations: z.object({
+          quarantine_cleanup: z.boolean().optional().describe("Remove expired quarantine memories (default: true)"),
+          feedback_maintenance: z.boolean().optional().describe("Auto-promote/prune by feedback (default: true)"),
+          compaction: z.boolean().optional().describe("Merge similar durable memories (default: false)"),
+          compaction_dry_run: z.boolean().optional().describe("Preview compaction without changes (default: true)"),
+        }).optional().describe("Which operations to run (default: quarantine_cleanup + feedback_maintenance)"),
+      }),
       annotations: TOOL_ANNOTATIONS["memory_maintenance"],
-      handler: async (_args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
+      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
+        const operations = args.operations as Record<string, boolean> | undefined;
+
         const response = await ctx.api.post("/api/memory/maintenance", {
           projectName: ctx.projectName,
+          operations,
         });
 
-        const { promoted, pruned, errors } = response.data;
+        const data = response.data;
         let result = `# \u{1F9F9} Memory Maintenance Results\n\n`;
 
-        if (promoted.length > 0) {
-          result += `**Promoted** (${promoted.length}): memories with 3+ positive feedback moved to durable\n`;
-          promoted.forEach((id: string) => { result += `  \u2705 ${id}\n`; });
+        // Quarantine cleanup section
+        if (data.quarantine_cleanup) {
+          const qc = data.quarantine_cleanup;
+          result += `## Quarantine Cleanup\n`;
+          if (qc.rejected.length > 0) {
+            result += `**Expired** (${qc.rejected.length}): removed from quarantine\n`;
+            qc.rejected.slice(0, 10).forEach((id: string) => { result += `  \u{1F5D1}\u{FE0F} ${id}\n`; });
+            if (qc.rejected.length > 10) result += `  ... and ${qc.rejected.length - 10} more\n`;
+          } else {
+            result += `No expired quarantine memories.\n`;
+          }
+          if (qc.errors.length > 0) {
+            qc.errors.forEach((e: string) => { result += `  \u26A0\u{FE0F} ${e}\n`; });
+          }
           result += `\n`;
         }
 
-        if (pruned.length > 0) {
-          result += `**Pruned** (${pruned.length}): memories with 2+ incorrect feedback removed\n`;
-          pruned.forEach((id: string) => { result += `  \u{1F5D1}\u{FE0F} ${id}\n`; });
+        // Feedback maintenance section
+        if (data.feedback_maintenance) {
+          const fm = data.feedback_maintenance;
+          result += `## Feedback Maintenance\n`;
+          if (fm.promoted.length > 0) {
+            result += `**Promoted** (${fm.promoted.length}): moved to durable\n`;
+            fm.promoted.forEach((id: string) => { result += `  \u2705 ${id}\n`; });
+          }
+          if (fm.pruned.length > 0) {
+            result += `**Pruned** (${fm.pruned.length}): removed\n`;
+            fm.pruned.forEach((id: string) => { result += `  \u{1F5D1}\u{FE0F} ${id}\n`; });
+          }
+          if (fm.promoted.length === 0 && fm.pruned.length === 0) {
+            result += `No feedback-based actions needed.\n`;
+          }
+          if (fm.errors.length > 0) {
+            fm.errors.forEach((e: string) => { result += `  \u26A0\u{FE0F} ${e}\n`; });
+          }
           result += `\n`;
         }
 
-        if (errors.length > 0) {
-          result += `**Errors** (${errors.length}):\n`;
-          errors.forEach((e: string) => { result += `  \u26A0\u{FE0F} ${e}\n`; });
+        // Compaction section
+        if (data.compaction) {
+          const cp = data.compaction;
+          result += `## Compaction${cp.dryRun ? ' (dry run)' : ''}\n`;
+          if (cp.clusters.length > 0) {
+            result += `**${cp.totalClusters} cluster(s)** of similar memories found\n\n`;
+            cp.clusters.slice(0, 5).forEach((c: { originalIds: string[]; mergedId?: string; mergedContent: string }, i: number) => {
+              result += `${i + 1}. ${c.originalIds.length} memories → ${truncate(c.mergedContent, 120)}\n`;
+              if (c.mergedId) result += `   Merged ID: \`${c.mergedId}\`\n`;
+            });
+            if (cp.clusters.length > 5) result += `... and ${cp.clusters.length - 5} more clusters\n`;
+          } else {
+            result += `No similar memory clusters found.\n`;
+          }
           result += `\n`;
-        }
-
-        if (promoted.length === 0 && pruned.length === 0) {
-          result += `No memories needed maintenance. All feedback thresholds are below auto-action levels.\n`;
         }
 
         return result;
