@@ -87,6 +87,15 @@ app.get('/metrics', async (req: Request, res: Response) => {
   res.end(await getMetrics());
 });
 
+// /api/health — public health check (no auth required)
+app.get('/api/health', (req: Request, res: Response) => {
+  res.json({
+    status: 'ok',
+    uptime: process.uptime(),
+    timestamp: new Date().toISOString(),
+  });
+});
+
 // API routes
 app.use('/api', searchRoutes);
 app.use('/api', indexRoutes);

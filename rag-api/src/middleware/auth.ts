@@ -3,7 +3,7 @@
  *
  * Validates requests against API_KEY from config.
  * Supports both "Authorization: Bearer <key>" and "X-API-Key: <key>" headers.
- * Skips auth for /health and /metrics endpoints, and when API_KEY is not configured.
+ * Skips auth for /health, /metrics, and /api/health endpoints, and when API_KEY is not configured.
  */
 
 import { Request, Response, NextFunction } from 'express';
@@ -11,7 +11,7 @@ import { timingSafeEqual } from 'crypto';
 import config from '../config';
 import { logger } from '../utils/logger';
 
-const SKIP_AUTH_PATHS = ['/health', '/metrics'];
+const SKIP_AUTH_PATHS = ['/health', '/metrics', '/api/health'];
 
 function safeCompare(a: string, b: string): boolean {
   if (a.length !== b.length) return false;
