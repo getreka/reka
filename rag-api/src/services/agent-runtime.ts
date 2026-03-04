@@ -259,7 +259,10 @@ class AgentRuntime {
 
       // Add assistant response and tool results to history
       // Build assistant content blocks
-      const assistantContent: any[] = [];
+      const assistantContent: Array<
+        | { type: 'text'; text: string }
+        | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }
+      > = [];
       if (response.text) {
         assistantContent.push({ type: 'text', text: response.text });
       }
@@ -492,7 +495,7 @@ class AgentRuntime {
         projectName,
         query,
         limit,
-        type: type as any,
+        type: type as 'all' | 'decision' | 'insight' | 'context' | 'todo' | 'conversation' | 'note',
       });
       if (results.length === 0) return 'No memories found.';
       return results

@@ -56,8 +56,8 @@ describe('ClaudeAgentService', () => {
       mocks.query.mockReturnValue(mockMessages([
         {
           type: 'result',
-          subtype: 'error',
-          error: 'API rate limit exceeded',
+          subtype: 'error_during_execution',
+          errors: ['API rate limit exceeded'],
           duration_ms: 1000,
           session_id: 'sess-2',
         },
@@ -79,7 +79,7 @@ describe('ClaudeAgentService', () => {
         {
           type: 'result',
           subtype: 'error_max_budget_usd',
-          error: 'Budget exceeded',
+          errors: ['Budget exceeded'],
           duration_ms: 30000,
           session_id: 'sess-3',
         },

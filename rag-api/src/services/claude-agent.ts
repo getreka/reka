@@ -9,7 +9,7 @@
  */
 
 import { v4 as uuidv4 } from 'uuid';
-import { query, type Options, type SDKMessage, type SDKResultSuccess } from '@anthropic-ai/claude-agent-sdk';
+import { query, type Options, type SDKMessage, type SDKResultSuccess, type SDKResultError, type McpServerConfig } from '@anthropic-ai/claude-agent-sdk';
 import path from 'path';
 import config from '../config';
 import { logger } from '../utils/logger';
@@ -157,7 +157,7 @@ class ClaudeAgentService {
 
     try {
       // Build MCP server config for RAG access
-      const mcpServers: Record<string, any> = {
+      const mcpServers: Record<string, McpServerConfig> = {
         rag: {
           command: 'node',
           args: [this.mcpServerPath],
@@ -231,15 +231,16 @@ class ClaudeAgentService {
             };
           } else {
             // Error result
+            const errorMsg = message as SDKResultError;
             result = {
               id: agentId,
               type: options.type,
               task: options.task,
               projectName: options.projectName,
-              status: message.subtype === 'error_max_budget_usd' ? 'budget_exceeded' : 'failed',
-              error: (message as any).error || 'Agent failed',
-              durationMs: (message as any).duration_ms,
-              sessionId: (message as any).session_id,
+              status: errorMsg.subtype === 'error_max_budget_usd' ? 'budget_exceeded' : 'failed',
+              error: errorMsg.errors?.join('; ') || 'Agent failed',
+              durationMs: errorMsg.duration_ms,
+              sessionId: errorMsg.session_id,
             };
           }
         }

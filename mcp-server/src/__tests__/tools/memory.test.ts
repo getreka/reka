@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
-import { createMemoryTools } from '../../tools/memory';
-import type { ToolContext } from '../../types';
+import { createMemoryTools } from '../../tools/memory.js';
+import type { ToolContext, ToolSpec } from '../../types.js';
 
 function createMockCtx(): ToolContext {
   return {
@@ -29,7 +29,7 @@ describe('Memory Tools', () => {
   });
 
   function findTool(name: string) {
-    return tools.find(t => t.name === name)!;
+    return tools.find((t: ToolSpec) => t.name === name)!;
   }
 
   describe('remember', () => {
