@@ -62,11 +62,13 @@ router.post('/review', validateProjectName, validate(reviewSchema), asyncHandler
   // 5. Generate review
   const reviewPrompt = buildReviewPrompt(reviewType, codeToReview, filePath, patternContext, adrContext, similarContext);
 
-  const result = await llm.complete(reviewPrompt, {
+  const result = await llm.completeWithBestProvider(reviewPrompt, {
     systemPrompt: CODE_REVIEW_SYSTEM_PROMPT,
     maxTokens: 3000,
     temperature: 0.3,
     format: 'json',
+    complexity: 'complex',
+    think: true,
   });
 
   // Parse structured response
@@ -100,13 +102,15 @@ router.post('/review', validateProjectName, validate(reviewSchema), asyncHandler
 router.post('/review/security', validate(securityReviewSchema), asyncHandler(async (req: Request, res: Response) => {
   const { code, language } = req.body;
 
-  const result = await llm.complete(
+  const result = await llm.completeWithBestProvider(
     `Analyze the following ${language || 'code'} for security vulnerabilities:\n\n\`\`\`\n${code}\n\`\`\``,
     {
       systemPrompt: SECURITY_REVIEW_SYSTEM_PROMPT,
       maxTokens: 2000,
       temperature: 0.2,
       format: 'json',
+      complexity: 'complex',
+      think: true,
     }
   );
 
@@ -135,13 +139,14 @@ router.post('/review/complexity', asyncHandler(async (req: Request, res: Respons
     return res.status(400).json({ error: 'code is required' });
   }
 
-  const result = await llm.complete(
+  const result = await llm.completeWithBestProvider(
     `Analyze the complexity of this code and suggest simplifications:\n\n\`\`\`\n${code}\n\`\`\``,
     {
       systemPrompt: COMPLEXITY_REVIEW_SYSTEM_PROMPT,
       maxTokens: 2000,
       temperature: 0.3,
       format: 'json',
+      complexity: 'complex',
     }
   );
 

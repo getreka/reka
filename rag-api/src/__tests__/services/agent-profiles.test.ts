@@ -3,6 +3,7 @@ import {
   agentProfiles,
   getAgentProfile,
   listAgentTypes,
+  getToolDefinitions,
   AgentProfile,
 } from '../../services/agent-profiles';
 
@@ -77,5 +78,37 @@ describe('listAgentTypes()', () => {
     expect(names).toContain('documentation');
     expect(names).toContain('refactor');
     expect(names).toContain('test');
+  });
+});
+
+describe('getToolDefinitions()', () => {
+  it('returns tool definitions for known actions', () => {
+    const tools = getToolDefinitions(['search_codebase', 'recall_memory']);
+    expect(tools).toHaveLength(2);
+    expect(tools[0].name).toBe('search_codebase');
+    expect(tools[1].name).toBe('recall_memory');
+  });
+
+  it('filters out unknown actions', () => {
+    const tools = getToolDefinitions(['search_codebase', 'nonexistent']);
+    expect(tools).toHaveLength(1);
+    expect(tools[0].name).toBe('search_codebase');
+  });
+
+  it('returns empty array for empty input', () => {
+    expect(getToolDefinitions([])).toHaveLength(0);
+  });
+
+  it('each tool has required schema fields', () => {
+    const allActions = ['search_codebase', 'recall_memory', 'get_patterns', 'get_adrs', 'search_similar'];
+    const tools = getToolDefinitions(allActions);
+    expect(tools).toHaveLength(5);
+
+    for (const tool of tools) {
+      expect(tool.name).toBeTruthy();
+      expect(tool.description).toBeTruthy();
+      expect(tool.input_schema).toBeDefined();
+      expect(tool.input_schema.type).toBe('object');
+    }
   });
 });

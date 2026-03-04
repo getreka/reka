@@ -27,6 +27,8 @@ export interface Config {
   OPENAI_MODEL: string;
   ANTHROPIC_API_KEY?: string;
   ANTHROPIC_MODEL: string;
+  ANTHROPIC_THINK: boolean;
+  CLAUDE_EFFORT: 'low' | 'medium' | 'high' | 'max';
 
   // Vector
   VECTOR_SIZE: number;
@@ -85,7 +87,9 @@ const config: Config = {
   OLLAMA_MODEL: process.env.OLLAMA_MODEL || 'qwen3.5:35b',
   OPENAI_MODEL: process.env.OPENAI_MODEL || 'gpt-4-turbo-preview',
   ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
-  ANTHROPIC_MODEL: process.env.ANTHROPIC_MODEL || 'claude-3-sonnet-20240229',
+  ANTHROPIC_MODEL: process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6',
+  ANTHROPIC_THINK: process.env.ANTHROPIC_THINK !== 'false',
+  CLAUDE_EFFORT: (process.env.CLAUDE_EFFORT || 'high') as Config['CLAUDE_EFFORT'],
 
   // Vector size based on embedding provider
   VECTOR_SIZE: parseInt(process.env.VECTOR_SIZE || '1024', 10),

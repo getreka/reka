@@ -11,7 +11,7 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('../../services/vector-store', () => ({ vectorStore: { search: mocks.search } }));
 vi.mock('../../services/embedding', () => ({ embeddingService: { embed: mocks.embed } }));
-vi.mock('../../services/llm', () => ({ llm: { complete: mocks.complete } }));
+vi.mock('../../services/llm', () => ({ llm: { complete: mocks.complete, completeWithBestProvider: mocks.complete } }));
 vi.mock('../../services/memory', () => ({ memoryService: { recall: mocks.recall } }));
 
 import reviewRoutes from '../../routes/review';

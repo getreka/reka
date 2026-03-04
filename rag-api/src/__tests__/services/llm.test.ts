@@ -1,7 +1,9 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   post: vi.fn(),
+  anthropicCreate: vi.fn(),
+  anthropicStream: vi.fn(),
 }));
 
 vi.mock('axios', () => ({
@@ -10,8 +12,28 @@ vi.mock('axios', () => ({
   },
 }));
 
+// Mock the SDK module so the import in llm.ts resolves to a dummy
+vi.mock('@anthropic-ai/sdk', () => ({
+  default: class MockAnthropic {
+    constructor() {}
+    messages = {
+      create: mocks.anthropicCreate,
+      stream: mocks.anthropicStream,
+    };
+  },
+}));
+
+/** Helper: build a mock Anthropic client with our mocked methods */
+function mockAnthropicClient() {
+  return {
+    messages: {
+      create: mocks.anthropicCreate,
+      stream: mocks.anthropicStream,
+    },
+  };
+}
+
 // config is globally mocked in setup.ts (LLM_PROVIDER: 'ollama')
-// We import config to override per-test via vi.mocked
 import config from '../../config';
 import { llm } from '../../services/llm';
 
@@ -27,8 +49,9 @@ describe('LLMService', () => {
     mockedConfig.OLLAMA_MODEL = 'qwen2.5:32b';
     mockedConfig.OPENAI_MODEL = 'gpt-4-turbo-preview';
     mockedConfig.OPENAI_API_KEY = 'sk-test';
-    mockedConfig.ANTHROPIC_MODEL = 'claude-3-sonnet-20240229';
+    mockedConfig.ANTHROPIC_MODEL = 'claude-sonnet-4-6';
     mockedConfig.ANTHROPIC_API_KEY = 'anthro-test';
+    mockedConfig.ANTHROPIC_THINK = false;
   });
 
   describe('complete() with ollama provider', () => {
@@ -41,10 +64,6 @@ describe('LLMService', () => {
         },
       });
 
-      // Re-create to pick up provider at test time via the service's constructor
-      // The singleton reads config.LLM_PROVIDER at construction time — we test by calling
-      // the already-constructed singleton which dispatches based on this.provider
-      // Since setup.ts mocks config with LLM_PROVIDER: 'ollama', the singleton is already ollama.
       const result = await llm.complete('test prompt');
 
       expect(mocks.post).toHaveBeenCalledWith(
@@ -178,7 +197,6 @@ describe('LLMService', () => {
 
   describe('complete() with openai provider', () => {
     beforeEach(() => {
-      // Swap the internal provider by mutating the singleton's private field
       (llm as any).provider = 'openai';
     });
 
@@ -227,34 +245,33 @@ describe('LLMService', () => {
   describe('complete() with anthropic provider', () => {
     beforeEach(() => {
       (llm as any).provider = 'anthropic';
+      // Ensure client is initialized
+      (llm as any).anthropicClient = mockAnthropicClient();
     });
 
     afterEach(() => {
       (llm as any).provider = 'ollama';
     });
 
-    it('sends correct URL, headers, and payload to anthropic', async () => {
-      mocks.post.mockResolvedValue({
-        data: {
-          content: [{ text: 'anthropic response' }],
-          usage: { input_tokens: 8, output_tokens: 16 },
-        },
+    it('calls SDK messages.create with correct params', async () => {
+      mocks.anthropicCreate.mockResolvedValue({
+        content: [{ type: 'text', text: 'anthropic response' }],
+        usage: { input_tokens: 8, output_tokens: 16 },
       });
 
-      const result = await llm.complete('anthropic prompt', { systemPrompt: 'Be concise' });
+      const result = await llm.complete('anthropic prompt', {
+        systemPrompt: 'Be concise',
+        maxTokens: 1024,
+        temperature: 0.5,
+      });
 
-      expect(mocks.post).toHaveBeenCalledWith(
-        'https://api.anthropic.com/v1/messages',
+      expect(mocks.anthropicCreate).toHaveBeenCalledWith(
         expect.objectContaining({
-          model: 'claude-3-sonnet-20240229',
+          model: 'claude-sonnet-4-6',
+          max_tokens: 1024,
           system: 'Be concise',
           messages: [{ role: 'user', content: 'anthropic prompt' }],
-        }),
-        expect.objectContaining({
-          headers: expect.objectContaining({
-            'x-api-key': 'anthro-test',
-            'anthropic-version': '2023-06-01',
-          }),
+          temperature: 0.5,
         })
       );
 
@@ -264,12 +281,208 @@ describe('LLMService', () => {
         completionTokens: 16,
         totalTokens: 24,
       });
+      expect(result.provider).toBe('anthropic');
     });
 
-    it('throws on anthropic error', async () => {
-      mocks.post.mockRejectedValue(new Error('Anthropic failure'));
+    it('enables thinking when ANTHROPIC_THINK is true', async () => {
+      mockedConfig.ANTHROPIC_THINK = true;
+      mocks.anthropicCreate.mockResolvedValue({
+        content: [
+          { type: 'thinking', thinking: 'Let me analyze this...' },
+          { type: 'text', text: 'The answer is 42' },
+        ],
+        usage: { input_tokens: 10, output_tokens: 50 },
+      });
 
-      await expect(llm.complete('prompt')).rejects.toThrow('Anthropic failure');
+      const result = await llm.complete('deep question');
+
+      expect(mocks.anthropicCreate).toHaveBeenCalledWith(
+        expect.objectContaining({
+          thinking: { type: 'enabled', budget_tokens: expect.any(Number) },
+        })
+      );
+
+      expect(result.text).toBe('The answer is 42');
+      expect(result.thinking).toBe('Let me analyze this...');
+    });
+
+    it('does not set temperature when thinking is enabled', async () => {
+      mockedConfig.ANTHROPIC_THINK = true;
+      mocks.anthropicCreate.mockResolvedValue({
+        content: [{ type: 'text', text: 'ok' }],
+        usage: { input_tokens: 5, output_tokens: 5 },
+      });
+
+      await llm.complete('prompt', { temperature: 0.5 });
+
+      const params = mocks.anthropicCreate.mock.calls[0][0];
+      expect(params.temperature).toBeUndefined();
+    });
+
+    it('appends JSON instruction to system prompt when format is json', async () => {
+      mocks.anthropicCreate.mockResolvedValue({
+        content: [{ type: 'text', text: '{"key": "value"}' }],
+        usage: { input_tokens: 5, output_tokens: 10 },
+      });
+
+      await llm.complete('return json', {
+        systemPrompt: 'You are helpful',
+        format: 'json',
+      });
+
+      const params = mocks.anthropicCreate.mock.calls[0][0];
+      expect(params.system).toContain('You are helpful');
+      expect(params.system).toContain('valid JSON only');
+    });
+
+    it('retries without thinking on 400 error', async () => {
+      mockedConfig.ANTHROPIC_THINK = true;
+      const err = Object.assign(new Error('Bad Request'), { status: 400 });
+      mocks.anthropicCreate
+        .mockRejectedValueOnce(err)
+        .mockResolvedValueOnce({
+          content: [{ type: 'text', text: 'retry ok' }],
+          usage: { input_tokens: 5, output_tokens: 5 },
+        });
+
+      const result = await llm.complete('prompt');
+
+      expect(mocks.anthropicCreate).toHaveBeenCalledTimes(2);
+      const retryParams = mocks.anthropicCreate.mock.calls[1][0];
+      expect(retryParams.thinking).toBeUndefined();
+      expect(result.text).toBe('retry ok');
+    });
+
+    it('throws on non-400 error', async () => {
+      const err = Object.assign(new Error('Rate limit'), { status: 429 });
+      mocks.anthropicCreate.mockRejectedValue(err);
+
+      await expect(llm.complete('prompt')).rejects.toThrow('Rate limit');
+    });
+
+    it('throws when no API key configured', async () => {
+      (llm as any).anthropicClient = null;
+
+      await expect(llm.complete('prompt')).rejects.toThrow('Anthropic API key not configured');
+    });
+  });
+
+  describe('completeWithBestProvider()', () => {
+    beforeEach(() => {
+      // Ensure anthropic client exists for hybrid routing tests
+      (llm as any).anthropicClient = mockAnthropicClient();
+    });
+
+    it('routes utility tasks to Ollama with think:false', async () => {
+      mocks.post.mockResolvedValue({
+        data: { message: { content: 'utility response' } },
+      });
+
+      const result = await llm.completeWithBestProvider('route this', { complexity: 'utility' });
+
+      expect(mocks.post).toHaveBeenCalled();
+      const body = mocks.post.mock.calls[0][1];
+      expect(body.think).toBeUndefined(); // think: false means no think field
+      expect(result.text).toBe('utility response');
+    });
+
+    it('routes complex tasks to Claude', async () => {
+      mocks.anthropicCreate.mockResolvedValue({
+        content: [{ type: 'text', text: 'complex analysis' }],
+        usage: { input_tokens: 10, output_tokens: 20 },
+      });
+
+      const result = await llm.completeWithBestProvider('analyze deeply', { complexity: 'complex' });
+
+      expect(mocks.anthropicCreate).toHaveBeenCalled();
+      expect(result.text).toBe('complex analysis');
+    });
+
+    it('falls back to default provider for complex when no Claude key', async () => {
+      (llm as any).anthropicClient = null;
+      mocks.post.mockResolvedValue({
+        data: { message: { content: 'ollama fallback' } },
+      });
+
+      const result = await llm.completeWithBestProvider('analyze', { complexity: 'complex' });
+
+      expect(mocks.post).toHaveBeenCalled();
+      expect(result.text).toBe('ollama fallback');
+    });
+
+    it('routes standard tasks to configured provider', async () => {
+      mocks.post.mockResolvedValue({
+        data: { message: { content: 'standard response' } },
+      });
+
+      const result = await llm.completeWithBestProvider('normal task', { complexity: 'standard' });
+
+      expect(mocks.post).toHaveBeenCalled();
+      expect(result.text).toBe('standard response');
+    });
+  });
+
+  describe('chat()', () => {
+    it('routes to Ollama by default and returns text', async () => {
+      mocks.post.mockResolvedValue({
+        data: {
+          message: { content: 'chat response' },
+          prompt_eval_count: 10,
+          eval_count: 20,
+        },
+      });
+
+      const result = await llm.chat([
+        { role: 'system', content: 'You are helpful' },
+        { role: 'user', content: 'Hello' },
+      ]);
+
+      expect(mocks.post).toHaveBeenCalled();
+      expect(result.text).toBe('chat response');
+      expect(result.toolUse).toBeUndefined();
+    });
+
+    it('routes to Anthropic when provider specified', async () => {
+      (llm as any).anthropicClient = mockAnthropicClient();
+      mocks.anthropicCreate.mockResolvedValue({
+        content: [{ type: 'text', text: 'claude chat' }],
+        usage: { input_tokens: 10, output_tokens: 20 },
+      });
+
+      const result = await llm.chat(
+        [{ role: 'user', content: 'Hello' }],
+        { provider: 'anthropic' }
+      );
+
+      expect(mocks.anthropicCreate).toHaveBeenCalled();
+      expect(result.text).toBe('claude chat');
+    });
+
+    it('returns tool_use blocks from Claude response', async () => {
+      (llm as any).anthropicClient = mockAnthropicClient();
+      mocks.anthropicCreate.mockResolvedValue({
+        content: [
+          { type: 'text', text: 'I will search for that.' },
+          { type: 'tool_use', id: 'call_1', name: 'search_codebase', input: { query: 'auth' } },
+        ],
+        usage: { input_tokens: 10, output_tokens: 30 },
+      });
+
+      const result = await llm.chat(
+        [{ role: 'user', content: 'find auth code' }],
+        {
+          provider: 'anthropic',
+          tools: [{
+            name: 'search_codebase',
+            description: 'Search codebase',
+            input_schema: { type: 'object' as const, properties: { query: { type: 'string' } }, required: ['query'] },
+          }],
+        }
+      );
+
+      expect(result.toolUse).toHaveLength(1);
+      expect(result.toolUse![0].name).toBe('search_codebase');
+      expect(result.toolUse![0].input).toEqual({ query: 'auth' });
     });
   });
 

@@ -1,18 +1,19 @@
 /**
  * Agent Runtime - ReAct loop execution engine for specialized agents.
  *
- * Uses Ollama directly for multi-turn chat and executes tool actions
- * via direct service calls (no HTTP overhead).
+ * Supports both text-based ReAct (Ollama) and native tool_use (Claude).
+ * Provider selection: uses LLM service's chat() method which routes to
+ * the configured provider automatically.
  */
 
 import { v4 as uuidv4 } from 'uuid';
-import axios from 'axios';
 import config from '../config';
 import { logger } from '../utils/logger';
 import { embeddingService } from './embedding';
 import { vectorStore } from './vector-store';
 import { memoryService } from './memory';
-import { getAgentProfile, listAgentTypes, type AgentProfile } from './agent-profiles';
+import { llm } from './llm';
+import { getAgentProfile, listAgentTypes, type AgentProfile, getToolDefinitions } from './agent-profiles';
 import {
   agentRunsTotal,
   agentDuration,
@@ -59,12 +60,6 @@ interface ChatMessage {
   content: string;
 }
 
-interface OllamaResponse {
-  message?: { content: string; thinking?: string };
-  prompt_eval_count?: number;
-  eval_count?: number;
-}
-
 // ============================================
 // Agent Runtime
 // ============================================
@@ -106,15 +101,11 @@ class AgentRuntime {
     agentRunsTotal.inc({ project: projectName, agent_type: agentType, status: 'started' });
 
     try {
-      const result = await this.reactLoop(
-        profile,
-        projectName,
-        task,
-        context,
-        maxIterations,
-        timeout,
-        agentTask
-      );
+      // Choose loop based on provider
+      const useToolUse = config.LLM_PROVIDER === 'anthropic';
+      const result = useToolUse
+        ? await this.toolUseLoop(profile, projectName, task, context, maxIterations, timeout, agentTask)
+        : await this.reactLoop(profile, projectName, task, context, maxIterations, timeout, agentTask);
 
       agentTask.status = 'completed';
       agentTask.result = result;
@@ -160,7 +151,136 @@ class AgentRuntime {
   }
 
   // ============================================
-  // ReAct Loop
+  // Claude Tool Use Loop
+  // ============================================
+
+  private async toolUseLoop(
+    profile: AgentProfile,
+    projectName: string,
+    task: string,
+    context: string | undefined,
+    maxIterations: number,
+    timeout: number,
+    agentTask: AgentTask
+  ): Promise<string> {
+    const deadline = Date.now() + timeout;
+
+    // Get Claude tool definitions for this profile
+    const tools = getToolDefinitions(profile.allowedActions);
+
+    // Build message history — Claude uses system prompt separately
+    const messages: Array<{ role: string; content: string | any[] }> = [];
+
+    // User message with task and optional context
+    let userPrompt = `Task: ${task}`;
+    if (context) {
+      userPrompt += `\n\nAdditional Context:\n${context}`;
+    }
+    messages.push({ role: 'user', content: userPrompt });
+
+    for (let iteration = 1; iteration <= maxIterations; iteration++) {
+      const remaining = deadline - Date.now();
+      if (remaining <= 5000) {
+        throw new Error('AGENT_TIMEOUT');
+      }
+
+      agentTask.usage.iterations = iteration;
+
+      // Call Claude via LLM service chat()
+      const response = await llm.chat(messages, {
+        systemPrompt: profile.systemPrompt,
+        tools,
+        temperature: profile.temperature,
+        maxTokens: 4096,
+        think: true,
+        provider: 'anthropic',
+      });
+
+      agentTask.usage.totalTokens += (response.promptTokens || 0) + (response.completionTokens || 0);
+
+      const step: AgentStep = {
+        iteration,
+        thought: response.text || '',
+        thinking: response.thinking,
+        timestamp: new Date().toISOString(),
+      };
+
+      // If no tool calls — we have the final answer
+      if (!response.toolUse || response.toolUse.length === 0) {
+        agentTask.steps.push(step);
+        return response.text;
+      }
+
+      // Process tool calls
+      const toolResults: Array<{ type: 'tool_result'; tool_use_id: string; content: string }> = [];
+
+      for (const toolCall of response.toolUse) {
+        // Validate action is allowed
+        if (!profile.allowedActions.includes(toolCall.name)) {
+          const errorMsg = `Error: Action "${toolCall.name}" is not allowed. Allowed: ${profile.allowedActions.join(', ')}`;
+          toolResults.push({ type: 'tool_result', tool_use_id: toolCall.id, content: errorMsg });
+          step.action = { tool: toolCall.name, input: toolCall.input, reasoning: response.text };
+          step.observation = { tool: toolCall.name, result: errorMsg, truncated: false };
+          continue;
+        }
+
+        agentTask.usage.toolCalls++;
+        agentActionsTotal.inc({
+          project: projectName,
+          agent_type: agentTask.type,
+          action: toolCall.name,
+          success: 'true',
+        });
+
+        let observation: string;
+        let truncated = false;
+        try {
+          observation = await this.executeAction(toolCall.name, toolCall.input, projectName);
+          if (observation.length > 3000) {
+            observation = observation.slice(0, 3000) + '\n... [truncated]';
+            truncated = true;
+          }
+        } catch (error: any) {
+          observation = `Error executing ${toolCall.name}: ${error.message}`;
+          agentActionsTotal.inc({
+            project: projectName,
+            agent_type: agentTask.type,
+            action: toolCall.name,
+            success: 'false',
+          });
+        }
+
+        toolResults.push({ type: 'tool_result', tool_use_id: toolCall.id, content: observation });
+        step.action = { tool: toolCall.name, input: toolCall.input, reasoning: response.text };
+        step.observation = { tool: toolCall.name, result: observation, truncated };
+      }
+
+      agentTask.steps.push(step);
+
+      // Add assistant response and tool results to history
+      // Build assistant content blocks
+      const assistantContent: any[] = [];
+      if (response.text) {
+        assistantContent.push({ type: 'text', text: response.text });
+      }
+      for (const toolCall of response.toolUse) {
+        assistantContent.push({
+          type: 'tool_use',
+          id: toolCall.id,
+          name: toolCall.name,
+          input: toolCall.input,
+        });
+      }
+      messages.push({ role: 'assistant', content: assistantContent });
+      messages.push({ role: 'user', content: toolResults });
+    }
+
+    // Max iterations reached
+    return this.extractPartialResult(agentTask) || 'Agent reached maximum iterations without a final answer.';
+  }
+
+  // ============================================
+  // ReAct Loop (Ollama text-based)
   // ============================================
 
   private async reactLoop(
@@ -195,8 +315,13 @@ class AgentRuntime {
 
       agentTask.usage.iterations = iteration;
 
-      // Call LLM with dynamic timeout based on remaining time
-      const response = await this.chatWithOllama(messages, profile.temperature, remaining);
+      // Call LLM via chat() method
+      const response = await llm.chat(messages, {
+        temperature: profile.temperature,
+        maxTokens: 4096,
+        provider: 'ollama',
+      });
+
       agentTask.usage.totalTokens += (response.promptTokens || 0) + (response.completionTokens || 0);
 
       const assistantContent = response.text;
@@ -276,83 +401,6 @@ class AgentRuntime {
 
     // Max iterations reached
     return this.extractPartialResult(agentTask) || 'Agent reached maximum iterations without a final answer.';
-  }
-
-  // ============================================
-  // LLM Communication
-  // ============================================
-
-  private async chatWithOllama(
-    messages: ChatMessage[],
-    temperature: number,
-    remainingMs?: number
-  ): Promise<{ text: string; thinking?: string; promptTokens: number; completionTokens: number }> {
-    try {
-      const timeout = remainingMs
-        ? Math.min(90000, remainingMs - 1000)
-        : 90000;
-
-      const body: Record<string, unknown> = {
-        model: config.AGENT_OLLAMA_MODEL,
-        messages,
-        stream: false,
-        options: {
-          temperature,
-          num_predict: 4096,
-          num_ctx: 2048,
-        },
-      };
-
-      if (config.OLLAMA_THINK) {
-        body.think = true;
-      }
-
-      const response = await axios.post<OllamaResponse>(
-        `${config.OLLAMA_URL}/api/chat`,
-        body,
-        { timeout }
-      );
-
-      const thinking = response.data.message?.thinking;
-      if (thinking) {
-        logger.debug('Agent thinking trace', {
-          thinkingChars: thinking.length,
-          preview: thinking.slice(0, 200),
-        });
-      }
-
-      return {
-        text: response.data.message?.content || '',
-        thinking,
-        promptTokens: response.data.prompt_eval_count || 0,
-        completionTokens: response.data.eval_count || 0,
-      };
-    } catch (error: any) {
-      // Fallback: retry without thinking on 400 error
-      if (config.OLLAMA_THINK && error.response?.status === 400) {
-        logger.warn('Agent think mode failed, retrying without thinking');
-        const timeout = remainingMs
-          ? Math.min(60000, remainingMs - 1000)
-          : 60000;
-        const response = await axios.post<OllamaResponse>(
-          `${config.OLLAMA_URL}/api/chat`,
-          {
-            model: config.AGENT_OLLAMA_MODEL,
-            messages,
-            stream: false,
-            options: { temperature, num_predict: 4096, num_ctx: 2048 },
-          },
-          { timeout }
-        );
-        return {
-          text: response.data.message?.content || '',
-          promptTokens: response.data.prompt_eval_count || 0,
-          completionTokens: response.data.eval_count || 0,
-        };
-      }
-      logger.error('Agent Ollama chat failed', { error: error.message });
-      throw new Error(`LLM call failed: ${error.message}`);
-    }
   }
 
   // ============================================
