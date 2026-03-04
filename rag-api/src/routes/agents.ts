@@ -1,14 +1,25 @@
 /**
- * Agent Routes - Run specialized agents and get agent type info.
+ * Agent Routes - Run specialized agents (ReAct + autonomous) and get agent type info.
  */
 
 import { Router, Request, Response } from 'express';
 import { agentRuntime } from '../services/agent-runtime';
+import { claudeAgentService } from '../services/claude-agent';
 import { projectProfileService } from '../services/project-profile';
 import { asyncHandler } from '../middleware/async-handler';
-import { validate, validateProjectName, runAgentSchema } from '../utils/validation';
+import {
+  validate,
+  validateProjectName,
+  runAgentSchema,
+  autonomousAgentSchema,
+  stopAutonomousAgentSchema,
+} from '../utils/validation';
 
 const router = Router();
+
+// ============================================
+// ReAct Agents (in-process, Ollama/Claude)
+// ============================================
 
 /**
  * Run a specialized agent
@@ -49,8 +60,69 @@ router.post(
 router.get(
   '/agent/types',
   asyncHandler(async (_req: Request, res: Response) => {
-    const types = agentRuntime.getAgentTypes();
-    res.json({ agents: types });
+    const reactAgents = agentRuntime.getAgentTypes();
+    const autonomousAgents = claudeAgentService.getAgentTypes();
+    res.json({
+      agents: reactAgents,
+      autonomous: autonomousAgents,
+    });
+  })
+);
+
+// ============================================
+// Autonomous Agents (Claude Agent SDK)
+// ============================================
+
+/**
+ * Run an autonomous Claude agent
+ * POST /api/agent/autonomous
+ */
+router.post(
+  '/agent/autonomous',
+  validateProjectName,
+  validate(autonomousAgentSchema),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { projectName, projectPath, type, task, maxTurns, maxBudgetUsd, model, effort, includeStreaming } = req.body;
+
+    const result = await claudeAgentService.run({
+      projectName,
+      projectPath,
+      type,
+      task,
+      maxTurns,
+      maxBudgetUsd,
+      model,
+      effort,
+      includeStreaming,
+    });
+
+    res.json(result);
+  })
+);
+
+/**
+ * Stop a running autonomous agent
+ * POST /api/agent/autonomous/stop
+ */
+router.post(
+  '/agent/autonomous/stop',
+  validate(stopAutonomousAgentSchema),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { agentId } = req.body;
+    const stopped = claudeAgentService.stop(agentId);
+    res.json({ stopped, agentId });
+  })
+);
+
+/**
+ * List running autonomous agents
+ * GET /api/agent/autonomous/running
+ */
+router.get(
+  '/agent/autonomous/running',
+  asyncHandler(async (_req: Request, res: Response) => {
+    const running = claudeAgentService.getRunningAgents();
+    res.json({ running, count: running.length });
   })
 );
 

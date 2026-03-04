@@ -431,6 +431,24 @@ export const runAgentSchema = z.object({
 
 export type RunAgentInput = z.infer<typeof runAgentSchema>;
 
+export const autonomousAgentSchema = z.object({
+  projectName: projectNameSchema.optional(),
+  projectPath: z.string().min(1).max(1000),
+  type: z.enum(['research', 'review', 'implement', 'test', 'refactor']),
+  task: z.string().min(1).max(10000),
+  maxTurns: z.number().int().min(1).max(100).optional(),
+  maxBudgetUsd: z.number().min(0.01).max(50).optional(),
+  model: z.string().max(100).optional(),
+  effort: z.enum(['low', 'medium', 'high', 'max']).optional(),
+  includeStreaming: z.boolean().optional(),
+});
+
+export type AutonomousAgentInput = z.infer<typeof autonomousAgentSchema>;
+
+export const stopAutonomousAgentSchema = z.object({
+  agentId: z.string().uuid(),
+});
+
 // ============================================
 // Context Pack Schemas
 // ============================================
