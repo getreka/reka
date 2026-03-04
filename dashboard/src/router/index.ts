@@ -48,6 +48,11 @@ const router = createRouter({
       component: () => import('@/pages/VectorSpacePage.vue'),
     },
     {
+      path: '/agents',
+      name: 'agents',
+      component: () => import('@/pages/AgentsPage.vue'),
+    },
+    {
       path: '/settings',
       name: 'settings',
       component: () => import('@/pages/SettingsPage.vue'),

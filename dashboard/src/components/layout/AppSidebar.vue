@@ -13,6 +13,7 @@ const navItems = [
   { to: '/graph', icon: 'pi pi-sitemap', label: 'Graph' },
   { to: '/quality', icon: 'pi pi-check-circle', label: 'Quality' },
   { to: '/vectors', icon: 'pi pi-th-large', label: 'Vectors' },
+  { to: '/agents', icon: 'pi pi-android', label: 'Agents' },
   { to: '/settings', icon: 'pi pi-cog', label: 'Settings' },
 ]
 </script>
