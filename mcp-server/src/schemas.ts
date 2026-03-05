@@ -6,7 +6,6 @@
  */
 
 import { z } from "zod";
-import { zodToJsonSchema } from "zod-to-json-schema";
 import type { ToolInputSchema } from "./types.js";
 
 // ── JSON Schema conversion ──────────────────────────────────
@@ -16,8 +15,8 @@ import type { ToolInputSchema } from "./types.js";
  * Used during Phase 2 migration while ToolRegistry still expects raw JSON Schema.
  * Phase 3 passes Zod schemas directly to McpServer.registerTool().
  */
-export function zodToInputSchema(schema: z.ZodObject<z.ZodRawShape>): ToolInputSchema {
-  const jsonSchema = zodToJsonSchema(schema, { target: "openApi3" }) as Record<string, unknown>;
+export function zodToInputSchema(schema: z.ZodObject<Record<string, z.ZodType>>): ToolInputSchema {
+  const jsonSchema = z.toJSONSchema(schema) as Record<string, unknown>;
   return {
     type: "object",
     properties: (jsonSchema.properties ?? {}) as Record<string, unknown>,

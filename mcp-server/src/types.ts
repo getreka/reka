@@ -3,7 +3,7 @@
  */
 
 import type { AxiosInstance } from "axios";
-import type { ZodObject, ZodRawShape } from "zod";
+import type { z } from "zod";
 import type { ToolAnnotations } from "./annotations.js";
 
 /** MCP tool input schema shape (raw JSON Schema) */
@@ -52,8 +52,8 @@ export interface ToolModule {
 export interface ToolSpec {
   name: string;
   description: string;
-  schema: ZodObject<ZodRawShape>;
-  outputSchema?: ZodObject<ZodRawShape>;
+  schema: z.ZodObject<Record<string, z.ZodType>>;
+  outputSchema?: z.ZodObject<Record<string, z.ZodType>>;
   annotations?: ToolAnnotations;
   handler: ToolHandler;
 }
