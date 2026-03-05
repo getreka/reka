@@ -125,7 +125,7 @@ export function createSessionTools(projectName: string, sharedCtx?: ToolContext)
       name: "analyze_usage_patterns",
       description: `Analyze tool usage patterns for ${projectName}. Shows common workflows, detected patterns, and recommendations for improving productivity.`,
       schema: z.object({
-        days: z.number().optional().describe("Number of days to analyze (default: 7)."),
+        days: z.coerce.number().optional().describe("Number of days to analyze (default: 7)."),
       }),
       annotations: TOOL_ANNOTATIONS["analyze_usage_patterns"],
       handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {

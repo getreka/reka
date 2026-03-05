@@ -110,7 +110,7 @@ export function createAskTools(projectName: string): ToolSpec[] {
         conversation: z.string().describe("The conversation text to analyze"),
         context: z.string().optional().describe("Additional context about the conversation"),
         autoSave: z.boolean().optional().describe("Automatically save extracted learnings (default: false)"),
-        minConfidence: z.number().optional().describe("Minimum confidence threshold for learnings (0-1, default: 0.7)"),
+        minConfidence: z.coerce.number().optional().describe("Minimum confidence threshold for learnings (0-1, default: 0.7)"),
       }),
       annotations: TOOL_ANNOTATIONS["analyze_conversation"],
       handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {

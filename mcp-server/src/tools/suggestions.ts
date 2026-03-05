@@ -336,7 +336,7 @@ export function createSuggestionTools(projectName: string): ToolSpec[] {
       schema: z.object({
         file: z.string().optional().describe("File path to find related code for"),
         code: z.string().optional().describe("Code snippet to find related code for"),
-        limit: z.number().optional().describe("Max results (default: 5)"),
+        limit: z.coerce.number().optional().describe("Max results (default: 5)"),
       }),
       annotations: TOOL_ANNOTATIONS["suggest_related_code"],
       handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {

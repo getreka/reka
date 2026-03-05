@@ -168,10 +168,10 @@ export function createIndexingTools(projectName: string): ToolSpec[] {
       schema: z.object({}),
       outputSchema: z.object({
         status: z.string(),
-        totalFiles: z.number().optional(),
-        indexedFiles: z.number().optional(),
+        totalFiles: z.coerce.number().optional(),
+        indexedFiles: z.coerce.number().optional(),
         lastUpdated: z.string().optional(),
-        vectorCount: z.number().optional(),
+        vectorCount: z.coerce.number().optional(),
         cached: z.boolean(),
       }),
       annotations: TOOL_ANNOTATIONS["get_index_status"],

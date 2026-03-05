@@ -81,7 +81,7 @@ ${alternatives ? `## Alternatives Considered\n${alternatives}` : ""}`;
       schema: z.object({
         query: z.string().optional().describe("Search query (optional - returns all if empty)"),
         status: z.enum(["proposed", "accepted", "deprecated", "superseded", "all"]).optional().describe("Filter by status"),
-        limit: z.number().optional().describe("Max results (default: 10)"),
+        limit: z.coerce.number().optional().describe("Max results (default: 10)"),
       }),
       annotations: TOOL_ANNOTATIONS["get_adrs"],
       handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
@@ -202,7 +202,7 @@ ${appliesTo ? `## Applies To\n${appliesTo}` : ""}`;
       schema: z.object({
         query: z.string().optional().describe("Search for patterns by name or description"),
         appliesTo: z.string().optional().describe("Filter by what patterns apply to (e.g., 'api', 'module')"),
-        limit: z.number().optional().describe("Max results (default: 10)"),
+        limit: z.coerce.number().optional().describe("Max results (default: 10)"),
       }),
       annotations: TOOL_ANNOTATIONS["get_patterns"],
       handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
@@ -577,7 +577,7 @@ ${relatedAdr ? `## Related ADR\n${relatedAdr}` : ""}`;
       description: `List technical debt items for ${projectName}.`,
       schema: z.object({
         impact: z.enum(["low", "medium", "high", "critical", "all"]).optional().describe("Filter by impact"),
-        limit: z.number().optional().describe("Max results (default: 10)"),
+        limit: z.coerce.number().optional().describe("Max results (default: 10)"),
       }),
       annotations: TOOL_ANNOTATIONS["get_tech_debt"],
       handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {

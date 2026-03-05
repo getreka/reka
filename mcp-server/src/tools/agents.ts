@@ -18,7 +18,7 @@ export function createAgentTools(projectName: string): ToolSpec[] {
         type: z.enum(["research", "review", "documentation", "refactor", "test"]).describe("Agent type: research, review, documentation, refactor, or test"),
         task: z.string().describe("The task for the agent to perform"),
         context: z.string().optional().describe("Optional additional context (code, requirements, etc.)"),
-        maxIterations: z.number().optional().describe("Maximum ReAct iterations (default: varies by agent type)"),
+        maxIterations: z.coerce.number().optional().describe("Maximum ReAct iterations (default: varies by agent type)"),
       }),
       annotations: TOOL_ANNOTATIONS["run_agent"],
       handler: async (

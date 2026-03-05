@@ -187,7 +187,7 @@ export function createAnalyticsTools(projectName: string): ToolSpec[] {
       description: `Enable scalar quantization on a ${projectName} collection to reduce memory usage.`,
       schema: z.object({
         collectionName: z.string().describe("Collection name to enable quantization on"),
-        quantile: z.number().optional().describe("Quantile for quantization (0-1, default: 0.99)"),
+        quantile: z.coerce.number().optional().describe("Quantile for quantization (0-1, default: 0.99)"),
       }),
       annotations: TOOL_ANNOTATIONS["enable_quantization"],
       handler: async (

@@ -18,7 +18,7 @@ export function createPmTools(projectName: string): ToolSpec[] {
       description: `Search technical requirements and product documentation for ${projectName}. Finds relevant requirements, user stories, and specifications from Confluence.`,
       schema: z.object({
         query: z.string().describe("Search query for requirements (e.g., 'video inspection flow', 'payment integration')"),
-        limit: z.number().optional().describe("Max results (default: 5)"),
+        limit: z.coerce.number().optional().describe("Max results (default: 5)"),
       }),
       annotations: TOOL_ANNOTATIONS["search_requirements"],
       handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
@@ -273,8 +273,8 @@ export function createPmTools(projectName: string): ToolSpec[] {
       description: `List all documented requirements/features for ${projectName} from Confluence. Groups by category or status.`,
       schema: z.object({
         category: z.string().optional().describe("Filter by category (optional)"),
-        limit: z.number().optional().describe("Max results (default: 20)"),
-        offset: z.number().optional().describe("Pagination offset (default: 0)"),
+        limit: z.coerce.number().optional().describe("Max results (default: 20)"),
+        offset: z.coerce.number().optional().describe("Pagination offset (default: 0)"),
       }),
       annotations: TOOL_ANNOTATIONS["list_requirements"],
       handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {

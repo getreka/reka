@@ -18,7 +18,7 @@ export function createConfluenceTools(projectName: string): ToolSpec[] {
       description: `Search indexed Confluence documentation for ${projectName}. Returns relevant pages with content snippets.`,
       schema: z.object({
         query: z.string().describe("Search query for Confluence content"),
-        limit: z.number().optional().describe("Max results (default: 5)"),
+        limit: z.coerce.number().optional().describe("Max results (default: 5)"),
         spaceKey: z.string().optional().describe("Filter by Confluence space key"),
       }),
       annotations: TOOL_ANNOTATIONS["search_confluence"],
@@ -58,7 +58,7 @@ export function createConfluenceTools(projectName: string): ToolSpec[] {
       schema: z.object({
         spaceKeys: z.array(z.string()).optional().describe("Specific space keys to index (indexes all accessible if empty)"),
         labels: z.array(z.string()).optional().describe("Filter pages by labels"),
-        maxPages: z.number().optional().describe("Maximum pages to index (default: 500)"),
+        maxPages: z.coerce.number().optional().describe("Maximum pages to index (default: 500)"),
         force: z.boolean().optional().describe("Force re-index even if already indexed"),
       }),
       annotations: TOOL_ANNOTATIONS["index_confluence"],

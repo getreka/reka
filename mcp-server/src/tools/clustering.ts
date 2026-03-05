@@ -18,8 +18,8 @@ export function createClusteringTools(projectName: string): ToolSpec[] {
       description: `Cluster code in the ${projectName} codebase by similarity. Groups related files around seed points.`,
       schema: z.object({
         seedIds: z.array(z.string()).describe("Seed point IDs to cluster around"),
-        limit: z.number().optional().describe("Max results per cluster (default: 5)"),
-        threshold: z.number().optional().describe("Minimum similarity threshold (0-1, default: 0.7)"),
+        limit: z.coerce.number().optional().describe("Max results per cluster (default: 5)"),
+        threshold: z.coerce.number().optional().describe("Minimum similarity threshold (0-1, default: 0.7)"),
       }),
       annotations: TOOL_ANNOTATIONS["cluster_code"],
       handler: async (
@@ -64,8 +64,8 @@ export function createClusteringTools(projectName: string): ToolSpec[] {
       description: `Find duplicate or near-duplicate code in ${projectName}. Groups similar files by content.`,
       schema: z.object({
         collection: z.string().optional().describe("Collection to search (default: codebase)"),
-        limit: z.number().optional().describe("Max duplicate groups to return (default: 10)"),
-        threshold: z.number().optional().describe("Minimum similarity threshold (0-1, default: 0.9)"),
+        limit: z.coerce.number().optional().describe("Max duplicate groups to return (default: 10)"),
+        threshold: z.coerce.number().optional().describe("Minimum similarity threshold (0-1, default: 0.9)"),
       }),
       annotations: TOOL_ANNOTATIONS["find_duplicates"],
       handler: async (
@@ -118,7 +118,7 @@ export function createClusteringTools(projectName: string): ToolSpec[] {
       schema: z.object({
         positiveIds: z.array(z.string()).describe("IDs of vectors to find similar code to"),
         negativeIds: z.array(z.string()).optional().describe("IDs of vectors to avoid (dissimilar)"),
-        limit: z.number().optional().describe("Max results (default: 5)"),
+        limit: z.coerce.number().optional().describe("Max results (default: 5)"),
       }),
       annotations: TOOL_ANNOTATIONS["recommend_similar"],
       handler: async (
@@ -159,7 +159,7 @@ export function createClusteringTools(projectName: string): ToolSpec[] {
         text: z.string().describe("Text to extract learnings from"),
         context: z.string().optional().describe("Additional context about the text"),
         autoSave: z.boolean().optional().describe("Automatically save extracted learnings (default: false)"),
-        minConfidence: z.number().optional().describe("Minimum confidence threshold (0-1, default: 0.7)"),
+        minConfidence: z.coerce.number().optional().describe("Minimum confidence threshold (0-1, default: 0.7)"),
       }),
       annotations: TOOL_ANNOTATIONS["extract_learnings"],
       handler: async (

@@ -74,7 +74,7 @@ export function createMemoryTools(projectName: string): ToolSpec[] {
       schema: z.object({
         query: z.string().describe("What to recall (semantic search)"),
         type: z.enum(["decision", "insight", "context", "todo", "conversation", "note", "all"]).optional().describe("Filter by memory type (default: all)"),
-        limit: z.number().optional().describe("Max memories to retrieve (default: 5)"),
+        limit: z.coerce.number().optional().describe("Max memories to retrieve (default: 5)"),
       }),
       annotations: TOOL_ANNOTATIONS["recall"],
       handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
@@ -106,8 +106,8 @@ export function createMemoryTools(projectName: string): ToolSpec[] {
       schema: z.object({
         type: z.enum(["decision", "insight", "context", "todo", "conversation", "note", "all"]).optional().describe("Filter by type"),
         tag: z.string().optional().describe("Filter by tag"),
-        limit: z.number().optional().describe("Max results (default: 10)"),
-        offset: z.number().optional().describe("Pagination offset (default: 0)"),
+        limit: z.coerce.number().optional().describe("Max results (default: 10)"),
+        offset: z.coerce.number().optional().describe("Pagination offset (default: 0)"),
       }),
       annotations: TOOL_ANNOTATIONS["list_memories"],
       handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
@@ -162,7 +162,7 @@ export function createMemoryTools(projectName: string): ToolSpec[] {
       schema: z.object({
         memoryId: z.string().optional().describe("Specific memory ID to delete"),
         type: z.enum(["decision", "insight", "context", "todo", "conversation", "note"]).optional().describe("Delete all memories of this type"),
-        olderThanDays: z.number().optional().describe("Delete memories older than N days"),
+        olderThanDays: z.coerce.number().optional().describe("Delete memories older than N days"),
       }),
       annotations: TOOL_ANNOTATIONS["forget"],
       handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
@@ -318,8 +318,8 @@ export function createMemoryTools(projectName: string): ToolSpec[] {
       name: "review_memories",
       description: `Get auto-extracted memories pending review in ${projectName}. Shows unvalidated learnings that need human confirmation.`,
       schema: z.object({
-        limit: z.number().optional().describe("Max memories to return (default: 20)"),
-        offset: z.number().optional().describe("Pagination offset (default: 0)"),
+        limit: z.coerce.number().optional().describe("Max memories to return (default: 20)"),
+        offset: z.coerce.number().optional().describe("Pagination offset (default: 0)"),
       }),
       annotations: TOOL_ANNOTATIONS["review_memories"],
       handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {

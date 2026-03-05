@@ -18,9 +18,9 @@ export function createAdvancedTools(projectName: string): ToolSpec[] {
       description: `Consolidate duplicate memories for ${projectName}. Finds similar memories and merges them using LLM to reduce clutter.`,
       schema: z.object({
         type: z.string().optional().describe("Filter by memory type (decision, insight, context, todo, conversation, note, or all). Default: all"),
-        threshold: z.number().optional().describe("Similarity threshold for merging (0.5-1.0, default: 0.9). Lower = more aggressive merging."),
+        threshold: z.coerce.number().optional().describe("Similarity threshold for merging (0.5-1.0, default: 0.9). Lower = more aggressive merging."),
         dryRun: z.boolean().optional().describe("If true, preview merge candidates without making changes (default: true)."),
-        limit: z.number().optional().describe("Max clusters to process (default: 50)."),
+        limit: z.coerce.number().optional().describe("Max clusters to process (default: 50)."),
       }),
       annotations: TOOL_ANNOTATIONS["merge_memories"],
       handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
@@ -81,7 +81,7 @@ export function createAdvancedTools(projectName: string): ToolSpec[] {
         currentFile: z.string().describe("Path of the file being edited"),
         currentCode: z.string().describe("Current code snippet or file content"),
         language: z.string().optional().describe("Programming language filter (optional)"),
-        limit: z.number().optional().describe("Max results (default: 5)"),
+        limit: z.coerce.number().optional().describe("Max results (default: 5)"),
       }),
       annotations: TOOL_ANNOTATIONS["get_completion_context"],
       handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
@@ -135,7 +135,7 @@ export function createAdvancedTools(projectName: string): ToolSpec[] {
         currentFile: z.string().describe("Path of the file being edited"),
         currentCode: z.string().describe("Current code content"),
         language: z.string().optional().describe("Programming language filter (optional)"),
-        limit: z.number().optional().describe("Max suggestions (default: 10)"),
+        limit: z.coerce.number().optional().describe("Max suggestions (default: 10)"),
       }),
       annotations: TOOL_ANNOTATIONS["get_import_suggestions"],
       handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
@@ -184,7 +184,7 @@ export function createAdvancedTools(projectName: string): ToolSpec[] {
         typeName: z.string().optional().describe("Name of the type/interface/class to look up"),
         code: z.string().optional().describe("Code containing types to look up (alternative to typeName)"),
         currentFile: z.string().optional().describe("Current file to exclude from results"),
-        limit: z.number().optional().describe("Max results per category (default: 5)"),
+        limit: z.coerce.number().optional().describe("Max results per category (default: 5)"),
       }),
       annotations: TOOL_ANNOTATIONS["get_type_context"],
       handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
@@ -235,7 +235,7 @@ export function createAdvancedTools(projectName: string): ToolSpec[] {
       name: "get_behavior_patterns",
       description: `Analyze user workflow patterns for ${projectName}. Shows peak hours, tool preferences, common sequences, and session statistics.`,
       schema: z.object({
-        days: z.number().optional().describe("Number of days to analyze (default: 7)"),
+        days: z.coerce.number().optional().describe("Number of days to analyze (default: 7)"),
         sessionId: z.string().optional().describe("Filter to a specific session (optional)"),
       }),
       annotations: TOOL_ANNOTATIONS["get_behavior_patterns"],
