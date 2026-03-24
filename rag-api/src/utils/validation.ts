@@ -107,6 +107,7 @@ export const memoryTypeSchema = z.enum([
   'todo',
   'conversation',
   'note',
+  'procedure',
 ]);
 
 export const todoStatusSchema = z.enum([
@@ -131,6 +132,7 @@ export const recallMemorySchema = z.object({
   type: z.union([memoryTypeSchema, z.literal('all')]).default('all'),
   limit: limitSchema.optional(),
   tag: z.string().max(50).optional(),
+  graphRecall: z.boolean().optional(),  // Phase 4: spreading activation
 });
 
 export const promoteMemorySchema = z.object({
@@ -255,6 +257,29 @@ export const memoryFeedbackSchema = z.object({
   comment: z.string().optional(),
   sessionId: z.string().optional(),
 });
+
+// ============================================
+// Sensory Buffer & Working Memory Schemas
+// ============================================
+
+export const sensoryAppendSchema = z.object({
+  projectName: projectNameSchema.optional(),
+  sessionId: z.string().min(1).max(100),
+  toolName: z.string().min(1).max(100),
+  inputSummary: z.string().max(500).default(''),
+  outputSummary: z.string().max(500).default(''),
+  filesTouched: z.array(z.string().max(500)).max(50).default([]),
+  success: z.boolean(),
+  durationMs: z.number().int().min(0),
+});
+
+export const consolidateSchema = z.object({
+  projectName: projectNameSchema.optional(),
+  sessionId: z.string().min(1).max(100),
+  timeout: z.number().int().min(1000).max(300000).optional(),
+});
+
+export const semanticSubtypeSchema = z.enum(['decision', 'insight', 'pattern', 'procedure']);
 
 // ============================================
 // Validation Middleware

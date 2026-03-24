@@ -95,6 +95,14 @@ class CacheService {
   }
 
   /**
+   * Get raw Redis client for services that need native operations (Streams, Hashes, etc.)
+   * Returns null if Redis is not available.
+   */
+  getClient(): Redis | null {
+    return this.isEnabled() ? this.client : null;
+  }
+
+  /**
    * Generate a hash key for caching
    */
   private hash(data: string): string {

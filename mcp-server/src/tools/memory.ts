@@ -73,20 +73,23 @@ export function createMemoryTools(projectName: string): ToolSpec[] {
         "Retrieve relevant memories based on context. Searches agent memory for past decisions, insights, and notes related to the query.",
       schema: z.object({
         query: z.string().describe("What to recall (semantic search)"),
-        type: z.enum(["decision", "insight", "context", "todo", "conversation", "note", "all"]).optional().describe("Filter by memory type (default: all)"),
+        type: z.enum(["decision", "insight", "context", "todo", "conversation", "note", "procedure", "all"]).optional().describe("Filter by memory type (default: all)"),
         limit: z.coerce.number().optional().describe("Max memories to retrieve (default: 5)"),
+        graphRecall: z.boolean().optional().describe("Enable graph-aware recall with spreading activation (default: false)"),
       }),
       annotations: TOOL_ANNOTATIONS["recall"],
       handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
         const query = args.query as string;
         const type = (args.type as string) || "all";
         const limit = (args.limit as number) || 5;
+        const graphRecall = (args.graphRecall as boolean) || false;
 
         const response = await ctx.api.post("/api/memory/recall", {
           projectName: ctx.projectName,
           query,
           type,
           limit,
+          graphRecall,
         });
 
         const results = response.data.results || [];

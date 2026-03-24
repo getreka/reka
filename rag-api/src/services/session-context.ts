@@ -19,7 +19,11 @@ import { predictiveLoader } from './predictive-loader';
 import { cacheService } from './cache';
 import { projectProfileService } from './project-profile';
 import { staleMemoryDetector } from './stale-memory-detector';
+import { workingMemory } from './working-memory';
+import { sensoryBuffer } from './sensory-buffer';
+import { consolidationAgent } from './consolidation-agent';
 import { logger } from '../utils/logger';
+import config from '../config';
 
 export interface SessionContext {
   sessionId: string;
@@ -64,6 +68,8 @@ export interface SessionSummary {
   learningsSaved: number;
   summary: string;
   staleMemoriesCount?: number;
+  workingMemorySlots?: number;
+  sensoryEventCount?: number;
 }
 
 class SessionContextService {
@@ -136,6 +142,11 @@ class SessionContextService {
     await this.persistSession(context);
 
     logger.info(`Session started: ${sessionId}`, { projectName, resumeFrom });
+
+    // Initialize working memory for this session (human memory layer)
+    workingMemory.init(projectName, sessionId).catch(err =>
+      logger.debug('Working memory init failed', { error: err.message })
+    );
 
     // Background: generate predictions and prefetch likely-needed resources
     this.triggerPredictivePrefetch(context).catch(err =>
@@ -305,41 +316,27 @@ class SessionContextService {
       // Ignore errors
     }
 
-    // Save pending learnings if requested
+    // Save learnings: use consolidation agent (Phase 2) or legacy path
     let learningsSaved = 0;
-    if (autoSaveLearnings && context.pendingLearnings.length > 0) {
-      for (const learning of context.pendingLearnings) {
-        try {
-          await memoryGovernance.ingest({
-            projectName,
-            content: learning,
-            type: 'insight',
-            tags: ['session', sessionId.slice(0, 8)],
-            metadata: { sessionId },
-            source: 'auto_conversation',
-          });
-          learningsSaved++;
-        } catch {
-          // Ignore individual failures
-        }
-      }
-    }
-
-    // Save decisions
-    for (const decision of context.decisions) {
+    if (config.CONSOLIDATION_ENABLED && autoSaveLearnings) {
+      // Phase 2: Consolidation agent processes WM + sensory buffer → episodic/semantic LTM
       try {
-        await memoryGovernance.ingest({
-          projectName,
-          content: decision,
-          type: 'decision',
-          tags: ['session', sessionId.slice(0, 8)],
-          metadata: { sessionId },
-          source: 'auto_conversation',
+        const consolidation = await consolidationAgent.consolidate(projectName, sessionId);
+        learningsSaved = consolidation.episodic.length + consolidation.semantic.length;
+        logger.info(`Consolidation produced ${learningsSaved} memories`, {
+          episodic: consolidation.episodic.length,
+          semantic: consolidation.semantic.length,
+          patterns: consolidation.patternsDetected,
+          durationMs: consolidation.durationMs,
         });
-        learningsSaved++;
-      } catch {
-        // Ignore individual failures
+      } catch (err: any) {
+        logger.warn('Consolidation failed, falling back to legacy path', { error: err.message });
+        // Fall through to legacy path below
+        learningsSaved = await this.legacyExtractLearnings(projectName, sessionId, context, autoSaveLearnings);
       }
+    } else {
+      // Legacy path: pending learnings + conversation analyzer
+      learningsSaved = await this.legacyExtractLearnings(projectName, sessionId, context, autoSaveLearnings);
     }
 
     // Update session status
@@ -352,23 +349,6 @@ class SessionContextService {
         summary: summary || usageSummary.summary,
       },
     });
-
-    // Auto-extract learnings from queries if session was active enough
-    if (autoSaveLearnings && context.recentQueries.length > 5) {
-      try {
-        const querySummary = context.recentQueries.slice(-10).join('\n');
-        const extracted = await conversationAnalyzer.analyze({
-          projectName,
-          conversation: querySummary,
-          context: `Session ${sessionId} tool interactions`,
-          autoSave: true,
-          minConfidence: 0.7,
-        });
-        learningsSaved += extracted.learnings?.length || 0;
-      } catch {
-        // Non-critical, ignore
-      }
-    }
 
     // Clear from active cache
     await cacheService.delete(this.getCacheKey(projectName, sessionId));
@@ -387,6 +367,24 @@ class SessionContextService {
       // Non-critical, ignore
     }
 
+    // Log working memory state before cleanup (Phase 2 will use this for consolidation)
+    let workingMemorySlots = 0;
+    let sensoryEventCount = 0;
+    try {
+      const wmState = await workingMemory.getState(projectName, sessionId);
+      workingMemorySlots = wmState.slots.length;
+      sensoryEventCount = await sensoryBuffer.getLength(projectName, sessionId);
+      if (workingMemorySlots > 0) {
+        logger.info(`Session ${sessionId} working memory: ${workingMemorySlots} slots, ${sensoryEventCount} sensory events`);
+      }
+    } catch {
+      // Non-critical
+    }
+
+    // Cleanup working memory and schedule sensory buffer TTL expiry
+    workingMemory.clear(projectName, sessionId).catch(() => {});
+    // Sensory buffer has its own TTL and will auto-expire
+
     const result: SessionSummary = {
       sessionId,
       duration,
@@ -396,12 +394,16 @@ class SessionContextService {
       learningsSaved,
       summary: summary || usageSummary.summary || 'Session ended',
       staleMemoriesCount,
+      workingMemorySlots,
+      sensoryEventCount,
     };
 
     logger.info(`Session ended: ${sessionId}`, {
       duration: Math.round(duration / 1000),
       learningsSaved,
       staleMemories: staleMemoriesCount,
+      workingMemorySlots,
+      sensoryEventCount,
     });
 
     return result;
@@ -619,6 +621,71 @@ class SessionContextService {
       logger.debug('Failed to find last session', { error: error.message });
       return null;
     }
+  }
+
+  /**
+   * Legacy learning extraction path (pre-consolidation).
+   * Saves pending learnings + decisions via governance, then runs conversation analyzer.
+   */
+  private async legacyExtractLearnings(
+    projectName: string,
+    sessionId: string,
+    context: SessionContext,
+    autoSaveLearnings: boolean
+  ): Promise<number> {
+    let learningsSaved = 0;
+
+    if (autoSaveLearnings && context.pendingLearnings.length > 0) {
+      for (const learning of context.pendingLearnings) {
+        try {
+          await memoryGovernance.ingest({
+            projectName,
+            content: learning,
+            type: 'insight',
+            tags: ['session', sessionId.slice(0, 8)],
+            metadata: { sessionId },
+            source: 'auto_conversation',
+          });
+          learningsSaved++;
+        } catch {
+          // Ignore individual failures
+        }
+      }
+    }
+
+    for (const decision of context.decisions) {
+      try {
+        await memoryGovernance.ingest({
+          projectName,
+          content: decision,
+          type: 'decision',
+          tags: ['session', sessionId.slice(0, 8)],
+          metadata: { sessionId },
+          source: 'auto_conversation',
+        });
+        learningsSaved++;
+      } catch {
+        // Ignore individual failures
+      }
+    }
+
+    if (autoSaveLearnings && context.recentQueries.length > 5) {
+      try {
+        const querySummary = context.recentQueries.slice(-10).join('\n');
+        const extracted = await conversationAnalyzer.analyze({
+          projectName,
+          conversation: querySummary,
+          context: `Session ${sessionId} tool interactions`,
+          autoSave: true,
+          minConfidence: 0.7,
+        });
+        learningsSaved += extracted.learnings?.length || 0;
+      } catch {
+        // Non-critical, ignore
+      }
+    }
+
+    return learningsSaved;
   }
 
   private createNewContext(

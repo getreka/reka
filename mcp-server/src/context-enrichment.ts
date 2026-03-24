@@ -222,8 +222,11 @@ export class ContextEnricher {
     );
 
     try {
-      // Parallel recall: general memories + decisions/ADRs
-      const [memoriesRes, decisionsRes] = await Promise.all([
+      // Parallel recall: general memories + decisions/ADRs + LTM (when enabled)
+      const graphRecallEnabled = process.env.GRAPH_RECALL_ENABLED === "true";
+      const consolidationEnabled = process.env.CONSOLIDATION_ENABLED === "true";
+
+      const recalls: Array<Promise<any>> = [
         ctx.api
           .post(
             "/api/memory/recall-durable",
@@ -248,7 +251,27 @@ export class ContextEnricher {
             { signal: controller.signal }
           )
           .catch(() => null),
-      ]);
+      ];
+
+      // Phase 2+4: also recall from LTM (episodic+semantic with Ebbinghaus decay)
+      if (consolidationEnabled) {
+        recalls.push(
+          ctx.api
+            .post(
+              "/api/memory/recall-ltm",
+              {
+                projectName: ctx.projectName,
+                query,
+                limit: this.config.maxAutoRecall,
+                graphRecall: graphRecallEnabled,
+              },
+              { signal: controller.signal }
+            )
+            .catch(() => null)
+        );
+      }
+
+      const [memoriesRes, decisionsRes, ltmRes] = await Promise.all(recalls);
 
       const memories: RecalledMemory[] = [];
       const seenIds = new Set<string>();
@@ -281,6 +304,24 @@ export class ContextEnricher {
         }
       }
 
+      // Process LTM results (episodic + semantic)
+      if (ltmRes?.data?.results) {
+        for (const r of ltmRes.data.results) {
+          const mem = r.memory;
+          const id = mem?.id;
+          if (r.score >= this.config.minRelevance && id && !seenIds.has(id)) {
+            seenIds.add(id);
+            memories.push({
+              type: mem?.subtype || mem?.type || "insight",
+              content: mem?.content || "",
+              score: r.score,
+            });
+          }
+        }
+      }
+
+      // Sort by score and limit
+      memories.sort((a, b) => b.score - a.score);
       return memories.slice(0, this.config.maxAutoRecall + 2);
     } finally {
       clearTimeout(timeout);

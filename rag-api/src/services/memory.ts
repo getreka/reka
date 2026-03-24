@@ -8,14 +8,19 @@ import { v4 as uuidv4 } from 'uuid';
 import { vectorStore, VectorPoint } from './vector-store';
 import { embeddingService } from './embedding';
 import { llm } from './llm';
+import { relationshipClassifier } from './relationship-classifier';
+import { reconsolidation } from './reconsolidation';
+import { spreadingActivation, type ActivatedMemory } from './spreading-activation';
 import { logger } from '../utils/logger';
 import config from '../config';
 
-export type MemoryType = 'decision' | 'insight' | 'context' | 'todo' | 'conversation' | 'note';
+export type MemoryType = 'decision' | 'insight' | 'context' | 'todo' | 'conversation' | 'note' | 'procedure';
 export type MemorySource = 'manual' | 'auto_conversation' | 'auto_pattern' | 'auto_feedback';
 export type TodoStatus = 'pending' | 'in_progress' | 'done' | 'cancelled';
 
-export type MemoryRelationType = 'supersedes' | 'relates_to' | 'contradicts' | 'extends';
+export type MemoryRelationType =
+  | 'supersedes' | 'relates_to' | 'contradicts' | 'extends'
+  | 'caused_by' | 'follow_up' | 'refines' | 'alternative_to';
 
 export interface MemoryRelation {
   targetId: string;
@@ -65,6 +70,7 @@ export interface SearchMemoryOptions {
   type?: MemoryType | 'all';
   limit?: number;
   tag?: string;
+  graphRecall?: boolean;  // Phase 4: enable spreading activation after vector search
 }
 
 export interface ListMemoryOptions {
@@ -141,7 +147,7 @@ class MemoryService {
    * Recall memories by semantic search
    */
   async recall(options: SearchMemoryOptions): Promise<MemorySearchResult[]> {
-    const { projectName, query, type = 'all', limit = 5, tag } = options;
+    const { projectName, query, type = 'all', limit = 5, tag, graphRecall } = options;
     const collectionName = this.getCollectionName(projectName);
 
     const embedding = await embeddingService.embed(query);
@@ -168,7 +174,7 @@ class MemoryService {
     const now = Date.now();
     const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
 
-    return results
+    let mappedResults = results
       .filter(r => !r.payload.supersededBy) // Exclude superseded memories
       .map(r => {
         let score = r.score;
@@ -210,6 +216,60 @@ class MemoryService {
       })
       .sort((a, b) => b.score - a.score)
       .slice(0, limit);
+
+    // Fire-and-forget reconsolidation: strengthen recalled memories + track co-recalls
+    if (config.RECONSOLIDATION_ENABLED && mappedResults.length > 0) {
+      reconsolidation.onRecall(
+        projectName,
+        mappedResults.map(r => ({
+          id: r.memory.id,
+          content: r.memory.content,
+          type: r.memory.type,
+          tags: r.memory.tags,
+          collection: 'durable' as const,
+        })),
+        query
+      ).catch(() => {});
+    }
+
+    // Phase 4: Spreading activation — enrich results with graph-connected memories
+    if (config.GRAPH_RECALL_ENABLED && graphRecall && mappedResults.length > 0) {
+      try {
+        const seeds = mappedResults.map(r => ({ id: r.memory.id, activation: r.score }));
+        const activated = await spreadingActivation.activate(projectName, seeds);
+
+        // Merge: add graph-discovered memories that weren't in vector search results
+        const existingIds = new Set(mappedResults.map(r => r.memory.id));
+        for (const act of activated) {
+          if (existingIds.has(act.id) || act.hop === 0) continue;
+          mappedResults.push({
+            memory: {
+              id: act.id,
+              type: (act.type || 'note') as MemoryType,
+              content: act.content,
+              tags: [],
+              relatedTo: undefined,
+              createdAt: '',
+              updatedAt: '',
+              metadata: { graphActivated: true, hop: act.hop, activatedVia: act.activatedVia },
+              status: undefined,
+              statusHistory: undefined,
+              relationships: undefined,
+              supersededBy: undefined,
+            },
+            score: act.activation,
+          });
+        }
+
+        // Re-sort and re-limit
+        mappedResults.sort((a, b) => b.score - a.score);
+        mappedResults = mappedResults.slice(0, limit);
+      } catch (err: any) {
+        logger.debug('Spreading activation failed, returning vector-only results', { error: err.message });
+      }
+    }
+
+    return mappedResults;
   }
 
   /**
@@ -417,6 +477,7 @@ class MemoryService {
         todo: typeCounts['todo'] || 0,
         conversation: typeCounts['conversation'] || 0,
         note: typeCounts['note'] || 0,
+        procedure: typeCounts['procedure'] || 0,
       },
     };
   }
@@ -783,28 +844,49 @@ class MemoryService {
     embedding: number[]
   ): Promise<MemoryRelation[]> {
     const collectionName = this.getCollectionName(projectName);
-    const relations: MemoryRelation[] = [];
 
-    // Find highly similar existing memories (score > 0.8)
+    // Find similar existing memories
     const similar = await vectorStore.search(collectionName, embedding, 5, undefined, 0.75);
-    if (similar.length === 0) return relations;
+    if (similar.length === 0) return [];
 
+    // Phase 2: LLM-powered classification when consolidation is enabled
+    if (config.CONSOLIDATION_ENABLED) {
+      try {
+        const classified = await relationshipClassifier.classify(
+          { content, type },
+          similar.map(r => ({
+            id: r.id,
+            content: (r.payload.content as string) ?? '',
+            type: (r.payload.type as string) ?? 'note',
+          }))
+        );
+
+        if (classified.length > 0) {
+          return classified.slice(0, 5).map(c => ({
+            targetId: c.targetId,
+            type: c.type as MemoryRelationType,
+            reason: c.reason,
+          }));
+        }
+      } catch (err: any) {
+        logger.debug('LLM relationship classification failed, falling back to threshold-based', { error: err.message });
+      }
+    }
+
+    // Fallback: threshold-based detection (original logic)
+    const relations: MemoryRelation[] = [];
     const contentLower = content.toLowerCase();
 
     for (const r of similar) {
-      const existingContent = (r.payload.content as string || '').toLowerCase();
       const existingType = r.payload.type as string;
 
-      // Same type + very high similarity → likely supersedes
       if (r.score > 0.85 && existingType === type) {
         relations.push({
           targetId: r.id,
           type: 'supersedes',
           reason: `High similarity (${(r.score * 100).toFixed(0)}%) with same type`,
         });
-      }
-      // Contradiction signals: negation words
-      else if (
+      } else if (
         r.score > 0.8 &&
         (contentLower.includes('not ') || contentLower.includes('instead') || contentLower.includes('wrong')) &&
         existingType === type
@@ -814,9 +896,7 @@ class MemoryService {
           type: 'contradicts',
           reason: `Similar topic with contradicting language`,
         });
-      }
-      // Related: same type or shared tags, moderate similarity
-      else if (r.score > 0.75) {
+      } else if (r.score > 0.75) {
         relations.push({
           targetId: r.id,
           type: 'relates_to',
@@ -825,7 +905,7 @@ class MemoryService {
       }
     }
 
-    return relations.slice(0, 5); // Limit to 5 relationships
+    return relations.slice(0, 5);
   }
 
   /**

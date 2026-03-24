@@ -77,6 +77,34 @@ export interface Config {
   TRIBUNAL_JUDGE_COMPLEXITY: 'utility' | 'standard' | 'complex';
   TRIBUNAL_ADVOCATE_COMPLEXITY: 'utility' | 'standard' | 'complex';
 
+  // Human Memory Architecture (Phase 1: Sensory Buffer + Working Memory)
+  SENSORY_BUFFER_MAX_LEN: number;
+  SENSORY_BUFFER_TTL_HOURS: number;
+  WORKING_MEMORY_CAPACITY: number;
+  SENSORY_SALIENCE_THRESHOLD: number;
+
+  // Human Memory Architecture (Phase 2: Consolidation + Episodic/Semantic LTM)
+  CONSOLIDATION_ENABLED: boolean;
+  EPISODIC_BASE_STABILITY_DAYS: number;
+  SEMANTIC_BASE_STABILITY_DAYS: number;
+  PROCEDURAL_BASE_STABILITY_DAYS: number;
+  RECALL_STRENGTHENING_FACTOR: number;
+  CONSOLIDATION_TIMEOUT_MS: number;
+  CONSOLIDATION_LLM_TIMEOUT_MS: number;
+
+  // Human Memory Architecture (Phase 3: Reconsolidation)
+  RECONSOLIDATION_ENABLED: boolean;
+  CORECALL_THRESHOLD: number;
+  CORECALL_TTL_DAYS: number;
+  MAX_TAG_ENRICHMENT_PER_RECALL: number;
+
+  // Human Memory Architecture (Phase 4: Spreading Activation)
+  GRAPH_RECALL_ENABLED: boolean;
+  SPREADING_ACTIVATION_MAX_HOPS: number;
+  SPREADING_ACTIVATION_THRESHOLD: number;
+  SPREADING_ACTIVATION_HOP_DECAY: number;
+  SPREADING_ACTIVATION_CACHE_TTL: number;
+
   // Logging
   LOG_LEVEL: string;
 }
@@ -152,6 +180,34 @@ const config: Config = {
   TRIBUNAL_MAX_BUDGET: parseFloat(process.env.TRIBUNAL_MAX_BUDGET || '0.50'),
   TRIBUNAL_JUDGE_COMPLEXITY: (process.env.TRIBUNAL_JUDGE_COMPLEXITY || 'complex') as Config['TRIBUNAL_JUDGE_COMPLEXITY'],
   TRIBUNAL_ADVOCATE_COMPLEXITY: (process.env.TRIBUNAL_ADVOCATE_COMPLEXITY || 'complex') as Config['TRIBUNAL_ADVOCATE_COMPLEXITY'],
+
+  // Human Memory Architecture (Phase 1: Sensory Buffer + Working Memory)
+  SENSORY_BUFFER_MAX_LEN: parseInt(process.env.SENSORY_BUFFER_MAX_LEN || '10000', 10),
+  SENSORY_BUFFER_TTL_HOURS: parseInt(process.env.SENSORY_BUFFER_TTL_HOURS || '24', 10),
+  WORKING_MEMORY_CAPACITY: parseInt(process.env.WORKING_MEMORY_CAPACITY || '20', 10),
+  SENSORY_SALIENCE_THRESHOLD: parseFloat(process.env.SENSORY_SALIENCE_THRESHOLD || '0.5'),
+
+  // Human Memory Architecture (Phase 2: Consolidation + Episodic/Semantic LTM)
+  CONSOLIDATION_ENABLED: process.env.CONSOLIDATION_ENABLED === 'true',
+  EPISODIC_BASE_STABILITY_DAYS: parseInt(process.env.EPISODIC_BASE_STABILITY_DAYS || '7', 10),
+  SEMANTIC_BASE_STABILITY_DAYS: parseInt(process.env.SEMANTIC_BASE_STABILITY_DAYS || '90', 10),
+  PROCEDURAL_BASE_STABILITY_DAYS: parseInt(process.env.PROCEDURAL_BASE_STABILITY_DAYS || '180', 10),
+  RECALL_STRENGTHENING_FACTOR: parseFloat(process.env.RECALL_STRENGTHENING_FACTOR || '1.5'),
+  CONSOLIDATION_TIMEOUT_MS: parseInt(process.env.CONSOLIDATION_TIMEOUT_MS || '120000', 10),
+  CONSOLIDATION_LLM_TIMEOUT_MS: parseInt(process.env.CONSOLIDATION_LLM_TIMEOUT_MS || '30000', 10),
+
+  // Human Memory Architecture (Phase 3: Reconsolidation)
+  RECONSOLIDATION_ENABLED: process.env.RECONSOLIDATION_ENABLED === 'true',
+  CORECALL_THRESHOLD: parseInt(process.env.CORECALL_THRESHOLD || '3', 10),
+  CORECALL_TTL_DAYS: parseInt(process.env.CORECALL_TTL_DAYS || '30', 10),
+  MAX_TAG_ENRICHMENT_PER_RECALL: parseInt(process.env.MAX_TAG_ENRICHMENT_PER_RECALL || '3', 10),
+
+  // Human Memory Architecture (Phase 4: Spreading Activation)
+  GRAPH_RECALL_ENABLED: process.env.GRAPH_RECALL_ENABLED === 'true',
+  SPREADING_ACTIVATION_MAX_HOPS: parseInt(process.env.SPREADING_ACTIVATION_MAX_HOPS || '2', 10),
+  SPREADING_ACTIVATION_THRESHOLD: parseFloat(process.env.SPREADING_ACTIVATION_THRESHOLD || '0.3'),
+  SPREADING_ACTIVATION_HOP_DECAY: parseFloat(process.env.SPREADING_ACTIVATION_HOP_DECAY || '0.7'),
+  SPREADING_ACTIVATION_CACHE_TTL: parseInt(process.env.SPREADING_ACTIVATION_CACHE_TTL || '300', 10),
 
   // Logging
   LOG_LEVEL: process.env.LOG_LEVEL || 'info',

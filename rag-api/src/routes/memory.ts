@@ -7,6 +7,10 @@ import { memoryService, MemoryType, TodoStatus } from '../services/memory';
 import { memoryGovernance, PromoteReason } from '../services/memory-governance';
 import { qualityGates } from '../services/quality-gates';
 import { conversationAnalyzer } from '../services/conversation-analyzer';
+import { consolidationAgent } from '../services/consolidation-agent';
+import { memoryLtm } from '../services/memory-ltm';
+import { reconsolidation } from '../services/reconsolidation';
+import { memoryGraph } from '../services/memory-graph';
 import { asyncHandler } from '../middleware/async-handler';
 import {
   validate,
@@ -18,6 +22,7 @@ import {
   promoteMemorySchema,
   maintenanceSchema,
   forgetOlderThanSchema,
+  consolidateSchema,
 } from '../utils/validation';
 
 const router = Router();
@@ -62,17 +67,62 @@ router.post('/memory', validateProjectName, validate(createMemorySchema), asyncH
  * POST /api/memory/recall
  */
 router.post('/memory/recall', validateProjectName, validate(recallMemorySchema), asyncHandler(async (req: Request, res: Response) => {
-  const { projectName, query, type, limit, tag } = req.body;
+  const { projectName, query, type, limit = 5, tag, graphRecall } = req.body;
+  const config = (await import('../config')).default;
 
-  const results = await memoryService.recall({
+  // Always search durable (legacy) collection
+  const durableResults = await memoryService.recall({
     projectName,
     query,
     type: type as MemoryType | 'all',
     limit,
     tag,
+    graphRecall,
   });
 
-  res.json({ results });
+  // When consolidation enabled, also search episodic+semantic LTM and merge
+  if (config.CONSOLIDATION_ENABLED) {
+    try {
+      const ltmResults = await memoryLtm.recall({
+        projectName,
+        query,
+        limit,
+      });
+
+      if (ltmResults.length > 0) {
+        // Merge: add LTM results that aren't already in durable results
+        const existingIds = new Set(durableResults.map(r => r.memory.id));
+        for (const ltm of ltmResults) {
+          if (existingIds.has(ltm.memory.id)) continue;
+          durableResults.push({
+            memory: {
+              id: ltm.memory.id,
+              type: ('subtype' in ltm.memory ? ltm.memory.subtype : 'insight') as MemoryType,
+              content: ltm.memory.content,
+              tags: ltm.memory.tags ?? [],
+              relatedTo: undefined,
+              createdAt: ('createdAt' in ltm.memory ? ltm.memory.createdAt : ltm.memory.timestamp) as string,
+              updatedAt: ('updatedAt' in ltm.memory ? ltm.memory.updatedAt : '') as string,
+              metadata: { ltmCollection: ltm.collection, retention: ltm.retention },
+              status: undefined,
+              statusHistory: undefined,
+              relationships: ltm.memory.relationships,
+              supersededBy: ('supersededBy' in ltm.memory ? ltm.memory.supersededBy : undefined) as string | undefined,
+            },
+            score: ltm.score,
+          });
+        }
+
+        // Re-sort and re-limit
+        durableResults.sort((a, b) => b.score - a.score);
+        durableResults.splice(limit);
+      }
+    } catch {
+      // LTM search failed — return durable-only results
+    }
+  }
+
+  res.json({ results: durableResults });
 }));
 
 /**
@@ -399,6 +449,127 @@ router.get('/memory/stale', validateProjectName, asyncHandler(async (req: Reques
   const { staleMemoryDetector } = await import('../services/stale-memory-detector');
   const result = await staleMemoryDetector.detectStaleMemories(projectName);
   res.json(result);
+}));
+
+// ── Phase 2: Consolidation + Episodic/Semantic LTM ──────
+
+/**
+ * Recall from LTM only (episodic + semantic with Ebbinghaus decay)
+ * POST /api/memory/recall-ltm
+ */
+router.post('/memory/recall-ltm', validateProjectName, validate(recallMemorySchema), asyncHandler(async (req: Request, res: Response) => {
+  const { projectName, query, limit = 5 } = req.body;
+  const subtype = req.body.subtype as string | undefined;
+
+  const results = await memoryLtm.recall({
+    projectName,
+    query,
+    limit,
+    subtype: subtype as any,
+  });
+
+  res.json({
+    results: results.map(r => ({
+      memory: r.memory,
+      score: r.score,
+      retention: r.retention,
+      collection: r.collection,
+    })),
+    count: results.length,
+  });
+}));
+
+/**
+ * Trigger consolidation for a session
+ * POST /api/memory/consolidate
+ */
+router.post('/memory/consolidate', validateProjectName, validate(consolidateSchema), asyncHandler(async (req: Request, res: Response) => {
+  const { projectName, sessionId, timeout } = req.body;
+  const result = await consolidationAgent.consolidate(projectName, sessionId, { timeout });
+  res.json({ success: true, ...result });
+}));
+
+/**
+ * List episodic long-term memories
+ * GET /api/memory/episodic
+ */
+router.get('/memory/episodic', validateProjectName, asyncHandler(async (req: Request, res: Response) => {
+  const { projectName } = req.body;
+  const limit = parseInt(req.query.limit as string || '20', 10);
+  const memories = await memoryLtm.list(projectName, 'episodic', { limit });
+  res.json({ memories, count: memories.length });
+}));
+
+/**
+ * List semantic long-term memories
+ * GET /api/memory/semantic
+ */
+router.get('/memory/semantic', validateProjectName, asyncHandler(async (req: Request, res: Response) => {
+  const { projectName } = req.body;
+  const limit = parseInt(req.query.limit as string || '20', 10);
+  const subtype = req.query.subtype as string | undefined;
+  const memories = await memoryLtm.list(projectName, 'semantic', {
+    limit,
+    subtype: subtype as any,
+  });
+  res.json({ memories, count: memories.length });
+}));
+
+/**
+ * Get LTM stats (episodic + semantic counts)
+ * GET /api/memory/ltm-stats
+ */
+router.get('/memory/ltm-stats', validateProjectName, asyncHandler(async (req: Request, res: Response) => {
+  const { projectName } = req.body;
+  const stats = await memoryLtm.getStats(projectName);
+  res.json(stats);
+}));
+
+// ── Phase 3: Reconsolidation ────────────────────────────
+
+/**
+ * Process pending co-recall relationships
+ * POST /api/memory/process-corecalls
+ */
+router.post('/memory/process-corecalls', validateProjectName, asyncHandler(async (req: Request, res: Response) => {
+  const { projectName } = req.body;
+  const result = await reconsolidation.processCoRecalls(projectName);
+  res.json({ success: true, ...result });
+}));
+
+/**
+ * Get co-recall stats for a specific memory
+ * GET /api/memory/corecall-stats/:memoryId
+ */
+router.get('/memory/corecall-stats/:memoryId', validateProjectName, asyncHandler(async (req: Request, res: Response) => {
+  const { projectName } = req.body;
+  const { memoryId } = req.params;
+  const stats = await reconsolidation.getCoRecallStats(projectName, memoryId);
+  res.json(stats);
+}));
+
+// ── Phase 4: Graph-Aware Recall ─────────────────────────
+
+/**
+ * Get relationship subgraph around a memory
+ * GET /api/memory/graph/:memoryId
+ */
+router.get('/memory/graph/:memoryId', validateProjectName, asyncHandler(async (req: Request, res: Response) => {
+  const { projectName } = req.body;
+  const { memoryId } = req.params;
+  const subgraph = await memoryGraph.getSubgraph(projectName, [memoryId]);
+  res.json(subgraph);
+}));
+
+/**
+ * Visualize full memory graph (for dashboard)
+ * POST /api/memory/graph/visualize
+ */
+router.post('/memory/graph/visualize', validateProjectName, asyncHandler(async (req: Request, res: Response) => {
+  const { projectName, memoryIds } = req.body;
+  const ids = Array.isArray(memoryIds) ? memoryIds : [];
+  const subgraph = await memoryGraph.getSubgraph(projectName, ids);
+  res.json(subgraph);
 }));
 
 export default router;

@@ -29,6 +29,7 @@ import pmRoutes from './routes/pm';
 import qualityRoutes from './routes/quality';
 import eventsRoutes from './routes/events';
 import tribunalRoutes from './routes/tribunal';
+import sensoryRoutes from './routes/sensory';
 
 // Extend Express Request type
 declare global {
@@ -117,6 +118,7 @@ app.use('/api', pmRoutes);
 app.use('/api', qualityRoutes);
 app.use('/api', eventsRoutes);
 app.use('/api', tribunalRoutes);
+app.use('/api', sensoryRoutes);
 
 // Legacy routes for backward compatibility with cypro-rag MCP
 app.use('/api/dev/codebase', (req, res, next) => {

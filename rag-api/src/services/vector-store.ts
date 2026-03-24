@@ -64,6 +64,12 @@ const INDEXED_FIELDS: Array<{ fieldName: string; type: 'keyword' | 'integer' | '
   { fieldName: 'layer', type: 'keyword' },
   { fieldName: 'service', type: 'keyword' },
   { fieldName: 'gitCommit', type: 'keyword' },
+  // Phase 2: LTM fields
+  { fieldName: 'sessionId', type: 'keyword' },
+  { fieldName: 'subtype', type: 'keyword' },
+  { fieldName: 'memoryLayer', type: 'keyword' },
+  { fieldName: 'accessCount', type: 'integer' },
+  { fieldName: 'stability', type: 'float' },
 ];
 
 class VectorStoreService {

@@ -192,6 +192,50 @@ export function trackUsage(
     .catch(() => {});
 }
 
+// ── Sensory buffer ─────────────────────────────────────────
+
+/** Extract file paths from tool args */
+function extractFiles(args: Record<string, unknown>): string[] {
+  const files: string[] = [];
+  for (const key of ['file', 'filePath', 'currentFile', 'path']) {
+    const v = args[key];
+    if (typeof v === 'string' && v.length > 0) files.push(v);
+  }
+  const arr = args.affectedFiles || args.files;
+  if (Array.isArray(arr)) {
+    for (const f of arr) {
+      if (typeof f === 'string') files.push(f);
+    }
+  }
+  return files.slice(0, 20);
+}
+
+/** Fire-and-forget: capture tool event in sensory buffer */
+function appendToSensoryBuffer(
+  name: string,
+  args: Record<string, unknown>,
+  startTime: number,
+  success: boolean,
+  resultText: string,
+  ctx: ToolContext
+): void {
+  if (!ctx.activeSessionId) return;
+  if (TRACKING_EXCLUDE.has(name)) return;
+
+  ctx.api
+    .post("/api/sensory/append", {
+      projectName: ctx.projectName,
+      sessionId: ctx.activeSessionId,
+      toolName: name,
+      inputSummary: summarizeInput(name, args).slice(0, 500),
+      outputSummary: (resultText || "").slice(0, 500),
+      filesTouched: extractFiles(args),
+      success,
+      durationMs: Date.now() - startTime,
+    })
+    .catch(() => {});
+}
+
 // ── Error formatting ────────────────────────────────────────
 
 /** Format an error caught during tool execution */
@@ -273,6 +317,9 @@ export function wrapHandler(
       // Track usage (fire-and-forget)
       trackUsage(name, args, startTime, true, text, undefined, ctx);
 
+      // Capture in sensory buffer (fire-and-forget)
+      appendToSensoryBuffer(name, args, startTime, true, text, ctx);
+
       // Prepend context/warnings if available
       const prefix = [warningPrefix, contextPrefix].filter(Boolean).join('');
       if (prefix) {
@@ -287,6 +334,9 @@ export function wrapHandler(
 
       // Track failed usage (fire-and-forget)
       trackUsage(name, args, startTime, false, "", errorMessage, ctx);
+
+      // Capture failure in sensory buffer (fire-and-forget)
+      appendToSensoryBuffer(name, args, startTime, false, errorMessage, ctx);
 
       return errorMessage;
     }
