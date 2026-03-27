@@ -179,6 +179,10 @@ export async function startServer(): Promise<void> {
     const { heartbeatMonitor } = await import('./services/heartbeat');
     heartbeatMonitor.start();
 
+    // Start scheduled maintenance (dedup, cleanup)
+    const { scheduledMaintenance } = await import('./services/scheduled-maintenance');
+    scheduledMaintenance.start();
+
     // Start server
     app.listen(config.API_PORT, config.API_HOST, () => {
       logger.info(`Shared RAG API running at http://${config.API_HOST}:${config.API_PORT}`);

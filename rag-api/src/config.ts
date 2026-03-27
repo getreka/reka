@@ -94,6 +94,31 @@ export interface Config {
   // Sparse Vectors
   SPARSE_VECTORS_ENABLED: boolean;
 
+  // Qdrant BM25 (replaces BGE-M3 sparse vectors)
+  QDRANT_BM25_ENABLED: boolean;
+
+  // Embedding Instructions (Qwen3-Embedding)
+  EMBEDDING_INSTRUCTION_ENABLED: boolean;
+
+  // Reranker
+  RERANKER_ENABLED: boolean;
+  RERANKER_URL: string;
+  RERANKER_MIN_RESULTS: number;
+  RERANKER_TIMEOUT_MS: number;
+  RERANKER_BLEND_WEIGHT: number;
+
+  // RAG-Fusion
+  RAG_FUSION_ENABLED: boolean;
+  RAG_FUSION_REFORMULATION_COUNT: number;
+
+  // Scheduled Maintenance
+  MAINTENANCE_ENABLED: boolean;
+  MAINTENANCE_INTERVAL_HOURS: number;
+  DEDUP_SIMILARITY_THRESHOLD: number;
+  DEDUP_MAX_CLUSTERS: number;
+  DEDUP_DELETE_SUPERSEDED: boolean;
+  DEDUP_DELETE_GRACE_DAYS: number;
+
   // Authentication
   API_KEY?: string;
 
@@ -197,6 +222,31 @@ const config: Config = {
 
   // Sparse Vectors
   SPARSE_VECTORS_ENABLED: process.env.SPARSE_VECTORS_ENABLED === 'true',
+
+  // Qdrant BM25
+  QDRANT_BM25_ENABLED: process.env.QDRANT_BM25_ENABLED === 'true',
+
+  // Embedding Instructions
+  EMBEDDING_INSTRUCTION_ENABLED: process.env.EMBEDDING_INSTRUCTION_ENABLED !== 'false',
+
+  // Reranker
+  RERANKER_ENABLED: process.env.RERANKER_ENABLED !== 'false',
+  RERANKER_URL: process.env.RERANKER_URL || process.env.BGE_M3_URL || 'http://localhost:8080',
+  RERANKER_MIN_RESULTS: parseInt(process.env.RERANKER_MIN_RESULTS || '3', 10),
+  RERANKER_TIMEOUT_MS: parseInt(process.env.RERANKER_TIMEOUT_MS || '5000', 10),
+  RERANKER_BLEND_WEIGHT: parseFloat(process.env.RERANKER_BLEND_WEIGHT || '0.6'),
+
+  // RAG-Fusion
+  RAG_FUSION_ENABLED: process.env.RAG_FUSION_ENABLED === 'true',
+  RAG_FUSION_REFORMULATION_COUNT: parseInt(process.env.RAG_FUSION_REFORMULATION_COUNT || '3', 10),
+
+  // Scheduled Maintenance
+  MAINTENANCE_ENABLED: process.env.MAINTENANCE_ENABLED !== 'false',
+  MAINTENANCE_INTERVAL_HOURS: parseInt(process.env.MAINTENANCE_INTERVAL_HOURS || '24', 10),
+  DEDUP_SIMILARITY_THRESHOLD: parseFloat(process.env.DEDUP_SIMILARITY_THRESHOLD || '0.88'),
+  DEDUP_MAX_CLUSTERS: parseInt(process.env.DEDUP_MAX_CLUSTERS || '50', 10),
+  DEDUP_DELETE_SUPERSEDED: process.env.DEDUP_DELETE_SUPERSEDED !== 'false',
+  DEDUP_DELETE_GRACE_DAYS: parseInt(process.env.DEDUP_DELETE_GRACE_DAYS || '7', 10),
 
   // Authentication
   API_KEY: process.env.API_KEY,

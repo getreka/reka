@@ -71,6 +71,8 @@ export interface SearchMemoryOptions {
   limit?: number;
   tag?: string;
   graphRecall?: boolean;  // Phase 4: enable spreading activation after vector search
+  ragFusion?: boolean;    // RAG-Fusion: multi-query + RRF merge
+  recencyBoost?: number;  // 0-1: weight for recency scoring (0=disabled)
 }
 
 export interface ListMemoryOptions {
@@ -147,10 +149,8 @@ class MemoryService {
    * Recall memories by semantic search
    */
   async recall(options: SearchMemoryOptions): Promise<MemorySearchResult[]> {
-    const { projectName, query, type = 'all', limit = 5, tag, graphRecall } = options;
+    const { projectName, query, type = 'all', limit = 5, tag, graphRecall, ragFusion, recencyBoost = 0 } = options;
     const collectionName = this.getCollectionName(projectName);
-
-    const embedding = await embeddingService.embed(query);
 
     // Build Qdrant filter
     const mustConditions: Record<string, unknown>[] = [];
@@ -160,16 +160,34 @@ class MemoryService {
     if (tag) {
       mustConditions.push({ key: 'tags', match: { any: [tag] } });
     }
-
     const filter = mustConditions.length > 0 ? { must: mustConditions } : undefined;
 
-    // Over-fetch to compensate for aging and superseded filtering
-    const results = await vectorStore.search(
-      collectionName,
-      embedding,
-      limit * 2,
-      filter
-    );
+    let results;
+
+    // RAG-Fusion path: multi-query + RRF merge
+    if (ragFusion && config.RAG_FUSION_ENABLED) {
+      const { retrievalFusion } = await import('./retrieval-fusion');
+      results = await retrievalFusion.fusedRecall(
+        query,
+        async (q: string) => {
+          const emb = config.EMBEDDING_INSTRUCTION_ENABLED
+            ? await embeddingService.embedQuery(q, 'memory_recall')
+            : await embeddingService.embed(q);
+          return vectorStore.search(collectionName, emb, limit * 2, filter);
+        },
+        limit * 3
+      );
+    } else {
+      // Standard path: single query
+      const embedding = config.EMBEDDING_INSTRUCTION_ENABLED
+        ? await embeddingService.embedQuery(query, 'memory_recall')
+        : await embeddingService.embed(query);
+      results = await vectorStore.search(collectionName, embedding, limit * 3, filter);
+    }
+
+    // Cross-encoder reranking (before aging/superseded filter to rank all candidates)
+    const { reranker } = await import('./reranker');
+    results = await reranker.rerank(query, results, limit * 2);
 
     const now = Date.now();
     const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
@@ -214,8 +232,23 @@ class MemoryService {
           score,
         };
       })
-      .sort((a, b) => b.score - a.score)
-      .slice(0, limit);
+      .sort((a, b) => b.score - a.score);
+
+    // Recency boost: blend score with freshness for "current state" queries
+    if (recencyBoost > 0) {
+      const now = Date.now();
+      for (const result of mappedResults) {
+        const createdAt = result.memory.createdAt;
+        if (createdAt) {
+          const ageInDays = (now - new Date(createdAt).getTime()) / 86400000;
+          const freshness = Math.exp(-ageInDays / 30); // 30-day half-life
+          result.score = result.score * (1 - recencyBoost) + freshness * recencyBoost;
+        }
+      }
+      mappedResults.sort((a, b) => b.score - a.score);
+    }
+
+    mappedResults = mappedResults.slice(0, limit);
 
     // Fire-and-forget reconsolidation: strengthen recalled memories + track co-recalls
     if (config.RECONSOLIDATION_ENABLED && mappedResults.length > 0) {

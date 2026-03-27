@@ -68,7 +68,7 @@ router.post('/memory', validateProjectName, validate(createMemorySchema), asyncH
  * POST /api/memory/recall
  */
 router.post('/memory/recall', validateProjectName, validate(recallMemorySchema), asyncHandler(async (req: Request, res: Response) => {
-  const { projectName, query, type, limit = 5, tag, graphRecall } = req.body;
+  const { projectName, query, type, limit = 5, tag, graphRecall, ragFusion, recencyBoost } = req.body;
   const config = (await import('../config')).default;
 
   // Always search durable (legacy) collection

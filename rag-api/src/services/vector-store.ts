@@ -370,6 +370,132 @@ class VectorStoreService {
   }
 
   /**
+   * Ensure collection with Qdrant built-in BM25 sparse vectors.
+   * Requires Qdrant v1.15.2+. No external sparse encoder needed.
+   */
+  async ensureCollectionWithBM25(name: string): Promise<void> {
+    try {
+      const collections = await this.client.getCollections();
+      const exists = collections.collections.some(c => c.name === name);
+
+      if (!exists) {
+        await this.resolveOrphanedAlias(name);
+
+        await this.client.createCollection(name, {
+          vectors: {
+            dense: {
+              size: config.VECTOR_SIZE,
+              distance: 'Cosine',
+            },
+          },
+          sparse_vectors: {
+            bm25: {
+              modifier: 'idf',
+            },
+          },
+          optimizers_config: {
+            default_segment_number: 2,
+          },
+        });
+        logger.info(`Created BM25 collection: ${name}`);
+        await this.createPayloadIndexes(name);
+      }
+    } catch (error) {
+      logger.error(`Failed to ensure BM25 collection: ${name}`, { error });
+      throw error;
+    }
+  }
+
+  /**
+   * Upsert with dense vector + raw text for Qdrant BM25 tokenization.
+   */
+  async upsertWithBM25(
+    collection: string,
+    points: Array<{
+      id?: string;
+      vector: number[];
+      text: string;
+      payload: Record<string, unknown>;
+    }>
+  ): Promise<void> {
+    await this.ensureCollectionWithBM25(collection);
+
+    const formattedPoints = points.map(p => ({
+      id: p.id || uuidv4(),
+      vector: {
+        dense: p.vector,
+        bm25: {
+          text: p.text,
+          model: 'Qdrant/bm25',
+        } as any,
+      },
+      payload: p.payload,
+    }));
+
+    const BATCH_SIZE = 100;
+    for (let i = 0; i < formattedPoints.length; i += BATCH_SIZE) {
+      const batch = formattedPoints.slice(i, i + BATCH_SIZE);
+      await this.client.upsert(collection, {
+        wait: true,
+        points: batch,
+      });
+    }
+
+    logger.debug(`Upserted ${points.length} BM25 points to ${collection}`);
+  }
+
+  /**
+   * Hybrid search using dense vectors + Qdrant built-in BM25.
+   * Requires Qdrant v1.15.2+. Sends raw query text for BM25 tokenization.
+   */
+  async searchHybridBM25(
+    collection: string,
+    denseVector: number[],
+    queryText: string,
+    limit: number = 10,
+    filter?: Record<string, unknown>
+  ): Promise<SearchResult[]> {
+    try {
+      const response = await (this.client as any).query(collection, {
+        prefetch: [
+          {
+            query: {
+              text: queryText,
+              model: 'Qdrant/bm25',
+            },
+            using: 'bm25',
+            limit: limit * 2,
+            ...(filter ? { filter: filter as any } : {}),
+          },
+          {
+            query: denseVector,
+            using: 'dense',
+            limit: limit * 2,
+            ...(filter ? { filter: filter as any } : {}),
+          },
+        ],
+        query: { fusion: 'rrf' },
+        limit,
+        with_payload: true,
+      });
+
+      const points = response.points || response;
+      return (Array.isArray(points) ? points : []).map((r: any) => ({
+        id: r.id as string,
+        score: r.score,
+        payload: r.payload as Record<string, unknown>,
+      }));
+    } catch (error: any) {
+      logger.warn('BM25 hybrid search failed, falling back to dense-only', {
+        error: error.message,
+        collection,
+      });
+      // Fallback: dense-only search
+      return this.search(collection, denseVector, limit, filter);
+    }
+  }
+
+  /**
    * Native hybrid search using Qdrant Query API with prefetch + RRF fusion.
    * Requires Qdrant v1.10+ and @qdrant/js-client-rest ^1.10.0.
    *

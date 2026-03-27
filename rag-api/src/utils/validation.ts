@@ -133,6 +133,8 @@ export const recallMemorySchema = z.object({
   limit: limitSchema.optional(),
   tag: z.string().max(50).optional(),
   graphRecall: z.boolean().optional(),  // Phase 4: spreading activation
+  ragFusion: z.boolean().optional(),   // RAG-Fusion: multi-query + RRF merge
+  recencyBoost: z.number().min(0).max(1).optional(), // Recency boost weight (0-1)
 });
 
 export const promoteMemorySchema = z.object({

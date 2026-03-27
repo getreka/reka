@@ -128,12 +128,17 @@ class EmbeddingService {
    * Batch embed with session awareness
    */
   async embedBatch(texts: string[], options?: EmbedOptions): Promise<number[][]> {
-    // For BGE-M3 server, we can batch efficiently
+    // BGE-M3 server batch
     if (this.provider === 'bge-m3-server') {
       return this.embedBatchWithBGE(texts, options);
     }
 
-    // Otherwise, embed one by one with caching
+    // Ollama batch via /api/embed (array input)
+    if (this.provider === 'ollama') {
+      return this.embedBatchOllama(texts, options);
+    }
+
+    // Fallback: embed one by one with caching
     const embeddings: number[][] = [];
     for (const text of texts) {
       embeddings.push(await this.embed(text, options));
@@ -337,13 +342,114 @@ class EmbeddingService {
     }
   }
 
+  /**
+   * Task-specific instruction prefixes for Qwen3-Embedding.
+   * Queries get prefixed; documents do not.
+   */
+  private readonly TASK_INSTRUCTIONS: Record<string, string> = {
+    code_search: 'Given a code search query, retrieve relevant source code snippets that match the query',
+    memory_recall: 'Given a memory query, retrieve relevant past decisions, insights and context',
+    doc_search: 'Given a technical question, retrieve relevant documentation passages',
+    general: 'Given a search query, retrieve relevant text passages that answer the query',
+  };
+
+  /**
+   * Embed a query with instruction prefix (for search/recall).
+   * Uses Ollama /api/embed endpoint with batch support and MRL truncation.
+   */
+  async embedQuery(text: string, task: string = 'general'): Promise<number[]> {
+    let input = text;
+    if (config.EMBEDDING_INSTRUCTION_ENABLED && this.provider === 'ollama') {
+      const instruction = this.TASK_INSTRUCTIONS[task] || this.TASK_INSTRUCTIONS.general;
+      input = `Instruct: ${instruction}\nQuery: ${text}`;
+    }
+    return this.embed(input);
+  }
+
+  /**
+   * Embed a document (for indexing/storage). No instruction prefix.
+   */
+  async embedDocument(text: string, options?: EmbedOptions): Promise<number[]> {
+    return this.embed(text, options);
+  }
+
+  /**
+   * Batch embed documents via Ollama /api/embed (array input).
+   */
+  async embedBatchOllama(texts: string[], options?: EmbedOptions): Promise<number[][]> {
+    const embeddings: number[][] = new Array(texts.length);
+    const uncachedIndices: number[] = [];
+    const uncachedTexts: string[] = [];
+
+    // Check cache first
+    for (let i = 0; i < texts.length; i++) {
+      const cached = options?.sessionId && options?.projectName
+        ? (await cacheService.getSessionEmbedding(texts[i], { sessionId: options.sessionId, projectName: options.projectName })).embedding
+        : await cacheService.getEmbedding(texts[i]);
+      if (cached) {
+        embeddings[i] = cached;
+      } else {
+        uncachedIndices.push(i);
+        uncachedTexts.push(texts[i]);
+      }
+    }
+
+    if (uncachedTexts.length === 0) return embeddings;
+
+    // Batch via /api/embed (supports array input)
+    const BATCH_SIZE = 32;
+    for (let b = 0; b < uncachedTexts.length; b += BATCH_SIZE) {
+      const batch = uncachedTexts.slice(b, b + BATCH_SIZE);
+      try {
+        const response = await axios.post(`${config.OLLAMA_URL}/api/embed`, {
+          model: config.OLLAMA_EMBEDDING_MODEL,
+          input: batch,
+        }, { timeout: 60000 });
+
+        const computed: number[][] = response.data.embeddings;
+        for (let j = 0; j < computed.length; j++) {
+          const idx = uncachedIndices[b + j];
+          // MRL truncation to VECTOR_SIZE
+          embeddings[idx] = computed[j].slice(0, config.VECTOR_SIZE);
+
+          // Cache
+          if (options?.sessionId && options?.projectName) {
+            await cacheService.setSessionEmbedding(uncachedTexts[b + j], embeddings[idx], {
+              sessionId: options.sessionId,
+              projectName: options.projectName,
+            });
+          } else {
+            await cacheService.setEmbedding(uncachedTexts[b + j], embeddings[idx]);
+          }
+        }
+      } catch (error: any) {
+        logger.error('Ollama batch embedding failed', { error: error.message, batchSize: batch.length });
+        // Fallback: embed one by one
+        for (let j = 0; j < batch.length; j++) {
+          const idx = uncachedIndices[b + j];
+          embeddings[idx] = await this.computeEmbedding(batch[j]);
+        }
+      }
+    }
+
+    logger.debug('Ollama batch embedding completed', {
+      total: texts.length,
+      cached: texts.length - uncachedTexts.length,
+      computed: uncachedTexts.length,
+    });
+
+    return embeddings;
+  }
+
   private async embedWithOllama(text: string): Promise<number[]> {
     try {
-      const response = await axios.post(`${config.OLLAMA_URL}/api/embeddings`, {
+      const response = await axios.post(`${config.OLLAMA_URL}/api/embed`, {
         model: config.OLLAMA_EMBEDDING_MODEL,
-        prompt: text,
-      });
-      return response.data.embedding;
+        input: text,
+      }, { timeout: 30000 });
+      const embedding: number[] = response.data.embeddings[0];
+      // MRL truncation: Qwen3 outputs up to 2560d, truncate to VECTOR_SIZE
+      return embedding.slice(0, config.VECTOR_SIZE);
     } catch (error: any) {
       logger.error('Ollama embedding failed', { error: error.message });
       throw error;
