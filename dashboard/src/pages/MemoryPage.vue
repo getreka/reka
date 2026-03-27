@@ -121,6 +121,24 @@ async function handleBulkDelete(type: MemoryType) {
     toast.error('Bulk delete failed')
   }
 }
+
+async function handleBatchPromote(ids: string[], reason: string) {
+  let ok = 0, fail = 0
+  for (const id of ids) {
+    try { await store.promote(id, reason); ok++ } catch { fail++ }
+  }
+  toast.success(`Promoted ${ok}${fail ? `, ${fail} failed` : ''}`)
+  reload()
+}
+
+async function handleBatchReject(ids: string[]) {
+  let ok = 0, fail = 0
+  for (const id of ids) {
+    try { await store.validate(id, false); ok++ } catch { fail++ }
+  }
+  toast.success(`Rejected ${ok}${fail ? `, ${fail} failed` : ''}`)
+  reload()
+}
 </script>
 
 <template>
@@ -162,6 +180,8 @@ async function handleBulkDelete(type: MemoryType) {
             :memories="store.quarantine"
             @validate="handleValidate"
             @promote="handlePromote"
+            @batch-promote="handleBatchPromote"
+            @batch-reject="handleBatchReject"
           />
         </TabPanel>
         <TabPanel value="unvalidated">

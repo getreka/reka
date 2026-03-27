@@ -173,6 +173,50 @@ class CacheService {
   }
 
   /**
+   * Atomic increment (for metering counters)
+   */
+  async increment(key: string, amount: number = 1): Promise<number> {
+    if (!this.isEnabled()) return 0;
+
+    try {
+      if (amount === 1) {
+        return await this.client!.incr(key);
+      }
+      return await this.client!.incrby(key, Math.round(amount));
+    } catch (error) {
+      logger.debug('Cache increment failed', { key, error });
+      return 0;
+    }
+  }
+
+  /**
+   * Alias for delete (used by key management)
+   */
+  async del(key: string): Promise<void> {
+    return this.delete(key);
+  }
+
+  /**
+   * Scan keys matching a pattern (safe for large keyspaces)
+   */
+  async scanKeys(pattern: string, count: number = 100): Promise<string[]> {
+    if (!this.isEnabled()) return [];
+
+    const results: string[] = [];
+    try {
+      let cursor = '0';
+      do {
+        const [newCursor, keys] = await this.client!.scan(cursor, 'MATCH', pattern, 'COUNT', count);
+        cursor = newCursor;
+        results.push(...keys);
+      } while (cursor !== '0' && results.length < 1000);
+    } catch (error) {
+      logger.debug('Cache scan failed', { pattern, error });
+    }
+    return results;
+  }
+
+  /**
    * Get or set with callback
    */
   async getOrSet<T>(

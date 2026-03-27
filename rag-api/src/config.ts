@@ -1,9 +1,47 @@
 /**
- * Shared RAG API Configuration
+ * Reka RAG API Configuration
+ *
+ * Priority: env vars > reka.config.yaml > defaults
  */
 
 import dotenv from 'dotenv';
 dotenv.config();
+
+import * as fs from 'fs';
+import * as path from 'path';
+import * as yaml from 'js-yaml';
+
+// Load reka.config.yaml if present
+function loadYamlConfig(): Record<string, any> {
+  const candidates = [
+    process.env.REKA_CONFIG,
+    path.join(process.cwd(), 'reka.config.yaml'),
+    path.join(process.cwd(), 'reka.config.yml'),
+  ].filter(Boolean) as string[];
+
+  for (const filePath of candidates) {
+    try {
+      if (fs.existsSync(filePath)) {
+        return (yaml.load(fs.readFileSync(filePath, 'utf-8')) as Record<string, any>) || {};
+      }
+    } catch { /* ignore */ }
+  }
+  return {};
+}
+
+const yamlConfig = loadYamlConfig();
+
+// Helper: env var > yaml path > default
+function envOrYaml(envKey: string, yamlPath: string, fallback: string): string {
+  if (process.env[envKey]) return process.env[envKey]!;
+  const parts = yamlPath.split('.');
+  let val: any = yamlConfig;
+  for (const p of parts) {
+    val = val?.[p];
+    if (val === undefined) return fallback;
+  }
+  return String(val);
+}
 
 export interface Config {
   // Server
@@ -118,19 +156,19 @@ const config: Config = {
   QDRANT_URL: process.env.QDRANT_URL || 'http://localhost:6333',
   QDRANT_API_KEY: process.env.QDRANT_API_KEY,
 
-  // Embedding
-  EMBEDDING_PROVIDER: (process.env.EMBEDDING_PROVIDER || 'bge-m3-server') as Config['EMBEDDING_PROVIDER'],
-  BGE_M3_URL: process.env.BGE_M3_URL || 'http://localhost:8080',
-  OLLAMA_URL: process.env.OLLAMA_URL || 'http://localhost:11434',
-  OLLAMA_EMBEDDING_MODEL: process.env.OLLAMA_EMBEDDING_MODEL || 'bge-m3',
-  OPENAI_API_KEY: process.env.OPENAI_API_KEY,
+  // Embedding (env > reka.config.yaml > default)
+  EMBEDDING_PROVIDER: envOrYaml('EMBEDDING_PROVIDER', 'models.embeddings.provider', 'bge-m3-server') as Config['EMBEDDING_PROVIDER'],
+  BGE_M3_URL: envOrYaml('BGE_M3_URL', 'models.embeddings.url', 'http://localhost:8080'),
+  OLLAMA_URL: envOrYaml('OLLAMA_URL', 'models.llm.utility.url', 'http://localhost:11434'),
+  OLLAMA_EMBEDDING_MODEL: envOrYaml('OLLAMA_EMBEDDING_MODEL', 'models.embeddings.model', 'bge-m3'),
+  OPENAI_API_KEY: process.env.OPENAI_API_KEY || yamlConfig?.models?.embeddings?.api_key,
 
-  // LLM
-  LLM_PROVIDER: (process.env.LLM_PROVIDER || 'ollama') as Config['LLM_PROVIDER'],
-  OLLAMA_MODEL: process.env.OLLAMA_MODEL || 'qwen3.5:35b',
-  OPENAI_MODEL: process.env.OPENAI_MODEL || 'gpt-4-turbo-preview',
-  ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY,
-  ANTHROPIC_MODEL: process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6',
+  // LLM (env > reka.config.yaml > default)
+  LLM_PROVIDER: envOrYaml('LLM_PROVIDER', 'models.llm.standard.provider', 'ollama') as Config['LLM_PROVIDER'],
+  OLLAMA_MODEL: envOrYaml('OLLAMA_MODEL', 'models.llm.utility.model', 'qwen3.5:35b'),
+  OPENAI_MODEL: envOrYaml('OPENAI_MODEL', 'models.llm.standard.model', 'gpt-4-turbo-preview'),
+  ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY || yamlConfig?.models?.llm?.complex?.api_key,
+  ANTHROPIC_MODEL: envOrYaml('ANTHROPIC_MODEL', 'models.llm.complex.model', 'claude-sonnet-4-6'),
   ANTHROPIC_THINK: process.env.ANTHROPIC_THINK !== 'false',
   CLAUDE_EFFORT: (process.env.CLAUDE_EFFORT || 'high') as Config['CLAUDE_EFFORT'],
 
