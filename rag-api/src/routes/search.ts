@@ -141,10 +141,15 @@ router.post('/search', validate(searchSchema), asyncHandler(async (req: Request,
   const { collection, query, limit = 5, filters, scoreThreshold, mode = 'content' } = req.body;
   const projectName = req.headers['x-project-name'] as string || collection.split('_')[0];
 
-  const queryEmbedding = await embeddingService.embed(query);
+  const queryEmbedding = await embeddingService.embedQuery(query, 'code_search');
   const filter = buildSearchFilter(filters);
   const rawResults = await vectorStore.search(collection, queryEmbedding, limit * 3, filter, scoreThreshold);
-  const boosted = applyChunkTypeBoost(rawResults);
+
+  // Cross-encoder reranking
+  const { reranker } = await import('../services/reranker');
+  const reranked = await reranker.rerank(query, rawResults, limit * 2);
+
+  const boosted = applyChunkTypeBoost(reranked);
   boosted.sort((a, b) => b.score - a.score);
   const deduped = deduplicateByFile(boosted).slice(0, limit);
 
@@ -198,7 +203,7 @@ router.post('/search-similar', validate(searchSimilarSchema), asyncHandler(async
 router.post('/search-grouped', validate(searchGroupedSchema), asyncHandler(async (req: Request, res: Response) => {
   const { collection, query, groupBy = 'file', limit = 10, groupSize = 1, filters, scoreThreshold, mode = 'content' } = req.body;
 
-  const queryEmbedding = await embeddingService.embed(query);
+  const queryEmbedding = await embeddingService.embedQuery(query, 'code_search');
   const filter = buildSearchFilter(filters);
 
   const projectName = req.headers['x-project-name'] as string || collection.split('_')[0];
@@ -370,7 +375,7 @@ router.post('/search-hybrid', validate(searchHybridSchema), asyncHandler(async (
 router.post('/ask', validate(askSchema), asyncHandler(async (req: Request, res: Response) => {
   const { collection, question, includeThinking } = req.body;
 
-  const queryEmbedding = await embeddingService.embed(question);
+  const queryEmbedding = await embeddingService.embedQuery(question, 'code_search');
   const rawResults = await vectorStore.search(collection, queryEmbedding, 24);
   const searchResults = deduplicateByFile(applyChunkTypeBoost(rawResults).sort((a, b) => b.score - a.score)).slice(0, 5);
 
@@ -461,7 +466,7 @@ Format your response as JSON with keys: summary, purpose, keyComponents (array),
 router.post('/find-feature', validate(findFeatureSchema), asyncHandler(async (req: Request, res: Response) => {
   const { collection, description } = req.body;
 
-  const queryEmbedding = await embeddingService.embed(description);
+  const queryEmbedding = await embeddingService.embedQuery(description, 'code_search');
   const results = await vectorStore.search(collection, queryEmbedding, 10);
 
   if (results.length === 0) {
@@ -519,7 +524,7 @@ router.post('/search-graph', asyncHandler(async (req: Request, res: Response) =>
   const projectName = collection.replace(/_codebase$|_code$/, '');
 
   // 1. Semantic search
-  const queryEmbedding = await embeddingService.embed(query);
+  const queryEmbedding = await embeddingService.embedQuery(query, 'code_search');
   const semanticResults = await vectorStore.search(collection, queryEmbedding, limit);
 
   // 2. Get files from results

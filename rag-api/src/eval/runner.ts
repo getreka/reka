@@ -47,7 +47,14 @@ export async function runEval(options: RunOptions = {}): Promise<EvalReport> {
   const collection = `${projectName}_codebase`;
   const mode = options.hybrid ? 'hybrid' : 'semantic';
 
-  const api: AxiosInstance = axios.create({ baseURL: apiUrl, timeout: 30000 });
+  const api: AxiosInstance = axios.create({
+    baseURL: apiUrl,
+    timeout: 120000,
+    headers: {
+      'X-Project-Name': projectName,
+      'X-API-Key': process.env.RAG_API_KEY || '',
+    },
+  });
 
   const endpoint = mode === 'hybrid' ? '/api/search-hybrid' : '/api/search';
   const perQuery: PerQueryResult[] = [];
