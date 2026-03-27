@@ -59,7 +59,9 @@ export async function runEval(options: RunOptions = {}): Promise<EvalReport> {
   const endpoint = mode === 'hybrid' ? '/api/search-hybrid' : '/api/search';
   const perQuery: PerQueryResult[] = [];
 
-  console.log(`\nRunning eval: ${dataset.queries.length} queries | mode: ${mode} | collection: ${collection}\n`);
+  console.log(
+    `\nRunning eval: ${dataset.queries.length} queries | mode: ${mode} | collection: ${collection}\n`
+  );
 
   for (const gq of dataset.queries) {
     const k = gq.k || 10;
@@ -75,7 +77,7 @@ export async function runEval(options: RunOptions = {}): Promise<EvalReport> {
       const latencyMs = Date.now() - start;
 
       const results: Array<{ file: string; score: number }> = response.data.results || [];
-      const resultFiles = results.map(r => r.file);
+      const resultFiles = results.map((r) => r.file);
 
       const recall = recallAtK(resultFiles, gq.expectedFiles, k);
       const precision = precisionAtK(resultFiles, gq.expectedFiles, k);
@@ -95,7 +97,9 @@ export async function runEval(options: RunOptions = {}): Promise<EvalReport> {
       });
 
       const status = recall >= 1 ? 'PASS' : recall > 0 ? 'PARTIAL' : 'MISS';
-      console.log(`  [${status}] ${gq.id}: recall=${(recall * 100).toFixed(0)}% mrr=${mrr.toFixed(2)} (${latencyMs}ms)`);
+      console.log(
+        `  [${status}] ${gq.id}: recall=${(recall * 100).toFixed(0)}% mrr=${mrr.toFixed(2)} (${latencyMs}ms)`
+      );
     } catch (error: any) {
       const latencyMs = Date.now() - start;
       console.log(`  [ERROR] ${gq.id}: ${error.message}`);
@@ -153,9 +157,13 @@ function printSummary(report: EvalReport): void {
 
   console.log('\nBy Category:');
   for (const [cat, metrics] of Object.entries(report.byCategory)) {
-    console.log(`  ${cat.padEnd(15)} recall=${(metrics.meanRecallAtK * 100).toFixed(1).padStart(5)}%  mrr=${metrics.meanMRR.toFixed(3)}  (n=${metrics.count})`);
+    console.log(
+      `  ${cat.padEnd(15)} recall=${(metrics.meanRecallAtK * 100).toFixed(1).padStart(5)}%  mrr=${metrics.meanMRR.toFixed(3)}  (n=${metrics.count})`
+    );
   }
 
   console.log('\nLatency:');
-  console.log(`  Mean: ${report.latency.mean}ms  P50: ${report.latency.p50}ms  P95: ${report.latency.p95}ms  P99: ${report.latency.p99}ms`);
+  console.log(
+    `  Mean: ${report.latency.mean}ms  P50: ${report.latency.p50}ms  P95: ${report.latency.p95}ms  P99: ${report.latency.p99}ms`
+  );
 }

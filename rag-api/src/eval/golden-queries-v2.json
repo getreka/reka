@@ -1,0 +1,1426 @@
+{
+  "projectName": "shared-ai-infra",
+  "collection": "shared-ai-infra_codebase",
+  "apiUrl": "http://localhost:3100",
+  "version": "2.0",
+  "generatedAt": "2026-03-27",
+  "queries": [
+    {
+      "id": "v2-001",
+      "query": "EmbeddingService embed method",
+      "expectedFiles": ["src/services/embedding.ts"],
+      "category": "exact-match",
+      "k": 10
+    },
+    {
+      "id": "v2-002",
+      "query": "VectorStoreService search method",
+      "expectedFiles": ["src/services/vector-store.ts"],
+      "category": "exact-match",
+      "k": 10
+    },
+    {
+      "id": "v2-003",
+      "query": "buildSearchFilter function",
+      "expectedFiles": ["src/utils/filters.ts"],
+      "category": "exact-match",
+      "k": 10
+    },
+    {
+      "id": "v2-004",
+      "query": "indexProject function in indexer",
+      "expectedFiles": ["src/services/indexer.ts"],
+      "category": "exact-match",
+      "k": 10
+    },
+    {
+      "id": "v2-005",
+      "query": "ContextPackBuilder build method",
+      "expectedFiles": ["src/services/context-pack.ts"],
+      "category": "exact-match",
+      "k": 10
+    },
+    {
+      "id": "v2-006",
+      "query": "CodeParser parse method",
+      "expectedFiles": ["src/services/parsers/code-parser.ts"],
+      "category": "exact-match",
+      "k": 10
+    },
+    {
+      "id": "v2-007",
+      "query": "memoryService recall function",
+      "expectedFiles": ["src/services/memory.ts"],
+      "category": "exact-match",
+      "k": 10
+    },
+    {
+      "id": "v2-008",
+      "query": "graphStore expand method",
+      "expectedFiles": ["src/services/graph-store.ts"],
+      "category": "exact-match",
+      "k": 10
+    },
+    {
+      "id": "v2-009",
+      "query": "searchSchema validation zod",
+      "expectedFiles": ["src/utils/validation.ts"],
+      "category": "exact-match",
+      "k": 10
+    },
+    {
+      "id": "v2-010",
+      "query": "createSearchTools function",
+      "expectedFiles": ["mcp-server/src/tools/search.ts"],
+      "category": "exact-match",
+      "k": 10
+    },
+    {
+      "id": "v2-011",
+      "query": "CircuitBreaker class",
+      "expectedFiles": ["src/utils/circuit-breaker.ts"],
+      "category": "exact-match",
+      "k": 10
+    },
+    {
+      "id": "v2-012",
+      "query": "asyncHandler function middleware",
+      "expectedFiles": ["src/middleware/async-handler.ts"],
+      "category": "exact-match",
+      "k": 10
+    },
+    {
+      "id": "v2-013",
+      "query": "errorHandler middleware function",
+      "expectedFiles": ["src/middleware/error-handler.ts"],
+      "category": "exact-match",
+      "k": 10
+    },
+    {
+      "id": "v2-014",
+      "query": "ToolRegistry class register method",
+      "expectedFiles": ["mcp-server/src/tool-registry.ts"],
+      "category": "exact-match",
+      "k": 10
+    },
+    {
+      "id": "v2-015",
+      "query": "SmartDispatchService class",
+      "expectedFiles": ["src/services/smart-dispatch.ts"],
+      "category": "exact-match",
+      "k": 10
+    },
+    {
+      "id": "v2-016",
+      "query": "SymbolIndexService find method",
+      "expectedFiles": ["src/services/symbol-index.ts"],
+      "category": "exact-match",
+      "k": 10
+    },
+    {
+      "id": "v2-017",
+      "query": "ASTParser parse function",
+      "expectedFiles": ["src/services/parsers/ast-parser.ts"],
+      "category": "exact-match",
+      "k": 10
+    },
+    {
+      "id": "v2-018",
+      "query": "DocsParser class implementation",
+      "expectedFiles": ["src/services/parsers/docs-parser.ts"],
+      "category": "exact-match",
+      "k": 10
+    },
+    {
+      "id": "v2-019",
+      "query": "ConfigParser class",
+      "expectedFiles": ["src/services/parsers/config-parser.ts"],
+      "category": "exact-match",
+      "k": 10
+    },
+    {
+      "id": "v2-020",
+      "query": "ContractParser class implementation",
+      "expectedFiles": ["src/services/parsers/contract-parser.ts"],
+      "category": "exact-match",
+      "k": 10
+    },
+    {
+      "id": "v2-021",
+      "query": "ParserRegistry class",
+      "expectedFiles": ["src/services/parsers/index.ts"],
+      "category": "exact-match",
+      "k": 10
+    },
+    {
+      "id": "v2-022",
+      "query": "recallAtK metric function",
+      "expectedFiles": ["src/eval/metrics.ts"],
+      "category": "exact-match",
+      "k": 10
+    },
+    {
+      "id": "v2-023",
+      "query": "RerankerService class rerank method",
+      "expectedFiles": ["src/services/reranker.ts"],
+      "category": "exact-match",
+      "k": 10
+    },
+    {
+      "id": "v2-024",
+      "query": "SensoryBufferService class",
+      "expectedFiles": ["src/services/sensory-buffer.ts"],
+      "category": "exact-match",
+      "k": 10
+    },
+    {
+      "id": "v2-025",
+      "query": "WorkingMemoryService class",
+      "expectedFiles": ["src/services/working-memory.ts"],
+      "category": "exact-match",
+      "k": 10
+    },
+    {
+      "id": "v2-026",
+      "query": "MemoryGovernanceService ingest method",
+      "expectedFiles": ["src/services/memory-governance.ts"],
+      "category": "exact-match",
+      "k": 10
+    },
+    {
+      "id": "v2-027",
+      "query": "SpreadingActivationService activate method",
+      "expectedFiles": ["src/services/spreading-activation.ts"],
+      "category": "exact-match",
+      "k": 10
+    },
+    {
+      "id": "v2-028",
+      "query": "LongTermMemoryService class",
+      "expectedFiles": ["src/services/memory-ltm.ts"],
+      "category": "exact-match",
+      "k": 10
+    },
+    {
+      "id": "v2-029",
+      "query": "ConsolidationAgent class",
+      "expectedFiles": ["src/services/consolidation-agent.ts"],
+      "category": "exact-match",
+      "k": 10
+    },
+    {
+      "id": "v2-030",
+      "query": "RelationshipClassifierService classify method",
+      "expectedFiles": ["src/services/relationship-classifier.ts"],
+      "category": "exact-match",
+      "k": 10
+    },
+    {
+      "id": "v2-031",
+      "query": "FactExtractorService extract method",
+      "expectedFiles": ["src/services/fact-extractor.ts"],
+      "category": "exact-match",
+      "k": 10
+    },
+    {
+      "id": "v2-032",
+      "query": "CostTracker class trackCall method",
+      "expectedFiles": ["src/services/cost-tracker.ts"],
+      "category": "exact-match",
+      "k": 10
+    },
+    {
+      "id": "v2-033",
+      "query": "EventBus class emit method",
+      "expectedFiles": ["src/services/event-bus.ts"],
+      "category": "exact-match",
+      "k": 10
+    },
+    {
+      "id": "v2-034",
+      "query": "WorkRegistry class in work-handler",
+      "expectedFiles": ["src/services/work-handler.ts"],
+      "category": "exact-match",
+      "k": 10
+    },
+    {
+      "id": "v2-035",
+      "query": "AgentRuntime class execute method",
+      "expectedFiles": ["src/services/agent-runtime.ts"],
+      "category": "exact-match",
+      "k": 10
+    },
+    {
+      "id": "v2-036",
+      "query": "ClaudeAgentService class",
+      "expectedFiles": ["src/services/claude-agent.ts"],
+      "category": "exact-match",
+      "k": 10
+    },
+    {
+      "id": "v2-037",
+      "query": "RetrievalFusionService fuse method",
+      "expectedFiles": ["src/services/retrieval-fusion.ts"],
+      "category": "exact-match",
+      "k": 10
+    },
+    {
+      "id": "v2-038",
+      "query": "QualityGateService evaluate method",
+      "expectedFiles": ["src/services/quality-gates.ts"],
+      "category": "exact-match",
+      "k": 10
+    },
+    {
+      "id": "v2-039",
+      "query": "ProjectProfileService class",
+      "expectedFiles": ["src/services/project-profile.ts"],
+      "category": "exact-match",
+      "k": 10
+    },
+    {
+      "id": "v2-040",
+      "query": "KeyManagementService class",
+      "expectedFiles": ["src/services/key-management.ts"],
+      "category": "exact-match",
+      "k": 10
+    },
+    {
+      "id": "v2-041",
+      "query": "FeedbackService class",
+      "expectedFiles": ["src/services/feedback.ts"],
+      "category": "exact-match",
+      "k": 10
+    },
+    {
+      "id": "v2-042",
+      "query": "UsageTrackerService track method",
+      "expectedFiles": ["src/services/usage-tracker.ts"],
+      "category": "exact-match",
+      "k": 10
+    },
+    {
+      "id": "v2-043",
+      "query": "ConversationAnalyzerService analyze method",
+      "expectedFiles": ["src/services/conversation-analyzer.ts"],
+      "category": "exact-match",
+      "k": 10
+    },
+    {
+      "id": "v2-044",
+      "query": "CodeSuggestionService class",
+      "expectedFiles": ["src/services/code-suggestions.ts"],
+      "category": "exact-match",
+      "k": 10
+    },
+    {
+      "id": "v2-045",
+      "query": "ConfluenceService class",
+      "expectedFiles": ["src/services/confluence.ts"],
+      "category": "exact-match",
+      "k": 10
+    },
+    {
+      "id": "v2-046",
+      "query": "cacheService class Redis methods",
+      "expectedFiles": ["src/services/cache.ts"],
+      "category": "exact-match",
+      "k": 10
+    },
+    {
+      "id": "v2-047",
+      "query": "QueryLearningService class",
+      "expectedFiles": ["src/services/query-learning.ts"],
+      "category": "exact-match",
+      "k": 10
+    },
+    {
+      "id": "v2-048",
+      "query": "StaleMemoryDetector class detect method",
+      "expectedFiles": ["src/services/stale-memory-detector.ts"],
+      "category": "exact-match",
+      "k": 10
+    },
+    {
+      "id": "v2-049",
+      "query": "MemoryGraphService class",
+      "expectedFiles": ["src/services/memory-graph.ts"],
+      "category": "exact-match",
+      "k": 10
+    },
+    {
+      "id": "v2-050",
+      "query": "ReconsolidationService class",
+      "expectedFiles": ["src/services/reconsolidation.ts"],
+      "category": "exact-match",
+      "k": 10
+    },
+    {
+      "id": "v2-051",
+      "query": "ScheduledMaintenance class",
+      "expectedFiles": ["src/services/scheduled-maintenance.ts"],
+      "category": "exact-match",
+      "k": 10
+    },
+    {
+      "id": "v2-052",
+      "query": "UsagePatternService class",
+      "expectedFiles": ["src/services/usage-patterns.ts"],
+      "category": "exact-match",
+      "k": 10
+    },
+    {
+      "id": "v2-053",
+      "query": "MemoryMigrationService class",
+      "expectedFiles": ["src/services/memory-migration.ts"],
+      "category": "exact-match",
+      "k": 10
+    },
+    {
+      "id": "v2-054",
+      "query": "buildAnchorString function",
+      "expectedFiles": ["src/services/anchor.ts"],
+      "category": "exact-match",
+      "k": 10
+    },
+    {
+      "id": "v2-055",
+      "query": "computeSalience function sensory buffer",
+      "expectedFiles": ["src/services/sensory-buffer.ts"],
+      "category": "exact-match",
+      "k": 10
+    },
+    {
+      "id": "v2-056",
+      "query": "computeRetention function LTM",
+      "expectedFiles": ["src/services/memory-ltm.ts"],
+      "category": "exact-match",
+      "k": 10
+    },
+    {
+      "id": "v2-057",
+      "query": "computeSlotScore function working memory",
+      "expectedFiles": ["src/services/working-memory.ts"],
+      "category": "exact-match",
+      "k": 10
+    },
+    {
+      "id": "v2-058",
+      "query": "parseLLMOutput function",
+      "expectedFiles": ["src/utils/llm-output.ts"],
+      "category": "exact-match",
+      "k": 10
+    },
+    {
+      "id": "v2-059",
+      "query": "validate function middleware validation",
+      "expectedFiles": ["src/utils/validation.ts"],
+      "category": "exact-match",
+      "k": 10
+    },
+    {
+      "id": "v2-060",
+      "query": "retryable decorator function",
+      "expectedFiles": ["src/utils/retry.ts"],
+      "category": "exact-match",
+      "k": 10
+    },
+    {
+      "id": "v2-061",
+      "query": "how does hybrid search combine semantic and keyword results",
+      "expectedFiles": ["src/routes/search.ts", "src/services/context-pack.ts"],
+      "category": "concept",
+      "k": 10
+    },
+    {
+      "id": "v2-062",
+      "query": "how are embeddings cached across sessions",
+      "expectedFiles": ["src/services/embedding.ts", "src/services/cache.ts"],
+      "category": "concept",
+      "k": 10
+    },
+    {
+      "id": "v2-063",
+      "query": "how does the parser registry route files to the right parser",
+      "expectedFiles": ["src/services/parsers/index.ts", "src/services/parsers/code-parser.ts"],
+      "category": "concept",
+      "k": 10
+    },
+    {
+      "id": "v2-064",
+      "query": "how does zero-downtime reindexing work with collection aliases",
+      "expectedFiles": ["src/services/indexer.ts", "src/services/vector-store.ts"],
+      "category": "concept",
+      "k": 10
+    },
+    {
+      "id": "v2-065",
+      "query": "how does context pack builder assemble faceted retrieval results",
+      "expectedFiles": ["src/services/context-pack.ts"],
+      "category": "concept",
+      "k": 10
+    },
+    {
+      "id": "v2-066",
+      "query": "how are memory governance and quarantine implemented",
+      "expectedFiles": ["src/services/memory-governance.ts"],
+      "category": "concept",
+      "k": 10
+    },
+    {
+      "id": "v2-067",
+      "query": "how does LLM reranking improve search results quality",
+      "expectedFiles": ["src/services/reranker.ts", "src/services/context-pack.ts"],
+      "category": "concept",
+      "k": 10
+    },
+    {
+      "id": "v2-068",
+      "query": "what is the incremental indexing strategy for changed files only",
+      "expectedFiles": ["src/services/indexer.ts"],
+      "category": "concept",
+      "k": 10
+    },
+    {
+      "id": "v2-069",
+      "query": "how does the MCP tool registry dispatch and enrich tool calls",
+      "expectedFiles": ["mcp-server/src/tool-registry.ts", "mcp-server/src/tool-middleware.ts"],
+      "category": "concept",
+      "k": 10
+    },
+    {
+      "id": "v2-070",
+      "query": "how does AST parser extract import edges for the project graph",
+      "expectedFiles": ["src/services/parsers/ast-parser.ts", "src/services/graph-store.ts"],
+      "category": "concept",
+      "k": 10
+    },
+    {
+      "id": "v2-071",
+      "query": "how does the token budget compression select and trim chunks",
+      "expectedFiles": ["src/services/context-pack.ts"],
+      "category": "concept",
+      "k": 10
+    },
+    {
+      "id": "v2-072",
+      "query": "what vector similarity distance metric is used for search in Qdrant",
+      "expectedFiles": ["src/services/vector-store.ts"],
+      "category": "concept",
+      "k": 10
+    },
+    {
+      "id": "v2-073",
+      "query": "how does batch embedding work with BGE-M3 server",
+      "expectedFiles": ["src/services/embedding.ts"],
+      "category": "concept",
+      "k": 10
+    },
+    {
+      "id": "v2-074",
+      "query": "how does the sensory buffer filter events by salience threshold",
+      "expectedFiles": ["src/services/sensory-buffer.ts"],
+      "category": "concept",
+      "k": 10
+    },
+    {
+      "id": "v2-075",
+      "query": "how does working memory manage limited capacity slots with eviction",
+      "expectedFiles": ["src/services/working-memory.ts"],
+      "category": "concept",
+      "k": 10
+    },
+    {
+      "id": "v2-076",
+      "query": "how does consolidation agent promote memories from sensory to long-term",
+      "expectedFiles": ["src/services/consolidation-agent.ts", "src/services/memory-ltm.ts"],
+      "category": "concept",
+      "k": 10
+    },
+    {
+      "id": "v2-077",
+      "query": "how does spreading activation find related memories by association",
+      "expectedFiles": ["src/services/spreading-activation.ts", "src/services/memory-graph.ts"],
+      "category": "concept",
+      "k": 10
+    },
+    {
+      "id": "v2-078",
+      "query": "how does the episodic vs semantic LTM distinction work",
+      "expectedFiles": ["src/services/memory-ltm.ts"],
+      "category": "concept",
+      "k": 10
+    },
+    {
+      "id": "v2-079",
+      "query": "how does memory reconsolidation update existing memories on recall",
+      "expectedFiles": ["src/services/reconsolidation.ts"],
+      "category": "concept",
+      "k": 10
+    },
+    {
+      "id": "v2-080",
+      "query": "how does the stale memory detector identify outdated memories",
+      "expectedFiles": ["src/services/stale-memory-detector.ts"],
+      "category": "concept",
+      "k": 10
+    },
+    {
+      "id": "v2-081",
+      "query": "how does the relationship classifier detect supersedes and contradicts links",
+      "expectedFiles": ["src/services/relationship-classifier.ts"],
+      "category": "concept",
+      "k": 10
+    },
+    {
+      "id": "v2-082",
+      "query": "how does the fact extractor decompose memories into structured facts",
+      "expectedFiles": ["src/services/fact-extractor.ts"],
+      "category": "concept",
+      "k": 10
+    },
+    {
+      "id": "v2-083",
+      "query": "how does smart dispatch route queries to the right lookup strategy",
+      "expectedFiles": ["src/services/smart-dispatch.ts"],
+      "category": "concept",
+      "k": 10
+    },
+    {
+      "id": "v2-084",
+      "query": "how does the agent runtime execute multi-step ReAct loops",
+      "expectedFiles": ["src/services/agent-runtime.ts"],
+      "category": "concept",
+      "k": 10
+    },
+    {
+      "id": "v2-085",
+      "query": "how does the Claude agent service use tool_use for autonomous tasks",
+      "expectedFiles": ["src/services/claude-agent.ts"],
+      "category": "concept",
+      "k": 10
+    },
+    {
+      "id": "v2-086",
+      "query": "how does RAG fusion reformulate queries for better recall",
+      "expectedFiles": ["src/services/retrieval-fusion.ts"],
+      "category": "concept",
+      "k": 10
+    },
+    {
+      "id": "v2-087",
+      "query": "how does the code suggestion service generate completion recommendations",
+      "expectedFiles": ["src/services/code-suggestions.ts"],
+      "category": "concept",
+      "k": 10
+    },
+    {
+      "id": "v2-088",
+      "query": "how does the conversation analyzer extract learnings from chat history",
+      "expectedFiles": ["src/services/conversation-analyzer.ts"],
+      "category": "concept",
+      "k": 10
+    },
+    {
+      "id": "v2-089",
+      "query": "how does query learning improve search over time from feedback",
+      "expectedFiles": ["src/services/query-learning.ts"],
+      "category": "concept",
+      "k": 10
+    },
+    {
+      "id": "v2-090",
+      "query": "how does the memory graph store relationships between memories",
+      "expectedFiles": ["src/services/memory-graph.ts"],
+      "category": "concept",
+      "k": 10
+    },
+    {
+      "id": "v2-091",
+      "query": "how does the symbol index enable fast function and type lookups",
+      "expectedFiles": ["src/services/symbol-index.ts"],
+      "category": "concept",
+      "k": 10
+    },
+    {
+      "id": "v2-092",
+      "query": "how does the quality gate service validate indexing and search quality",
+      "expectedFiles": ["src/services/quality-gates.ts"],
+      "category": "concept",
+      "k": 10
+    },
+    {
+      "id": "v2-093",
+      "query": "how does the scheduled maintenance service run deduplication and compaction",
+      "expectedFiles": ["src/services/scheduled-maintenance.ts"],
+      "category": "concept",
+      "k": 10
+    },
+    {
+      "id": "v2-094",
+      "query": "how does the project profile service analyze codebase structure",
+      "expectedFiles": ["src/services/project-profile.ts"],
+      "category": "concept",
+      "k": 10
+    },
+    {
+      "id": "v2-095",
+      "query": "how does cost tracking work for LLM API calls",
+      "expectedFiles": ["src/services/cost-tracker.ts"],
+      "category": "concept",
+      "k": 10
+    },
+    {
+      "id": "v2-096",
+      "query": "how does the event bus publish and subscribe to system events",
+      "expectedFiles": ["src/services/event-bus.ts"],
+      "category": "concept",
+      "k": 10
+    },
+    {
+      "id": "v2-097",
+      "query": "how does the LLM service route between Ollama, OpenAI, and Anthropic providers",
+      "expectedFiles": ["src/services/llm.ts"],
+      "category": "concept",
+      "k": 10
+    },
+    {
+      "id": "v2-098",
+      "query": "how does anchor string building work for temporal context in memory",
+      "expectedFiles": ["src/services/anchor.ts"],
+      "category": "concept",
+      "k": 10
+    },
+    {
+      "id": "v2-099",
+      "query": "how does the MCP context enrichment add session state to tool calls",
+      "expectedFiles": ["mcp-server/src/context-enrichment.ts"],
+      "category": "concept",
+      "k": 10
+    },
+    {
+      "id": "v2-100",
+      "query": "how does the MCP validation pipeline guard against destructive operations",
+      "expectedFiles": ["mcp-server/src/validation-hooks.ts"],
+      "category": "concept",
+      "k": 10
+    },
+    {
+      "id": "v2-101",
+      "query": "what happens when a search request comes in from MCP to Qdrant",
+      "expectedFiles": [
+        "mcp-server/src/tools/search.ts",
+        "src/routes/search.ts",
+        "src/services/vector-store.ts"
+      ],
+      "category": "cross-file",
+      "k": 10
+    },
+    {
+      "id": "v2-102",
+      "query": "how does file indexing flow from disk through parsers to Qdrant collections",
+      "expectedFiles": [
+        "src/services/indexer.ts",
+        "src/services/parsers/code-parser.ts",
+        "src/services/embedding.ts",
+        "src/services/vector-store.ts"
+      ],
+      "category": "cross-file",
+      "k": 10
+    },
+    {
+      "id": "v2-103",
+      "query": "how does the memory remember and recall pipeline work end to end",
+      "expectedFiles": [
+        "mcp-server/src/tools/memory.ts",
+        "src/routes/memory.ts",
+        "src/services/memory.ts"
+      ],
+      "category": "cross-file",
+      "k": 10
+    },
+    {
+      "id": "v2-104",
+      "query": "how do Zod validation schemas connect to route handlers via middleware",
+      "expectedFiles": [
+        "src/utils/validation.ts",
+        "src/routes/search.ts",
+        "src/middleware/async-handler.ts"
+      ],
+      "category": "cross-file",
+      "k": 10
+    },
+    {
+      "id": "v2-105",
+      "query": "how does graph expansion enhance search results across services",
+      "expectedFiles": [
+        "src/services/graph-store.ts",
+        "src/routes/search.ts",
+        "src/services/context-pack.ts"
+      ],
+      "category": "cross-file",
+      "k": 10
+    },
+    {
+      "id": "v2-106",
+      "query": "how do tool usage tracking events flow from MCP to the backend",
+      "expectedFiles": ["mcp-server/src/tool-middleware.ts", "src/services/usage-tracker.ts"],
+      "category": "cross-file",
+      "k": 10
+    },
+    {
+      "id": "v2-107",
+      "query": "how do search filters flow from MCP tool params to Qdrant query",
+      "expectedFiles": [
+        "mcp-server/src/tools/search.ts",
+        "src/utils/filters.ts",
+        "src/services/vector-store.ts"
+      ],
+      "category": "cross-file",
+      "k": 10
+    },
+    {
+      "id": "v2-108",
+      "query": "how does the MCP server register and dispatch all tool modules at startup",
+      "expectedFiles": ["mcp-server/src/index.ts", "mcp-server/src/tool-registry.ts"],
+      "category": "cross-file",
+      "k": 10
+    },
+    {
+      "id": "v2-109",
+      "query": "how does the sensory buffer integrate with working memory and consolidation",
+      "expectedFiles": [
+        "src/services/sensory-buffer.ts",
+        "src/services/working-memory.ts",
+        "src/services/consolidation-agent.ts"
+      ],
+      "category": "cross-file",
+      "k": 10
+    },
+    {
+      "id": "v2-110",
+      "query": "how does memory governance quarantine flow through to memory LTM storage",
+      "expectedFiles": [
+        "src/services/memory-governance.ts",
+        "src/services/memory-ltm.ts",
+        "src/services/memory.ts"
+      ],
+      "category": "cross-file",
+      "k": 10
+    },
+    {
+      "id": "v2-111",
+      "query": "how does spreading activation use the memory graph to find related memories",
+      "expectedFiles": ["src/services/spreading-activation.ts", "src/services/memory-graph.ts"],
+      "category": "cross-file",
+      "k": 10
+    },
+    {
+      "id": "v2-112",
+      "query": "how does the agent runtime use LLM and tools together for ReAct execution",
+      "expectedFiles": [
+        "src/services/agent-runtime.ts",
+        "src/services/llm.ts",
+        "src/routes/agents.ts"
+      ],
+      "category": "cross-file",
+      "k": 10
+    },
+    {
+      "id": "v2-113",
+      "query": "how does the review pipeline use LLM and search together for code analysis",
+      "expectedFiles": [
+        "src/routes/review.ts",
+        "src/services/llm.ts",
+        "src/services/context-pack.ts"
+      ],
+      "category": "cross-file",
+      "k": 10
+    },
+    {
+      "id": "v2-114",
+      "query": "how does authentication middleware connect to key management for API keys",
+      "expectedFiles": ["src/middleware/auth.ts", "src/services/key-management.ts"],
+      "category": "cross-file",
+      "k": 10
+    },
+    {
+      "id": "v2-115",
+      "query": "how does metering middleware track usage across billing and cost tracking",
+      "expectedFiles": [
+        "src/middleware/metering.ts",
+        "src/services/cost-tracker.ts",
+        "src/routes/billing.ts"
+      ],
+      "category": "cross-file",
+      "k": 10
+    },
+    {
+      "id": "v2-116",
+      "query": "how does the circuit breaker protect embedding and LLM calls from cascading failures",
+      "expectedFiles": [
+        "src/utils/circuit-breaker.ts",
+        "src/services/embedding.ts",
+        "src/services/llm.ts"
+      ],
+      "category": "cross-file",
+      "k": 10
+    },
+    {
+      "id": "v2-117",
+      "query": "how does the indexer use parsers and graph store to build import relationships",
+      "expectedFiles": [
+        "src/services/indexer.ts",
+        "src/services/parsers/ast-parser.ts",
+        "src/services/graph-store.ts"
+      ],
+      "category": "cross-file",
+      "k": 10
+    },
+    {
+      "id": "v2-118",
+      "query": "how does the fact extractor work with relationship classifier during memory ingestion",
+      "expectedFiles": [
+        "src/services/fact-extractor.ts",
+        "src/services/relationship-classifier.ts",
+        "src/services/memory-governance.ts"
+      ],
+      "category": "cross-file",
+      "k": 10
+    },
+    {
+      "id": "v2-119",
+      "query": "how does the MCP session tool use session context and cache together",
+      "expectedFiles": [
+        "mcp-server/src/tools/session.ts",
+        "src/services/session-context.ts",
+        "src/services/cache.ts"
+      ],
+      "category": "cross-file",
+      "k": 10
+    },
+    {
+      "id": "v2-120",
+      "query": "how do SSE event streams flow from routes to the client for indexing progress",
+      "expectedFiles": ["src/routes/events.ts", "src/routes/index.ts", "src/services/indexer.ts"],
+      "category": "cross-file",
+      "k": 10
+    },
+    {
+      "id": "v2-121",
+      "query": "how does the tribunal debate system use advocates and judge across routes and services",
+      "expectedFiles": ["src/routes/tribunal.ts", "src/services/llm.ts"],
+      "category": "cross-file",
+      "k": 10
+    },
+    {
+      "id": "v2-122",
+      "query": "how does the eval runner compare query results against golden queries",
+      "expectedFiles": [
+        "src/eval/runner.ts",
+        "src/eval/metrics.ts",
+        "src/eval/golden-queries.json"
+      ],
+      "category": "cross-file",
+      "k": 10
+    },
+    {
+      "id": "v2-123",
+      "query": "how does the MCP formatters module format code and memory search results",
+      "expectedFiles": [
+        "mcp-server/src/formatters.ts",
+        "mcp-server/src/tools/search.ts",
+        "mcp-server/src/tools/memory.ts"
+      ],
+      "category": "cross-file",
+      "k": 10
+    },
+    {
+      "id": "v2-124",
+      "query": "how does the edge router work with feature gates and rate limiting",
+      "expectedFiles": [
+        "src/middleware/edge-router.ts",
+        "src/middleware/feature-gate.ts",
+        "src/middleware/rate-limit.ts"
+      ],
+      "category": "cross-file",
+      "k": 10
+    },
+    {
+      "id": "v2-125",
+      "query": "how does the reranker integrate with retrieval fusion for final result scoring",
+      "expectedFiles": [
+        "src/services/reranker.ts",
+        "src/services/retrieval-fusion.ts",
+        "src/services/context-pack.ts"
+      ],
+      "category": "cross-file",
+      "k": 10
+    },
+    {
+      "id": "v2-126",
+      "query": "how to call the search API endpoint with filters and hybrid mode",
+      "expectedFiles": ["src/routes/search.ts", "src/utils/validation.ts"],
+      "category": "api-usage",
+      "k": 10
+    },
+    {
+      "id": "v2-127",
+      "query": "how to use the ask endpoint to get LLM-generated answers from codebase",
+      "expectedFiles": ["src/routes/search.ts", "src/services/llm.ts"],
+      "category": "api-usage",
+      "k": 10
+    },
+    {
+      "id": "v2-128",
+      "query": "how to index a codebase via the POST index endpoint",
+      "expectedFiles": ["src/routes/index.ts", "src/services/indexer.ts"],
+      "category": "api-usage",
+      "k": 10
+    },
+    {
+      "id": "v2-129",
+      "query": "how to create a memory via the remember API endpoint",
+      "expectedFiles": ["src/routes/memory.ts", "src/services/memory.ts"],
+      "category": "api-usage",
+      "k": 10
+    },
+    {
+      "id": "v2-130",
+      "query": "how to recall memories by query using the recall API",
+      "expectedFiles": ["src/routes/memory.ts", "src/services/memory.ts"],
+      "category": "api-usage",
+      "k": 10
+    },
+    {
+      "id": "v2-131",
+      "query": "how to run an agent task via the agents API endpoint",
+      "expectedFiles": ["src/routes/agents.ts", "src/services/agent-runtime.ts"],
+      "category": "api-usage",
+      "k": 10
+    },
+    {
+      "id": "v2-132",
+      "query": "how to submit code for review via the review API endpoint",
+      "expectedFiles": ["src/routes/review.ts"],
+      "category": "api-usage",
+      "k": 10
+    },
+    {
+      "id": "v2-133",
+      "query": "how to use the hybrid search endpoint with semantic weight parameter",
+      "expectedFiles": ["src/routes/search.ts", "src/utils/validation.ts"],
+      "category": "api-usage",
+      "k": 10
+    },
+    {
+      "id": "v2-134",
+      "query": "how to get project stats and collection info via the API",
+      "expectedFiles": ["src/routes/index.ts", "src/services/vector-store.ts"],
+      "category": "api-usage",
+      "k": 10
+    },
+    {
+      "id": "v2-135",
+      "query": "how to record an ADR using the memory API",
+      "expectedFiles": ["src/routes/memory.ts", "src/services/memory.ts"],
+      "category": "api-usage",
+      "k": 10
+    },
+    {
+      "id": "v2-136",
+      "query": "how to promote a memory from quarantine to durable via API",
+      "expectedFiles": ["src/routes/memory.ts", "src/services/memory-governance.ts"],
+      "category": "api-usage",
+      "k": 10
+    },
+    {
+      "id": "v2-137",
+      "query": "how to use the find_symbol endpoint for function lookup",
+      "expectedFiles": ["src/routes/search.ts", "src/services/symbol-index.ts"],
+      "category": "api-usage",
+      "k": 10
+    },
+    {
+      "id": "v2-138",
+      "query": "how to use the search_graph endpoint for dependency traversal",
+      "expectedFiles": ["src/routes/search.ts", "src/services/graph-store.ts"],
+      "category": "api-usage",
+      "k": 10
+    },
+    {
+      "id": "v2-139",
+      "query": "how to submit search feedback for quality improvement",
+      "expectedFiles": ["src/routes/analytics.ts", "src/services/feedback.ts"],
+      "category": "api-usage",
+      "k": 10
+    },
+    {
+      "id": "v2-140",
+      "query": "how to use the context briefing endpoint for pre-change analysis",
+      "expectedFiles": ["src/routes/search.ts", "src/services/context-pack.ts"],
+      "category": "api-usage",
+      "k": 10
+    },
+    {
+      "id": "v2-141",
+      "query": "how to initiate a tribunal debate via the API",
+      "expectedFiles": ["src/routes/tribunal.ts"],
+      "category": "api-usage",
+      "k": 10
+    },
+    {
+      "id": "v2-142",
+      "query": "how to use the sensory buffer append endpoint",
+      "expectedFiles": ["src/routes/sensory.ts", "src/services/sensory-buffer.ts"],
+      "category": "api-usage",
+      "k": 10
+    },
+    {
+      "id": "v2-143",
+      "query": "how to use the smart dispatch endpoint for automatic tool routing",
+      "expectedFiles": ["src/routes/search.ts", "src/services/smart-dispatch.ts"],
+      "category": "api-usage",
+      "k": 10
+    },
+    {
+      "id": "v2-144",
+      "query": "how to start and end MCP sessions via the session tools",
+      "expectedFiles": ["mcp-server/src/tools/session.ts", "src/services/session-context.ts"],
+      "category": "api-usage",
+      "k": 10
+    },
+    {
+      "id": "v2-145",
+      "query": "how to use the testing routes for test generation",
+      "expectedFiles": ["src/routes/testing.ts"],
+      "category": "api-usage",
+      "k": 10
+    },
+    {
+      "id": "v2-146",
+      "query": "what embedding providers are supported and how to configure them",
+      "expectedFiles": ["src/config.ts", "src/services/embedding.ts"],
+      "category": "config",
+      "k": 10
+    },
+    {
+      "id": "v2-147",
+      "query": "how to set up MCP server for a new project with environment variables",
+      "expectedFiles": ["mcp-server/src/index.ts"],
+      "category": "config",
+      "k": 10
+    },
+    {
+      "id": "v2-148",
+      "query": "what environment variables control the RAG API behavior",
+      "expectedFiles": ["src/config.ts"],
+      "category": "config",
+      "k": 10
+    },
+    {
+      "id": "v2-149",
+      "query": "docker compose services and ports configuration",
+      "expectedFiles": ["docker/docker-compose.yml"],
+      "category": "config",
+      "k": 10
+    },
+    {
+      "id": "v2-150",
+      "query": "what Qdrant payload fields are indexed for filtering",
+      "expectedFiles": ["src/services/vector-store.ts"],
+      "category": "config",
+      "k": 10
+    },
+    {
+      "id": "v2-151",
+      "query": "SEPARATE_COLLECTIONS and LEGACY_CODEBASE_COLLECTION configuration flags",
+      "expectedFiles": ["src/config.ts", "src/services/indexer.ts"],
+      "category": "config",
+      "k": 10
+    },
+    {
+      "id": "v2-152",
+      "query": "how is SPARSE_VECTORS_ENABLED and QDRANT_BM25_ENABLED configured",
+      "expectedFiles": ["src/config.ts", "src/services/vector-store.ts"],
+      "category": "config",
+      "k": 10
+    },
+    {
+      "id": "v2-153",
+      "query": "how is the reranker configured with URL and timeout settings",
+      "expectedFiles": ["src/config.ts", "src/services/reranker.ts"],
+      "category": "config",
+      "k": 10
+    },
+    {
+      "id": "v2-154",
+      "query": "how are memory governance TTL and decay rate configured",
+      "expectedFiles": ["src/config.ts", "src/services/memory-governance.ts"],
+      "category": "config",
+      "k": 10
+    },
+    {
+      "id": "v2-155",
+      "query": "how are agent runtime timeout and max iterations configured",
+      "expectedFiles": ["src/config.ts", "src/services/agent-runtime.ts"],
+      "category": "config",
+      "k": 10
+    },
+    {
+      "id": "v2-156",
+      "query": "how is the tribunal debate max rounds and budget configured",
+      "expectedFiles": ["src/config.ts"],
+      "category": "config",
+      "k": 10
+    },
+    {
+      "id": "v2-157",
+      "query": "how are sensory buffer and working memory capacity configured",
+      "expectedFiles": [
+        "src/config.ts",
+        "src/services/sensory-buffer.ts",
+        "src/services/working-memory.ts"
+      ],
+      "category": "config",
+      "k": 10
+    },
+    {
+      "id": "v2-158",
+      "query": "how is RAG fusion reformulation count and enable flag configured",
+      "expectedFiles": ["src/config.ts", "src/services/retrieval-fusion.ts"],
+      "category": "config",
+      "k": 10
+    },
+    {
+      "id": "v2-159",
+      "query": "how are CORS origins and allowed headers configured in the server",
+      "expectedFiles": ["src/server.ts"],
+      "category": "config",
+      "k": 10
+    },
+    {
+      "id": "v2-160",
+      "query": "how does reka.config.yaml override defaults in config loading",
+      "expectedFiles": ["src/config.ts"],
+      "category": "config",
+      "k": 10
+    },
+    {
+      "id": "v2-161",
+      "query": "how does the error handler middleware format and log errors",
+      "expectedFiles": ["src/middleware/error-handler.ts"],
+      "category": "error-handling",
+      "k": 10
+    },
+    {
+      "id": "v2-162",
+      "query": "how does asyncHandler wrap Express routes to catch promise rejections",
+      "expectedFiles": ["src/middleware/async-handler.ts"],
+      "category": "error-handling",
+      "k": 10
+    },
+    {
+      "id": "v2-163",
+      "query": "how does the circuit breaker handle failure thresholds and recovery",
+      "expectedFiles": ["src/utils/circuit-breaker.ts"],
+      "category": "error-handling",
+      "k": 10
+    },
+    {
+      "id": "v2-164",
+      "query": "how does the retry utility implement exponential backoff",
+      "expectedFiles": ["src/utils/retry.ts"],
+      "category": "error-handling",
+      "k": 10
+    },
+    {
+      "id": "v2-165",
+      "query": "how are custom error classes defined for the application",
+      "expectedFiles": ["src/utils/errors.ts"],
+      "category": "error-handling",
+      "k": 10
+    },
+    {
+      "id": "v2-166",
+      "query": "how does the MCP tool middleware handle timeouts and format errors",
+      "expectedFiles": ["mcp-server/src/tool-middleware.ts"],
+      "category": "error-handling",
+      "k": 10
+    },
+    {
+      "id": "v2-167",
+      "query": "how does the rate limit middleware throttle requests and return 429 errors",
+      "expectedFiles": ["src/middleware/rate-limit.ts"],
+      "category": "error-handling",
+      "k": 10
+    },
+    {
+      "id": "v2-168",
+      "query": "how does the embedding circuit breaker protect against BGE-M3 failures",
+      "expectedFiles": ["src/utils/circuit-breaker.ts", "src/services/embedding.ts"],
+      "category": "error-handling",
+      "k": 10
+    },
+    {
+      "id": "v2-169",
+      "query": "how does the feature gate return 403 when quotas are exceeded",
+      "expectedFiles": ["src/middleware/feature-gate.ts"],
+      "category": "error-handling",
+      "k": 10
+    },
+    {
+      "id": "v2-170",
+      "query": "how does the MCP validation pipeline reject invalid or dangerous tool inputs",
+      "expectedFiles": ["mcp-server/src/validation-hooks.ts"],
+      "category": "error-handling",
+      "k": 10
+    },
+    {
+      "id": "v2-171",
+      "query": "how are embedding service tests structured and what do they mock",
+      "expectedFiles": ["src/__tests__/services/embedding.test.ts"],
+      "category": "testing",
+      "k": 10
+    },
+    {
+      "id": "v2-172",
+      "query": "how are vector store service tests structured",
+      "expectedFiles": ["src/__tests__/services/vector-store.test.ts"],
+      "category": "testing",
+      "k": 10
+    },
+    {
+      "id": "v2-173",
+      "query": "how are memory service tests organized with mocks",
+      "expectedFiles": ["src/__tests__/services/memory.test.ts"],
+      "category": "testing",
+      "k": 10
+    },
+    {
+      "id": "v2-174",
+      "query": "how are search route handler tests structured",
+      "expectedFiles": ["src/__tests__/routes/search.test.ts"],
+      "category": "testing",
+      "k": 10
+    },
+    {
+      "id": "v2-175",
+      "query": "how are circuit breaker tests organized with state transitions",
+      "expectedFiles": ["src/__tests__/utils/circuit-breaker.test.ts"],
+      "category": "testing",
+      "k": 10
+    },
+    {
+      "id": "v2-176",
+      "query": "how are parser tests structured for code and AST parsers",
+      "expectedFiles": [
+        "src/__tests__/services/parsers/code-parser.test.ts",
+        "src/__tests__/services/parsers/ast-parser.test.ts"
+      ],
+      "category": "testing",
+      "k": 10
+    },
+    {
+      "id": "v2-177",
+      "query": "how are the eval metrics recallAtK and ndcgAtK tested",
+      "expectedFiles": ["src/eval/metrics.ts"],
+      "category": "testing",
+      "k": 10
+    },
+    {
+      "id": "v2-178",
+      "query": "how are human memory architecture tests organized for sensory buffer and working memory",
+      "expectedFiles": [
+        "src/__tests__/services/sensory-buffer.test.ts",
+        "src/__tests__/services/working-memory.test.ts"
+      ],
+      "category": "testing",
+      "k": 10
+    },
+    {
+      "id": "v2-179",
+      "query": "how are MCP tool middleware tests structured",
+      "expectedFiles": ["mcp-server/src/__tests__/tool-middleware.test.ts"],
+      "category": "testing",
+      "k": 10
+    },
+    {
+      "id": "v2-180",
+      "query": "how is the test setup file configuring jest and test helpers",
+      "expectedFiles": ["src/__tests__/setup.ts", "src/__tests__/helpers/fixtures.ts"],
+      "category": "testing",
+      "k": 10
+    },
+    {
+      "id": "v2-181",
+      "query": "how are context pack builder tests organized",
+      "expectedFiles": ["src/__tests__/services/context-pack.test.ts"],
+      "category": "testing",
+      "k": 10
+    },
+    {
+      "id": "v2-182",
+      "query": "how are agent runtime tests structured",
+      "expectedFiles": ["src/__tests__/services/agent-runtime.test.ts"],
+      "category": "testing",
+      "k": 10
+    },
+    {
+      "id": "v2-183",
+      "query": "how are the evals quality gates benchmark tests structured",
+      "expectedFiles": ["src/evals/quality-gates.ts", "src/evals/runner.ts"],
+      "category": "testing",
+      "k": 10
+    },
+    {
+      "id": "v2-184",
+      "query": "how are memory governance tests organized",
+      "expectedFiles": ["src/__tests__/services/memory-governance.test.ts"],
+      "category": "testing",
+      "k": 10
+    },
+    {
+      "id": "v2-185",
+      "query": "how are graph store tests structured with edge operations",
+      "expectedFiles": ["src/__tests__/services/graph-store.test.ts"],
+      "category": "testing",
+      "k": 10
+    },
+    {
+      "id": "v2-186",
+      "query": "how are validation utility tests structured",
+      "expectedFiles": ["src/__tests__/utils/validation.test.ts"],
+      "category": "testing",
+      "k": 10
+    },
+    {
+      "id": "v2-187",
+      "query": "how is the evals benchmark reporter formatting results",
+      "expectedFiles": ["src/evals/reporter.ts"],
+      "category": "testing",
+      "k": 10
+    },
+    {
+      "id": "v2-188",
+      "query": "how are LTM service tests structured for episodic and semantic memory",
+      "expectedFiles": ["src/__tests__/services/memory-ltm.test.ts"],
+      "category": "testing",
+      "k": 10
+    },
+    {
+      "id": "v2-189",
+      "query": "how are spreading activation tests organized",
+      "expectedFiles": ["src/__tests__/services/spreading-activation.test.ts"],
+      "category": "testing",
+      "k": 10
+    },
+    {
+      "id": "v2-190",
+      "query": "how are smart dispatch tests organized",
+      "expectedFiles": ["src/__tests__/services/smart-dispatch.test.ts"],
+      "category": "testing",
+      "k": 10
+    }
+  ]
+}

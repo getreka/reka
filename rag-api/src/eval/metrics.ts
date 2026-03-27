@@ -47,7 +47,9 @@ export interface LatencyStats {
 export function recallAtK(resultFiles: string[], expectedFiles: string[], k: number): number {
   if (expectedFiles.length === 0) return 1;
   const topK = resultFiles.slice(0, k);
-  const found = expectedFiles.filter(f => topK.some(r => r.endsWith(f) || f.endsWith(r) || r === f));
+  const found = expectedFiles.filter((f) =>
+    topK.some((r) => r.endsWith(f) || f.endsWith(r) || r === f)
+  );
   return found.length / expectedFiles.length;
 }
 
@@ -57,7 +59,9 @@ export function recallAtK(resultFiles: string[], expectedFiles: string[], k: num
 export function precisionAtK(resultFiles: string[], expectedFiles: string[], k: number): number {
   const topK = resultFiles.slice(0, k);
   if (topK.length === 0) return 0;
-  const relevant = topK.filter(r => expectedFiles.some(f => r.endsWith(f) || f.endsWith(r) || r === f));
+  const relevant = topK.filter((r) =>
+    expectedFiles.some((f) => r.endsWith(f) || f.endsWith(r) || r === f)
+  );
   return relevant.length / topK.length;
 }
 
@@ -67,11 +71,43 @@ export function precisionAtK(resultFiles: string[], expectedFiles: string[], k: 
 export function mrrAtK(resultFiles: string[], expectedFiles: string[], k: number): number {
   const topK = resultFiles.slice(0, k);
   for (let i = 0; i < topK.length; i++) {
-    if (expectedFiles.some(f => topK[i].endsWith(f) || f.endsWith(topK[i]) || topK[i] === f)) {
+    if (expectedFiles.some((f) => topK[i].endsWith(f) || f.endsWith(topK[i]) || topK[i] === f)) {
       return 1 / (i + 1);
     }
   }
   return 0;
+}
+
+/**
+ * NDCG@K (Normalized Discounted Cumulative Gain) with binary relevance.
+ *
+ * Binary relevance: a result is relevant (gain=1) if it matches any of the
+ * expected IDs via the same suffix/prefix match used by the other metrics,
+ * irrelevant (gain=0) otherwise.
+ *
+ * DCG@K  = sum_{i=1}^{K} gain_i / log2(i + 1)
+ * IDCG@K = DCG of the ideal ranking (all relevant docs first)
+ * NDCG@K = DCG@K / IDCG@K  (returns 1 when IDCG=0, matching recall behaviour)
+ */
+export function ndcgAtK(resultFiles: string[], expectedFiles: string[], k: number): number {
+  if (expectedFiles.length === 0) return 1;
+
+  const topK = resultFiles.slice(0, k);
+
+  const gains: number[] = topK.map((r) =>
+    expectedFiles.some((f) => r.endsWith(f) || f.endsWith(r) || r === f) ? 1 : 0
+  );
+
+  const dcg = gains.reduce((acc, g, i) => acc + g / Math.log2(i + 2), 0);
+
+  const relevantCount = Math.min(expectedFiles.length, k);
+  const idcg = Array.from({ length: relevantCount }, (_, i) => 1 / Math.log2(i + 2)).reduce(
+    (a, b) => a + b,
+    0
+  );
+
+  if (idcg === 0) return 1;
+  return dcg / idcg;
 }
 
 /**
@@ -104,7 +140,7 @@ export function computeLatencyStats(results: PerQueryResult[]): LatencyStats {
   if (results.length === 0) {
     return { mean: 0, p50: 0, p95: 0, p99: 0 };
   }
-  const latencies = results.map(r => r.latencyMs).sort((a, b) => a - b);
+  const latencies = results.map((r) => r.latencyMs).sort((a, b) => a - b);
   const mean = latencies.reduce((a, b) => a + b, 0) / latencies.length;
   return {
     mean: Math.round(mean),
