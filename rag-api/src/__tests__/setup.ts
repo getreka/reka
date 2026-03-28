@@ -41,8 +41,8 @@ vi.mock('../config', () => ({
     CLAUDE_EFFORT: 'high',
     VECTOR_SIZE: 1024,
     MEMORY_QUARANTINE_TTL_DAYS: 7,
-    MEMORY_DECAY_RATE: 0.10,
-    MEMORY_DECAY_MAX: 0.50,
+    MEMORY_DECAY_RATE: 0.1,
+    MEMORY_DECAY_MAX: 0.5,
     MEMORY_COMPACTION_THRESHOLD: 0.85,
     MEMORY_COMPACTION_CYCLE_DAYS: 90,
     OLLAMA_THINK: false,
@@ -50,5 +50,19 @@ vi.mock('../config', () => ({
     AGENT_OLLAMA_MODEL: 'qwen2.5:32b',
     AGENT_MAX_ITERATIONS: 8,
     AGENT_TIMEOUT: 180000,
+    EVENT_QUEUE_CONCURRENCY: 3,
+    EVENT_DLQ_MAX_RETRIES: 3,
+    RECONSOLIDATION_ENABLED: false,
+    EMBEDDING_INSTRUCTION_ENABLED: false,
   },
+}));
+
+// Mock event emitter to prevent BullMQ connections in tests
+vi.mock('../events/emitter', () => ({
+  publishEvent: vi.fn().mockResolvedValue(undefined),
+}));
+
+// Also mock from services/ perspective
+vi.mock('../../src/events/emitter', () => ({
+  publishEvent: vi.fn().mockResolvedValue(undefined),
 }));

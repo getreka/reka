@@ -20,6 +20,8 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('../../services/embedding', () => ({ embeddingService: { embed: mocks.embed } }));
+const mockPublishEvent = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+vi.mock('../../events/emitter', () => ({ publishEvent: mockPublishEvent }));
 vi.mock('../../services/vector-store', () => ({
   vectorStore: {
     upsert: mocks.upsert,
@@ -37,7 +39,10 @@ vi.mock('../../services/conversation-analyzer', () => ({
   conversationAnalyzer: { extractEntities: mocks.extractEntities, analyze: mocks.analyze },
 }));
 vi.mock('../../services/usage-patterns', () => ({
-  usagePatterns: { summarizeChanges: mocks.summarizeChanges, buildDeveloperProfile: mocks.buildDeveloperProfile },
+  usagePatterns: {
+    summarizeChanges: mocks.summarizeChanges,
+    buildDeveloperProfile: mocks.buildDeveloperProfile,
+  },
 }));
 vi.mock('../../services/predictive-loader', () => ({
   predictiveLoader: { predict: mocks.predict, prefetch: mocks.prefetch },
@@ -58,6 +63,7 @@ import { sessionContext } from '../../services/session-context';
 describe('SessionContextService', () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    mockPublishEvent.mockResolvedValue(undefined);
     mocks.embed.mockResolvedValue(Array(1024).fill(0));
     mocks.scroll.mockResolvedValue({ points: [] });
     mocks.cacheGet.mockResolvedValue(null);
@@ -179,7 +185,12 @@ describe('SessionContextService', () => {
         metadata: {},
       };
       mocks.cacheGet.mockResolvedValue(sessionData);
-      mocks.summarizeChanges.mockResolvedValue({ toolsUsed: [], filesAffected: [], summary: '', keyActions: [] });
+      mocks.summarizeChanges.mockResolvedValue({
+        toolsUsed: [],
+        filesAffected: [],
+        summary: '',
+        keyActions: [],
+      });
 
       const summary = await sessionContext.endSession({
         projectName: 'test',

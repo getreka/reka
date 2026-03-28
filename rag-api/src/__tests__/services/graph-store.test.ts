@@ -85,20 +85,19 @@ describe('GraphStoreService', () => {
       await graphStore.indexFileEdges('testproj', 'src/a.ts', edges);
 
       // deleteByFilter called first to clear old edges
-      expect(mockedVS.deleteByFilter).toHaveBeenCalledWith(
-        'testproj_graph',
-        { must: [{ key: 'fromFile', match: { value: 'src/a.ts' } }] }
-      );
+      expect(mockedVS.deleteByFilter).toHaveBeenCalledWith('testproj_graph', {
+        must: [{ key: 'fromFile', match: { value: 'src/a.ts' } }],
+      });
 
-      // One embed per edge
-      expect(mockedEmbed.embed).toHaveBeenCalledTimes(2);
+      // Zero-vector graph edges — no embedding calls
+      expect(mockedEmbed.embed).not.toHaveBeenCalled();
 
-      // Upsert with 2 points
+      // Upsert with 2 points using zero vectors
       expect(mockedVS.upsert).toHaveBeenCalledWith(
         'testproj_graph',
         expect.arrayContaining([
           expect.objectContaining({
-            vector: fakeVector,
+            vector: expect.arrayContaining([0]),
             payload: expect.objectContaining({
               fromFile: 'src/a.ts',
               toFile: 'src/b.ts',
@@ -192,9 +191,15 @@ describe('GraphStoreService', () => {
       // Hop 1 from src/a.ts: outgoing → src/b.ts, incoming → none
       // Hop 2 from src/b.ts: outgoing → src/c.ts, incoming → none
       mockQdrantClient.scroll
-        .mockResolvedValueOnce({ points: [{ id: 'e1', payload: { toFile: 'src/b.ts' } }], next_page_offset: undefined })
+        .mockResolvedValueOnce({
+          points: [{ id: 'e1', payload: { toFile: 'src/b.ts' } }],
+          next_page_offset: undefined,
+        })
         .mockResolvedValueOnce({ points: [], next_page_offset: undefined })
-        .mockResolvedValueOnce({ points: [{ id: 'e2', payload: { toFile: 'src/c.ts' } }], next_page_offset: undefined })
+        .mockResolvedValueOnce({
+          points: [{ id: 'e2', payload: { toFile: 'src/c.ts' } }],
+          next_page_offset: undefined,
+        })
         .mockResolvedValueOnce({ points: [], next_page_offset: undefined });
 
       const result = await graphStore.expand('testproj', ['src/a.ts'], 2);
@@ -216,8 +221,14 @@ describe('GraphStoreService', () => {
     it('does not duplicate files already in visited set', async () => {
       // Both outgoing and incoming return the same file src/b.ts
       mockQdrantClient.scroll
-        .mockResolvedValueOnce({ points: [{ id: 'e1', payload: { toFile: 'src/b.ts' } }], next_page_offset: undefined })
-        .mockResolvedValueOnce({ points: [{ id: 'e2', payload: { fromFile: 'src/b.ts' } }], next_page_offset: undefined });
+        .mockResolvedValueOnce({
+          points: [{ id: 'e1', payload: { toFile: 'src/b.ts' } }],
+          next_page_offset: undefined,
+        })
+        .mockResolvedValueOnce({
+          points: [{ id: 'e2', payload: { fromFile: 'src/b.ts' } }],
+          next_page_offset: undefined,
+        });
 
       const result = await graphStore.expand('testproj', ['src/a.ts'], 1);
 
@@ -267,11 +278,10 @@ describe('GraphStoreService', () => {
 
     it('respects maxDepth and does not traverse beyond it', async () => {
       // With maxDepth=1, only traverse one level regardless of further edges
-      mockQdrantClient.scroll
-        .mockResolvedValueOnce({
-          points: [{ id: 'e1', payload: { fromFile: 'src/level1.ts' } }],
-          next_page_offset: undefined,
-        });
+      mockQdrantClient.scroll.mockResolvedValueOnce({
+        points: [{ id: 'e1', payload: { fromFile: 'src/level1.ts' } }],
+        next_page_offset: undefined,
+      });
       // No second call should reach level2
 
       const result = await graphStore.getBlastRadius('testproj', ['src/root.ts'], 1);

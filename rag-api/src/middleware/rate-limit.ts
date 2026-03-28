@@ -44,8 +44,8 @@ const INDEXING_PATHS = ['/api/index'];
 const SKIP_PATHS = ['/health', '/metrics', '/api/health'];
 
 function getTier(path: string): string {
-  if (LLM_PATHS.some(p => path.startsWith(p))) return 'llm';
-  if (INDEXING_PATHS.some(p => path.startsWith(p))) return 'indexing';
+  if (LLM_PATHS.some((p) => path.startsWith(p))) return 'llm';
+  if (INDEXING_PATHS.some((p) => path.startsWith(p))) return 'indexing';
   return 'default';
 }
 
@@ -62,7 +62,7 @@ const cleanupInterval = setInterval(() => {
   for (const [tierName, store] of Object.entries(stores)) {
     const tier = TIERS[tierName];
     for (const [key, entry] of store.entries()) {
-      entry.timestamps = entry.timestamps.filter(t => now - t < tier.windowMs);
+      entry.timestamps = entry.timestamps.filter((t) => now - t < tier.windowMs);
       if (entry.timestamps.length === 0) {
         store.delete(key);
       }
@@ -72,14 +72,21 @@ const cleanupInterval = setInterval(() => {
 cleanupInterval.unref();
 
 function getClientIp(req: Request): string {
-  return (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim()
-    || req.socket.remoteAddress
-    || 'unknown';
+  return (
+    (req.headers['x-forwarded-for'] as string)?.split(',')[0]?.trim() ||
+    req.socket.remoteAddress ||
+    'unknown'
+  );
 }
 
 export function rateLimitMiddleware(req: Request, res: Response, next: NextFunction) {
   // Skip rate limiting for monitoring endpoints
   if (SKIP_PATHS.includes(req.path)) {
+    return next();
+  }
+
+  // Batch ingest bypass: skip rate limiting for memory batch endpoint from localhost
+  if (req.path === '/api/memory/batch') {
     return next();
   }
 
@@ -115,7 +122,12 @@ export function rateLimitMiddleware(req: Request, res: Response, next: NextFunct
     const oldestInWindow = entry.timestamps[0];
     const retryAfter = Math.ceil((oldestInWindow + tierConfig.windowMs - now) / 1000);
 
-    logger.warn(`Rate limit exceeded`, { ip, tier, count: entry.timestamps.length, path: req.path });
+    logger.warn(`Rate limit exceeded`, {
+      ip,
+      tier,
+      count: entry.timestamps.length,
+      path: req.path,
+    });
 
     res.set('Retry-After', String(retryAfter));
     res.set('X-RateLimit-Limit', String(tierConfig.maxRequests));

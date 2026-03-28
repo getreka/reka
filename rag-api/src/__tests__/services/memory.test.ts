@@ -15,6 +15,7 @@ vi.mock('../../services/vector-store', () => ({
     getCollectionInfo: vi.fn(),
     aggregateByField: vi.fn(),
     recommend: vi.fn(),
+    searchByKeywords: vi.fn().mockResolvedValue([]),
     client: mockQdrantClient,
   },
   default: {
@@ -25,18 +26,25 @@ vi.mock('../../services/vector-store', () => ({
     getCollectionInfo: vi.fn(),
     aggregateByField: vi.fn(),
     recommend: vi.fn(),
+    searchByKeywords: vi.fn().mockResolvedValue([]),
     client: mockQdrantClient,
   },
+}));
+
+vi.mock('../../events/emitter', () => ({
+  publishEvent: vi.fn().mockResolvedValue(undefined),
 }));
 
 vi.mock('../../services/embedding', () => ({
   embeddingService: {
     embed: vi.fn(),
     embedBatch: vi.fn(),
+    embedQuery: vi.fn(),
   },
   default: {
     embed: vi.fn(),
     embedBatch: vi.fn(),
+    embedQuery: vi.fn(),
   },
 }));
 
@@ -162,7 +170,14 @@ describe('MemoryService', () => {
         mockSearchResult({
           id: 'superseded',
           score: 0.85,
-          payload: { type: 'note', content: 'old', tags: [], createdAt: now, updatedAt: now, supersededBy: 'active' },
+          payload: {
+            type: 'note',
+            content: 'old',
+            tags: [],
+            createdAt: now,
+            updatedAt: now,
+            supersededBy: 'active',
+          },
         }),
       ]);
 
@@ -241,12 +256,9 @@ describe('MemoryService', () => {
         limit: 5,
       });
 
-      expect(mockedVS.search).toHaveBeenCalledWith(
-        'test_agent_memory',
-        fakeVector,
-        10,
-        { must: [{ key: 'type', match: { value: 'decision' } }] }
-      );
+      expect(mockedVS.search).toHaveBeenCalledWith('test_agent_memory', fakeVector, 10, {
+        must: [{ key: 'type', match: { value: 'decision' } }],
+      });
     });
   });
 
@@ -257,7 +269,13 @@ describe('MemoryService', () => {
         mockSearchResult({
           id: 'list-1',
           score: 0.8,
-          payload: { type: 'insight', content: 'listed', tags: ['a'], createdAt: now, updatedAt: now },
+          payload: {
+            type: 'insight',
+            content: 'listed',
+            tags: ['a'],
+            createdAt: now,
+            updatedAt: now,
+          },
         }),
       ]);
 
@@ -279,10 +297,7 @@ describe('MemoryService', () => {
       const result = await memoryService.forget('test', 'mem-1');
 
       expect(result).toBe(true);
-      expect(mockedVS.delete).toHaveBeenCalledWith(
-        'test_agent_memory',
-        ['mem-1']
-      );
+      expect(mockedVS.delete).toHaveBeenCalledWith('test_agent_memory', ['mem-1']);
     });
 
     it('returns false on error', async () => {
@@ -317,9 +332,7 @@ describe('MemoryService', () => {
     it('captures errors without throwing', async () => {
       mockedEmbed.embedBatch.mockRejectedValue(new Error('embed failed'));
 
-      const result = await memoryService.batchRemember('test', [
-        { content: 'will fail' },
-      ]);
+      const result = await memoryService.batchRemember('test', [{ content: 'will fail' }]);
 
       expect(result.saved).toHaveLength(0);
       expect(result.errors).toHaveLength(1);
@@ -352,7 +365,10 @@ describe('MemoryService', () => {
     it('targets quarantine collection when tier is quarantine', async () => {
       mockQdrantClient.scroll.mockResolvedValue({
         points: [
-          { id: 'q-old', payload: { createdAt: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString() } },
+          {
+            id: 'q-old',
+            payload: { createdAt: new Date(Date.now() - 90 * 24 * 60 * 60 * 1000).toISOString() },
+          },
         ],
         next_page_offset: undefined,
       });
@@ -361,7 +377,10 @@ describe('MemoryService', () => {
       const deleted = await memoryService.forgetOlderThan('test', 30, 'quarantine');
 
       expect(deleted).toBe(1);
-      expect(mockQdrantClient.scroll).toHaveBeenCalledWith('test_memory_pending', expect.anything());
+      expect(mockQdrantClient.scroll).toHaveBeenCalledWith(
+        'test_memory_pending',
+        expect.anything()
+      );
       expect(mockedVS.delete).toHaveBeenCalledWith('test_memory_pending', ['q-old']);
     });
 
@@ -403,10 +422,9 @@ describe('MemoryService', () => {
       const result = await memoryService.forgetByType('test', 'note');
 
       expect(result).toBe(1);
-      expect(mockedVS.deleteByFilter).toHaveBeenCalledWith(
-        'test_agent_memory',
-        { must: [{ key: 'type', match: { value: 'note' } }] }
-      );
+      expect(mockedVS.deleteByFilter).toHaveBeenCalledWith('test_agent_memory', {
+        must: [{ key: 'type', match: { value: 'note' } }],
+      });
     });
 
     it('returns 0 on error', async () => {
@@ -452,7 +470,13 @@ describe('MemoryService', () => {
         mockSearchResult({
           id: 'other-id',
           score: 0.5,
-          payload: { type: 'todo', content: 'different', tags: [], createdAt: new Date().toISOString(), updatedAt: new Date().toISOString() },
+          payload: {
+            type: 'todo',
+            content: 'different',
+            tags: [],
+            createdAt: new Date().toISOString(),
+            updatedAt: new Date().toISOString(),
+          },
         }),
       ]);
 
@@ -539,14 +563,42 @@ describe('MemoryService', () => {
       const now = new Date().toISOString();
       mockQdrantClient.scroll.mockResolvedValue({
         points: [
-          { id: 'm1', payload: { type: 'note', content: 'memory one', tags: [], createdAt: now, updatedAt: now } },
-          { id: 'm2', payload: { type: 'note', content: 'memory two', tags: [], createdAt: now, updatedAt: now } },
+          {
+            id: 'm1',
+            payload: {
+              type: 'note',
+              content: 'memory one',
+              tags: [],
+              createdAt: now,
+              updatedAt: now,
+            },
+          },
+          {
+            id: 'm2',
+            payload: {
+              type: 'note',
+              content: 'memory two',
+              tags: [],
+              createdAt: now,
+              updatedAt: now,
+            },
+          },
         ],
         next_page_offset: undefined,
       });
 
       mockedVS.recommend.mockResolvedValue([
-        { id: 'm2', score: 0.95, payload: { type: 'note', content: 'memory two', tags: [], createdAt: now, updatedAt: now } },
+        {
+          id: 'm2',
+          score: 0.95,
+          payload: {
+            type: 'note',
+            content: 'memory two',
+            tags: [],
+            createdAt: now,
+            updatedAt: now,
+          },
+        },
       ]);
 
       const { llm } = await import('../../services/llm');
@@ -603,9 +655,7 @@ describe('MemoryService', () => {
         fakeVector,
         40, // limit * 2
         expect.objectContaining({
-          must: expect.arrayContaining([
-            { key: 'validated', match: { value: false } },
-          ]),
+          must: expect.arrayContaining([{ key: 'validated', match: { value: false } }]),
         })
       );
     });
@@ -621,12 +671,9 @@ describe('MemoryService', () => {
         limit: 5,
       });
 
-      expect(mockedVS.search).toHaveBeenCalledWith(
-        'test_agent_memory',
-        fakeVector,
-        5,
-        { must: [{ key: 'type', match: { value: 'decision' } }] }
-      );
+      expect(mockedVS.search).toHaveBeenCalledWith('test_agent_memory', fakeVector, 5, {
+        must: [{ key: 'type', match: { value: 'decision' } }],
+      });
     });
 
     it('applies tag filter', async () => {
@@ -638,12 +685,9 @@ describe('MemoryService', () => {
         limit: 5,
       });
 
-      expect(mockedVS.search).toHaveBeenCalledWith(
-        'test_agent_memory',
-        fakeVector,
-        5,
-        { must: [{ key: 'tags', match: { any: ['important'] } }] }
-      );
+      expect(mockedVS.search).toHaveBeenCalledWith('test_agent_memory', fakeVector, 5, {
+        must: [{ key: 'tags', match: { any: ['important'] } }],
+      });
     });
 
     it('applies both type and tag filters', async () => {
@@ -656,17 +700,12 @@ describe('MemoryService', () => {
         limit: 5,
       });
 
-      expect(mockedVS.search).toHaveBeenCalledWith(
-        'test_agent_memory',
-        fakeVector,
-        5,
-        {
-          must: [
-            { key: 'type', match: { value: 'decision' } },
-            { key: 'tags', match: { any: ['important'] } },
-          ],
-        }
-      );
+      expect(mockedVS.search).toHaveBeenCalledWith('test_agent_memory', fakeVector, 5, {
+        must: [
+          { key: 'type', match: { value: 'decision' } },
+          { key: 'tags', match: { any: ['important'] } },
+        ],
+      });
     });
   });
 });

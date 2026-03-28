@@ -17,7 +17,7 @@ const mocks = vi.hoisted(() => ({
 }));
 
 vi.mock('../../services/embedding', () => ({
-  embeddingService: { embed: mocks.embed, embedFull: mocks.embedFull },
+  embeddingService: { embed: mocks.embed, embedFull: mocks.embedFull, embedQuery: mocks.embed },
 }));
 vi.mock('../../services/vector-store', () => ({
   vectorStore: {
@@ -58,7 +58,8 @@ describe('Search Routes', () => {
         { id: '1', score: 0.9, payload: { file: 'a.ts', content: 'code', language: 'typescript' } },
       ]);
 
-      const res = await request(app).post('/api/search')
+      const res = await request(app)
+        .post('/api/search')
         .set('X-Project-Name', 'test')
         .send({ collection: 'test_codebase', query: 'find function' });
 
@@ -67,8 +68,7 @@ describe('Search Routes', () => {
     });
 
     it('returns 400 when collection is missing', async () => {
-      const res = await request(app).post('/api/search')
-        .send({ query: 'test' });
+      const res = await request(app).post('/api/search').send({ query: 'test' });
       expect(res.status).toBe(400);
     });
   });
@@ -79,7 +79,8 @@ describe('Search Routes', () => {
         { id: '1', score: 0.8, payload: { file: 'b.ts', content: 'c', language: 'ts' } },
       ]);
 
-      const res = await request(app).post('/api/search-hybrid')
+      const res = await request(app)
+        .post('/api/search-hybrid')
         .set('X-Project-Name', 'test')
         .send({ collection: 'test_codebase', query: 'auth middleware' });
 
@@ -91,11 +92,16 @@ describe('Search Routes', () => {
   describe('POST /api/ask', () => {
     it('returns an answer', async () => {
       mocks.search.mockResolvedValue([
-        { id: '1', score: 0.9, payload: { file: 'a.ts', content: 'export class A {}', language: 'typescript' } },
+        {
+          id: '1',
+          score: 0.9,
+          payload: { file: 'a.ts', content: 'export class A {}', language: 'typescript' },
+        },
       ]);
       mocks.complete.mockResolvedValue({ text: 'Class A is defined in a.ts' });
 
-      const res = await request(app).post('/api/ask')
+      const res = await request(app)
+        .post('/api/ask')
         .send({ collection: 'test_codebase', question: 'What is class A?' });
 
       expect(res.status).toBe(200);
@@ -105,7 +111,8 @@ describe('Search Routes', () => {
     it('returns fallback message when no results', async () => {
       mocks.search.mockResolvedValue([]);
 
-      const res = await request(app).post('/api/ask')
+      const res = await request(app)
+        .post('/api/ask')
         .send({ collection: 'test_codebase', question: 'anything' });
 
       expect(res.status).toBe(200);
@@ -116,11 +123,16 @@ describe('Search Routes', () => {
   describe('POST /api/find-feature', () => {
     it('finds feature implementation', async () => {
       mocks.search.mockResolvedValue([
-        { id: '1', score: 0.85, payload: { file: 'auth.ts', content: 'auth logic', language: 'ts' } },
+        {
+          id: '1',
+          score: 0.85,
+          payload: { file: 'auth.ts', content: 'auth logic', language: 'ts' },
+        },
       ]);
       mocks.complete.mockResolvedValue({ text: 'Authentication is in auth.ts' });
 
-      const res = await request(app).post('/api/find-feature')
+      const res = await request(app)
+        .post('/api/find-feature')
         .send({ collection: 'test_codebase', description: 'authentication' });
 
       expect(res.status).toBe(200);
@@ -133,7 +145,8 @@ describe('Search Routes', () => {
     it('finds symbols', async () => {
       mocks.findSymbol.mockResolvedValue([{ name: 'AuthService', file: 'auth.ts', kind: 'class' }]);
 
-      const res = await request(app).post('/api/find-symbol')
+      const res = await request(app)
+        .post('/api/find-symbol')
         .send({ projectName: 'test', symbol: 'AuthService' });
 
       expect(res.status).toBe(200);
@@ -141,8 +154,7 @@ describe('Search Routes', () => {
     });
 
     it('returns 400 when projectName or symbol missing', async () => {
-      const res = await request(app).post('/api/find-symbol')
-        .send({ projectName: 'test' });
+      const res = await request(app).post('/api/find-symbol').send({ projectName: 'test' });
       expect(res.status).toBe(400);
     });
   });
@@ -150,12 +162,14 @@ describe('Search Routes', () => {
   describe('POST /api/context-pack', () => {
     it('builds context pack', async () => {
       mocks.build.mockResolvedValue({
-        facets: [], totalTokens: 500,
+        facets: [],
+        totalTokens: 500,
         guardrails: { relatedADRs: [], testCommands: [], invariants: [] },
         assembled: 'context',
       });
 
-      const res = await request(app).post('/api/context-pack')
+      const res = await request(app)
+        .post('/api/context-pack')
         .send({ projectName: 'test', query: 'implement auth' });
 
       expect(res.status).toBe(200);
@@ -166,20 +180,22 @@ describe('Search Routes', () => {
   describe('POST /api/smart-dispatch', () => {
     it('dispatches a task', async () => {
       mocks.dispatch.mockResolvedValue({
-        plan: ['code_search', 'memory'], reasoning: 'test',
-        context: {}, timing: { planMs: 10, executeMs: 20, totalMs: 30 },
+        plan: ['code_search', 'memory'],
+        reasoning: 'test',
+        context: {},
+        timing: { planMs: 10, executeMs: 20, totalMs: 30 },
       });
 
-      const res = await withProject(request(app).post('/api/smart-dispatch'))
-        .send({ task: 'fix auth bug' });
+      const res = await withProject(request(app).post('/api/smart-dispatch')).send({
+        task: 'fix auth bug',
+      });
 
       expect(res.status).toBe(200);
       expect(res.body.plan).toContain('code_search');
     });
 
     it('returns 400 when no projectName', async () => {
-      const res = await request(app).post('/api/smart-dispatch')
-        .send({ task: 'test' });
+      const res = await request(app).post('/api/smart-dispatch').send({ task: 'test' });
       expect(res.status).toBe(400);
     });
   });

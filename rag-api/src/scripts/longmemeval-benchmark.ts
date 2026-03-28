@@ -329,8 +329,8 @@ interface RankedResult {
 function reciprocalRankFusion(
   lists: Array<Array<RankedResult>>,
   k = 60
-): Array<{ score: number; content: string }> {
-  const scores = new Map<string, { score: number; content: string }>();
+): Array<{ id: string; score: number; content: string }> {
+  const scores = new Map<string, { id: string; score: number; content: string }>();
   for (const list of lists) {
     list.forEach((item, rank) => {
       const rrfScore = 1 / (k + rank + 1);
@@ -338,7 +338,7 @@ function reciprocalRankFusion(
       if (existing) {
         existing.score += rrfScore;
       } else {
-        scores.set(item.id, { score: rrfScore, content: item.content });
+        scores.set(item.id, { id: item.id, score: rrfScore, content: item.content });
       }
     });
   }
@@ -445,17 +445,91 @@ async function queryMemory(question: string, questionDate: string, _mode: string
       }));
     })();
 
+    // Strategy 4: Entity search via factEntities payload filter
+    const entityResults: RankedResult[] = await (async () => {
+      const rawEntities = query.match(/\b[A-Z][a-z]+(?:\s[A-Z][a-z]+)*/g) || [];
+      const quotedTerms = query.match(/"([^"]+)"/g)?.map((t: string) => t.replace(/"/g, '')) || [];
+      const allEntities = [...new Set([...rawEntities, ...quotedTerms])].filter(
+        (e) => e.length > 2
+      );
+
+      if (allEntities.length === 0) return [];
+
+      const scrollRes = await fetch(`${QDRANT_URL}/collections/${collection}/points/scroll`, {
+        method: 'POST',
+        headers: qdrantHeaders,
+        body: JSON.stringify({
+          filter: {
+            should: allEntities.map((e: string) => ({
+              key: 'factEntities',
+              match: { text: e },
+            })),
+          },
+          limit: 15,
+          with_payload: true,
+        }),
+      });
+      if (!scrollRes.ok) return [];
+
+      const scrollData = (await scrollRes.json()) as {
+        result: { points: Array<{ id: string | number; payload: any }> };
+      };
+      const points = scrollData.result?.points || [];
+      return points.map((p, idx) => ({
+        id: String(p.id),
+        content: String(p.payload?.content || ''),
+        score: 1 / (idx + 1),
+      }));
+    })();
+
     // RRF merge all non-empty strategy result lists
-    const allLists = [semanticResults, keywordResults, temporalResults].filter((l) => l.length > 0);
+    const allLists = [semanticResults, keywordResults, temporalResults, entityResults].filter(
+      (l) => l.length > 0
+    );
     if (allLists.length === 0) return '';
 
     const merged = reciprocalRankFusion(allLists);
     if (merged.length === 0) return '';
 
-    return merged
-      .slice(0, 15)
-      .map((r) => r.content.slice(0, 300))
-      .join('\n---\n');
+    // Collect top-15 merged result IDs to fetch full payloads for category grouping
+    const top = merged.slice(0, 15);
+    const topIds = top.map((r) => r.id).filter(Boolean);
+
+    let categoryMap: Map<string, string[]> = new Map();
+    if (topIds.length > 0) {
+      try {
+        const getRes = await fetch(`${QDRANT_URL}/collections/${collection}/points`, {
+          method: 'POST',
+          headers: qdrantHeaders,
+          body: JSON.stringify({ ids: topIds, with_payload: true }),
+        });
+        if (getRes.ok) {
+          const getData = (await getRes.json()) as {
+            result: Array<{ id: string | number; payload: any }>;
+          };
+          for (const point of getData.result || []) {
+            const cat = (point.payload?.factCategory as string) || 'general';
+            const content = String(point.payload?.content || '').slice(0, 300);
+            if (!categoryMap.has(cat)) categoryMap.set(cat, []);
+            categoryMap.get(cat)!.push(content);
+          }
+        }
+      } catch {
+        // Fall back to flat list if category fetch fails
+      }
+    }
+
+    if (categoryMap.size > 1) {
+      let context = '';
+      for (const [cat, facts] of categoryMap) {
+        context += `\n[${cat.toUpperCase()}]\n`;
+        context += facts.map((f) => `- ${f}`).join('\n');
+      }
+      return context.trim();
+    }
+
+    // Fallback: flat list
+    return top.map((r) => r.content.slice(0, 300)).join('\n---\n');
   } catch {
     return '';
   }

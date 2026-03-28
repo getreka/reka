@@ -209,6 +209,8 @@ async function ingest(specificId?: string) {
     batchIds = meta.batchIds;
   }
 
+  const sessions = loadSessions();
+
   let totalFacts = 0;
   let totalSessions = 0;
   let parseErrors = 0;
@@ -240,10 +242,17 @@ async function ingest(specificId?: string) {
             parseErrors++;
           }
 
+          // Look up the session date so we can prepend it to content for temporal search
+          const sessionDate = sessions.get(result.custom_id)?.date || '';
+
           for (const fact of facts) {
-            const factDateTs = isoDateToTs(fact.date);
+            const effectiveDate = fact.date || sessionDate || null;
+            const factDateTs = isoDateToTs(effectiveDate);
+            const contentWithDate = effectiveDate
+              ? `[${effectiveDate}] ${fact.content}`
+              : fact.content;
             items.push({
-              content: fact.content,
+              content: contentWithDate,
               type: 'insight',
               tags: [result.custom_id, 'extracted-fact', fact.category],
               metadata: {

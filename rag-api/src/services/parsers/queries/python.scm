@@ -37,7 +37,7 @@
 ; from X import *
 (import_from_statement
   module_name: (dotted_name) @import.source
-  name: (wildcard_import)) @import.statement
+  (wildcard_import)) @import.statement
 
 ; from . import X  (relative import)
 (import_from_statement
@@ -50,13 +50,6 @@
 
 ; def foo(...)
 (function_definition
-  name: (identifier) @definition.name
-  parameters: (parameters) @definition.params
-  return_type: (type)?) @definition.node
-
-; async def foo(...)
-(function_definition
-  "async"
   name: (identifier) @definition.name) @definition.node
 
 ; ------------------------------------------------------------
