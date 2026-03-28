@@ -279,40 +279,182 @@ async function ollamaChat(prompt: string, maxTokens = 300): Promise<string> {
 
 // ── Phase 1: Recall (embedding model only, direct Qdrant) ─
 
+const STOPWORDS = new Set([
+  'the',
+  'a',
+  'an',
+  'is',
+  'was',
+  'are',
+  'were',
+  'do',
+  'did',
+  'does',
+  'what',
+  'where',
+  'when',
+  'how',
+  'who',
+  'which',
+  'my',
+  'i',
+  'me',
+  'to',
+  'of',
+  'in',
+  'for',
+  'on',
+  'with',
+  'at',
+  'by',
+  'from',
+  'that',
+  'this',
+  'it',
+  'and',
+  'or',
+  'but',
+  'not',
+  'have',
+  'has',
+  'had',
+]);
+
+interface RankedResult {
+  id: string;
+  content: string;
+  score: number;
+}
+
+function reciprocalRankFusion(
+  lists: Array<Array<RankedResult>>,
+  k = 60
+): Array<{ score: number; content: string }> {
+  const scores = new Map<string, { score: number; content: string }>();
+  for (const list of lists) {
+    list.forEach((item, rank) => {
+      const rrfScore = 1 / (k + rank + 1);
+      const existing = scores.get(item.id);
+      if (existing) {
+        existing.score += rrfScore;
+      } else {
+        scores.set(item.id, { score: rrfScore, content: item.content });
+      }
+    });
+  }
+  return [...scores.values()].sort((a, b) => b.score - a.score);
+}
+
 async function queryMemory(question: string, questionDate: string, _mode: string): Promise<string> {
   const QDRANT_URL = process.env.QDRANT_URL || 'http://localhost:6333';
   const EMBEDDING_MODEL = process.env.OLLAMA_EMBEDDING_MODEL || 'qwen3-embedding:4b';
   const collection = `${PROJECT_NAME}_agent_memory`;
   const query = `${question} (as of ${questionDate})`;
 
+  const qdrantHeaders = { 'Content-Type': 'application/json' };
+
   try {
-    // Embed query via Ollama (embedding model loads/unloads independently)
-    const embedRes = await fetch(`${OLLAMA_URL}/api/embed`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ model: EMBEDDING_MODEL, input: query }),
-    });
-    if (!embedRes.ok) return '';
-    const embedData = (await embedRes.json()) as { embeddings: number[][] };
-    const vector = embedData.embeddings[0].slice(0, 1024);
+    // Strategy 1: Semantic search via Ollama embed + Qdrant vector search
+    const semanticResults: RankedResult[] = await (async () => {
+      const embedRes = await fetch(`${OLLAMA_URL}/api/embed`, {
+        method: 'POST',
+        headers: qdrantHeaders,
+        body: JSON.stringify({ model: EMBEDDING_MODEL, input: query }),
+      });
+      if (!embedRes.ok) return [];
+      const embedData = (await embedRes.json()) as { embeddings: number[][] };
+      const vector = embedData.embeddings[0].slice(0, 1024);
 
-    // Search Qdrant directly (bypass RAG API to avoid model loading conflicts)
-    const searchRes = await fetch(`${QDRANT_URL}/collections/${collection}/points/search`, {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ vector, limit: 15, with_payload: true }),
-    });
-    if (!searchRes.ok) return '';
+      const searchRes = await fetch(`${QDRANT_URL}/collections/${collection}/points/search`, {
+        method: 'POST',
+        headers: qdrantHeaders,
+        body: JSON.stringify({ vector, limit: 15, with_payload: true }),
+      });
+      if (!searchRes.ok) return [];
 
-    const searchData = (await searchRes.json()) as {
-      result: Array<{ payload: any; score: number }>;
-    };
-    const results = searchData.result || [];
-    if (results.length === 0) return '';
+      const searchData = (await searchRes.json()) as {
+        result: Array<{ id: string | number; payload: any; score: number }>;
+      };
+      return (searchData.result || []).map((r) => ({
+        id: String(r.id),
+        content: String(r.payload?.content || ''),
+        score: r.score,
+      }));
+    })();
 
-    return results
+    // Strategy 2: Keyword search via Qdrant scroll with text match filter
+    const keywordResults: RankedResult[] = await (async () => {
+      const keywords = query
+        .toLowerCase()
+        .split(/\W+/)
+        .filter((w) => w.length > 2 && !STOPWORDS.has(w));
+      if (keywords.length === 0) return [];
+
+      const scrollRes = await fetch(`${QDRANT_URL}/collections/${collection}/points/scroll`, {
+        method: 'POST',
+        headers: qdrantHeaders,
+        body: JSON.stringify({
+          filter: {
+            should: keywords.map((kw) => ({ key: 'content', match: { text: kw } })),
+          },
+          limit: 15,
+          with_payload: true,
+        }),
+      });
+      if (!scrollRes.ok) return [];
+
+      const scrollData = (await scrollRes.json()) as {
+        result: { points: Array<{ id: string | number; payload: any }> };
+      };
+      const points = scrollData.result?.points || [];
+      return points.map((p, idx) => ({
+        id: String(p.id),
+        content: String(p.payload?.content || ''),
+        score: 1 / (idx + 1),
+      }));
+    })();
+
+    // Strategy 3: Temporal-boosted scroll — filter by date substring if query contains a date
+    const temporalResults: RankedResult[] = await (async () => {
+      const dateMatch = query.match(/(\d{4})\/(\d{2})/);
+      if (!dateMatch) return [];
+
+      const datePrefix = `${dateMatch[1]}/${dateMatch[2]}`;
+
+      const scrollRes = await fetch(`${QDRANT_URL}/collections/${collection}/points/scroll`, {
+        method: 'POST',
+        headers: qdrantHeaders,
+        body: JSON.stringify({
+          filter: {
+            must: [{ key: 'content', match: { text: datePrefix } }],
+          },
+          limit: 15,
+          with_payload: true,
+        }),
+      });
+      if (!scrollRes.ok) return [];
+
+      const scrollData = (await scrollRes.json()) as {
+        result: { points: Array<{ id: string | number; payload: any }> };
+      };
+      const points = scrollData.result?.points || [];
+      return points.map((p, idx) => ({
+        id: String(p.id),
+        content: String(p.payload?.content || ''),
+        score: 1 / (idx + 1),
+      }));
+    })();
+
+    // RRF merge all non-empty strategy result lists
+    const allLists = [semanticResults, keywordResults, temporalResults].filter((l) => l.length > 0);
+    if (allLists.length === 0) return '';
+
+    const merged = reciprocalRankFusion(allLists);
+    if (merged.length === 0) return '';
+
+    return merged
       .slice(0, 15)
-      .map((r: any) => String(r.payload?.content || '').slice(0, 300))
+      .map((r) => r.content.slice(0, 300))
       .join('\n---\n');
   } catch {
     return '';

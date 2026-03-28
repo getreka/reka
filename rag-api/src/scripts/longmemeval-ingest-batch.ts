@@ -15,6 +15,7 @@ const RAG_API_URL = process.env.RAG_API_URL || 'http://localhost:3100';
 const RAG_API_KEY = process.env.RAG_API_KEY || '';
 const PROJECT_NAME = 'longmemeval-bench';
 const RESULTS_DIR = path.join(__dirname, 'batch-results');
+const META_FILE = process.env.BATCH_META_FILE || 'batch-meta.json';
 
 const client = new Anthropic();
 
@@ -118,7 +119,7 @@ async function submit() {
   }
 
   // Save batch IDs for polling
-  const metaPath = path.join(RESULTS_DIR, 'batch-meta.json');
+  const metaPath = path.join(RESULTS_DIR, META_FILE);
   fs.writeFileSync(
     metaPath,
     JSON.stringify(
@@ -128,7 +129,10 @@ async function submit() {
     )
   );
   console.log(`\nBatch IDs saved to ${metaPath}`);
-  console.log(`\nPoll with: npx ts-node src/scripts/longmemeval-ingest-batch.ts --poll`);
+  console.log(`Batch IDs: ${batchIds.join(', ')}`);
+  console.log(
+    `\nPoll with: BATCH_META_FILE=${META_FILE} npx ts-node src/scripts/longmemeval-ingest-batch.ts --poll`
+  );
 }
 
 async function poll(specificId?: string) {
@@ -138,7 +142,8 @@ async function poll(specificId?: string) {
   if (specificId) {
     batchIds = [specificId];
   } else {
-    const meta = JSON.parse(fs.readFileSync(metaPath, 'utf-8'));
+    const pollMetaPath = path.join(RESULTS_DIR, META_FILE);
+    const meta = JSON.parse(fs.readFileSync(pollMetaPath, 'utf-8'));
     batchIds = meta.batchIds;
   }
 
@@ -199,7 +204,8 @@ async function ingest(specificId?: string) {
   if (specificId) {
     batchIds = [specificId];
   } else {
-    const meta = JSON.parse(fs.readFileSync(metaPath, 'utf-8'));
+    const ingestMetaPath = path.join(RESULTS_DIR, META_FILE);
+    const meta = JSON.parse(fs.readFileSync(ingestMetaPath, 'utf-8'));
     batchIds = meta.batchIds;
   }
 
