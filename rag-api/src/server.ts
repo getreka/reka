@@ -204,7 +204,7 @@ export async function startServer(): Promise<void> {
     serverAdapter.setBasePath('/admin/queues');
 
     createBullBoard({
-      queues: ['memory-effects', 'session-lifecycle', 'indexing', 'maintenance', 'dead-letter'].map(
+      queues: ['indexing', 'maintenance', 'dead-letter'].map(
         (name) => new BullMQAdapter(getQueue(name as Parameters<typeof getQueue>[0]))
       ),
       serverAdapter,
@@ -213,12 +213,18 @@ export async function startServer(): Promise<void> {
     app.use('/admin/queues', serverAdapter.getRouter());
     logger.info('BullMQ event queues initialized with Bull Board at /admin/queues');
 
-    const { startSessionLifecycleWorker } =
-      await import('./events/workers/session-lifecycle.worker');
-    startSessionLifecycleWorker();
+    // Start Actor System
+    const { actorSystem } = await import('./actors/actor-system');
+    const { memoryActor } = await import('./actors/memory-actor');
+    const { sessionActor } = await import('./actors/session-actor');
 
-    const { startMemoryEffectsWorker } = await import('./events/workers/memory-effects.worker');
-    startMemoryEffectsWorker();
+    const { maintenanceActor } = await import('./actors/maintenance-actor');
+
+    actorSystem.register(memoryActor, 3); // 3 concurrent project actors
+    actorSystem.register(sessionActor, 5); // 5 concurrent session actors
+    actorSystem.register(maintenanceActor, 1); // singleton, concurrency 1
+
+    logger.info('Actor system started', { actors: ['memory', 'session', 'maintenance'] });
 
     // Start server
     app.listen(config.API_PORT, config.API_HOST, () => {
@@ -226,8 +232,8 @@ export async function startServer(): Promise<void> {
       logger.info(`Embedding: ${config.EMBEDDING_PROVIDER}, LLM: ${config.LLM_PROVIDER}`);
       logger.info(`Cache: ${cacheService.isEnabled() ? 'enabled' : 'disabled'}`);
     });
-  } catch (error) {
-    logger.error('Failed to start server', { error });
+  } catch (error: any) {
+    logger.error('Failed to start server', { error: error?.message || error, stack: error?.stack });
     process.exit(1);
   }
 }
@@ -239,8 +245,10 @@ process.on('SIGTERM', async () => {
   heartbeatMonitor.stop();
   const { llmUsageLogger } = await import('./services/llm-usage-logger');
   await llmUsageLogger.shutdown();
+  const { actorSystem } = await import('./actors/actor-system');
+  await actorSystem.shutdown();
   const { closeAll } = await import('./events/queues');
-  await closeAll();
+  await closeAll(); // Still needed for event queues (maintenance, indexing, dead-letter)
   await shutdownTracing();
   process.exit(0);
 });

@@ -375,6 +375,31 @@ export const eventProcessingDuration = new Histogram({
 });
 
 // ============================================
+// Actor Model Metrics
+// ============================================
+
+export const actorMailboxDepth = new Gauge({
+  name: 'rag_actor_mailbox_depth',
+  help: 'Number of pending messages in actor mailbox',
+  labelNames: ['actor_type'],
+  registers: [registry],
+});
+
+export const actorStateSizeBytes = new Gauge({
+  name: 'rag_actor_state_size_bytes',
+  help: 'Size of actor state in Redis (bytes)',
+  labelNames: ['actor_type', 'actor_id'],
+  registers: [registry],
+});
+
+export const actorLockContentions = new Counter({
+  name: 'rag_actor_lock_contentions_total',
+  help: 'Number of times an actor lock was contended (message had to retry)',
+  labelNames: ['actor_type'],
+  registers: [registry],
+});
+
+// ============================================
 // Helper Functions
 // ============================================
 

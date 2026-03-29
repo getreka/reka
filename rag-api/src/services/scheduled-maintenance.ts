@@ -56,7 +56,8 @@ class ScheduledMaintenance {
       'maintenance',
       async (job) => {
         if (job.name === 'maintenance:cycle') {
-          await this.runCycle();
+          const { maintenanceActor } = await import('../actors/maintenance-actor');
+          await maintenanceActor.ref('maintenance:system').send('maintenance:cycle', {});
         }
       },
       { concurrency: 1 }

@@ -133,4 +133,17 @@ router.delete(
   })
 );
 
+/**
+ * GET /api/admin/actors
+ * List active actors with their status
+ */
+router.get(
+  '/actors',
+  asyncHandler(async (req: Request, res: Response) => {
+    const { actorSystem } = await import('../actors/actor-system');
+    const statuses = await actorSystem.getStatus();
+    res.json({ actors: statuses });
+  })
+);
+
 export default router;
