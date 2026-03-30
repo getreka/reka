@@ -31,7 +31,9 @@ router.post(
   validateProjectName,
   validate(runAgentSchema),
   asyncHandler(async (req: Request, res: Response) => {
-    const { projectName, agentType, task, context, maxIterations, timeout, includeThinking } = req.body;
+    const { projectName, agentType, task, context, maxIterations, timeout, includeThinking } =
+      req.body;
+    const projectPath = (req.headers['x-project-path'] as string) || undefined;
 
     const result = await agentRuntime.run({
       projectName,
@@ -40,11 +42,12 @@ router.post(
       context,
       maxIterations,
       timeout,
+      projectPath,
     });
 
     // Strip thinking from steps if not requested
     if (!includeThinking && result.steps) {
-      result.steps = result.steps.map(step => {
+      result.steps = result.steps.map((step) => {
         const { thinking, ...rest } = step;
         return rest;
       });
@@ -83,7 +86,17 @@ router.post(
   validateProjectName,
   validate(autonomousAgentSchema),
   asyncHandler(async (req: Request, res: Response) => {
-    const { projectName, projectPath, type, task, maxTurns, maxBudgetUsd, model, effort, includeStreaming } = req.body;
+    const {
+      projectName,
+      projectPath,
+      type,
+      task,
+      maxTurns,
+      maxBudgetUsd,
+      model,
+      effort,
+      includeStreaming,
+    } = req.body;
 
     const result = await claudeAgentService.run({
       projectName,

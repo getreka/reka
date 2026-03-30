@@ -13,7 +13,7 @@ export interface GraphEdge {
   toFile: string;
   toSymbol: string;
   edgeType: 'imports' | 'calls' | 'extends' | 'implements' | 'depends_on';
-  confidence?: 'scip' | 'tree-sitter' | 'heuristic';
+  confidence?: 'lsp' | 'scip' | 'tree-sitter' | 'heuristic';
   symbolDescriptor?: string;
 }
 

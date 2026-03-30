@@ -19,6 +19,17 @@ import type { GraphEdge } from './parsers/ast-parser';
 
 const GRAPH_EXPAND_CACHE_TTL = 300; // 5 minutes
 
+const CONFIDENCE_RANK: Record<string, number> = {
+  lsp: 4,
+  scip: 3,
+  'tree-sitter': 2,
+  heuristic: 1,
+};
+
+function shouldUpgrade(existing: string | undefined, incoming: string | undefined): boolean {
+  return (CONFIDENCE_RANK[incoming || ''] || 0) > (CONFIDENCE_RANK[existing || ''] || 0);
+}
+
 /** Returns a zero vector of the configured dimension. */
 function zeroVector(): number[] {
   return new Array(config.VECTOR_SIZE).fill(0);
@@ -107,19 +118,19 @@ class GraphStoreService {
 
     for (const edge of existing) {
       const key = `${edge.fromSymbol}::${edge.edgeType}`;
-      const scip = scipByKey.get(key);
-      if (scip) {
-        // Upgrade with SCIP resolution
+      const incoming = scipByKey.get(key);
+      if (incoming && shouldUpgrade(edge.confidence, incoming.confidence)) {
+        // Upgrade with higher-confidence resolution
         merged.push({
           ...edge,
-          toFile: scip.toFile,
-          toSymbol: scip.toSymbol,
-          confidence: 'scip' as const,
-          symbolDescriptor: scip.symbolDescriptor,
+          toFile: incoming.toFile,
+          toSymbol: incoming.toSymbol,
+          confidence: incoming.confidence,
+          symbolDescriptor: incoming.symbolDescriptor,
         });
         usedScipKeys.add(key);
       } else {
-        // Keep tree-sitter edge as-is
+        // Keep existing edge as-is (already equal or higher confidence)
         merged.push(edge);
       }
     }
@@ -153,7 +164,7 @@ class GraphStoreService {
 
     await vectorStore.upsert(collection, points);
     logger.debug(
-      `Merged ${merged.length} edges for ${filePath} (${usedScipKeys.size} upgraded by SCIP)`,
+      `Merged ${merged.length} edges for ${filePath} (${usedScipKeys.size} upgraded by incoming edges)`,
       {
         project: projectName,
       }

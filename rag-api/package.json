@@ -1,6 +1,6 @@
 {
   "name": "@shared/rag-api",
-  "version": "2.1.0",
+  "version": "2.2.0",
   "description": "Shared RAG API for multi-project support",
   "main": "dist/server.js",
   "scripts": {
@@ -42,6 +42,7 @@
     "protobufjs": "^8.0.0",
     "ts-morph": "^27.0.2",
     "uuid": "^9.0.0",
+    "vscode-jsonrpc": "^8.2.1",
     "web-tree-sitter": "^0.26.7",
     "winston": "^3.19.0",
     "zod": "^4.0.0"

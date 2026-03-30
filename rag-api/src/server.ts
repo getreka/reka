@@ -250,6 +250,8 @@ process.on('SIGTERM', async () => {
   await actorSystem.shutdown();
   const { closeAll } = await import('./events/queues');
   await closeAll(); // Still needed for event queues (maintenance, indexing, dead-letter)
+  const { lspClient } = await import('./services/lsp-client');
+  await lspClient.shutdown();
   await shutdownTracing();
   process.exit(0);
 });

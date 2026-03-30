@@ -7,6 +7,7 @@
  */
 
 import * as crypto from 'crypto';
+import * as path from 'path';
 import { v4 as uuidv4 } from 'uuid';
 import config from '../config';
 import { logger } from '../utils/logger';
@@ -17,7 +18,12 @@ import { llm } from './llm';
 import { graphStore } from './graph-store';
 import { symbolIndex } from './symbol-index';
 import { workRegistry } from './work-handler';
-import { getAgentProfile, listAgentTypes, type AgentProfile, getToolDefinitions } from './agent-profiles';
+import {
+  getAgentProfile,
+  listAgentTypes,
+  type AgentProfile,
+  getToolDefinitions,
+} from './agent-profiles';
 import {
   agentRunsTotal,
   agentDuration,
@@ -35,7 +41,7 @@ import { withSpan } from '../utils/tracing';
 export interface AgentStep {
   iteration: number;
   thought: string;
-  thinking?: string;  // Raw reasoning trace from thinking mode
+  thinking?: string; // Raw reasoning trace from thinking mode
   action?: { tool: string; input: Record<string, unknown>; reasoning: string };
   observation?: { tool: string; result: string; truncated: boolean };
   timestamp: string;
@@ -80,30 +86,44 @@ class AgentRuntime {
     context?: string;
     maxIterations?: number;
     timeout?: number;
+    projectPath?: string;
   }): Promise<AgentTask> {
-    return withSpan('agent_runtime.run', {
-      agent_type: options.agentType,
-      project: options.projectName,
-      task: options.task.slice(0, 100),
-    }, async (span) => this._run(options, span));
+    return withSpan(
+      'agent_runtime.run',
+      {
+        agent_type: options.agentType,
+        project: options.projectName,
+        task: options.task.slice(0, 100),
+      },
+      async (span) => this._run(options, span)
+    );
   }
 
-  private async _run(options: {
-    projectName: string;
-    agentType: string;
-    task: string;
-    context?: string;
-    maxIterations?: number;
-    timeout?: number;
-  }, span?: any): Promise<AgentTask> {
-    const { projectName, agentType, task, context } = options;
+  private async _run(
+    options: {
+      projectName: string;
+      agentType: string;
+      task: string;
+      context?: string;
+      maxIterations?: number;
+      timeout?: number;
+      projectPath?: string;
+    },
+    span?: any
+  ): Promise<AgentTask> {
+    const { projectName, agentType, task, context, projectPath } = options;
 
     const profile = getAgentProfile(agentType);
     if (!profile) {
-      throw new Error(`Unknown agent type: ${agentType}. Available: ${listAgentTypes().map(a => a.name).join(', ')}`);
+      throw new Error(
+        `Unknown agent type: ${agentType}. Available: ${listAgentTypes()
+          .map((a) => a.name)
+          .join(', ')}`
+      );
     }
 
-    const maxIterations = options.maxIterations ?? profile.maxIterations ?? config.AGENT_MAX_ITERATIONS;
+    const maxIterations =
+      options.maxIterations ?? profile.maxIterations ?? config.AGENT_MAX_ITERATIONS;
     const timeout = options.timeout ?? profile.timeout ?? config.AGENT_TIMEOUT;
 
     const agentTask: AgentTask = {
@@ -133,14 +153,35 @@ class AgentRuntime {
       // Choose loop based on provider
       const useToolUse = config.LLM_PROVIDER === 'anthropic';
       const result = useToolUse
-        ? await this.toolUseLoop(profile, projectName, task, context, maxIterations, timeout, agentTask)
-        : await this.reactLoop(profile, projectName, task, context, maxIterations, timeout, agentTask);
+        ? await this.toolUseLoop(
+            profile,
+            projectName,
+            task,
+            context,
+            maxIterations,
+            timeout,
+            agentTask,
+            projectPath
+          )
+        : await this.reactLoop(
+            profile,
+            projectName,
+            task,
+            context,
+            maxIterations,
+            timeout,
+            agentTask,
+            projectPath
+          );
 
       agentTask.status = 'completed';
       agentTask.result = result;
       agentTask.completedAt = new Date().toISOString();
       agentRunsTotal.inc({ project: projectName, agent_type: agentType, status: 'completed' });
-      workHandle.complete({ iterations: agentTask.usage.iterations, toolCalls: agentTask.usage.toolCalls });
+      workHandle.complete({
+        iterations: agentTask.usage.iterations,
+        toolCalls: agentTask.usage.toolCalls,
+      });
 
       // Extract and save structured facts from observations
       try {
@@ -168,8 +209,14 @@ class AgentRuntime {
 
       // Record metrics
       agentDuration.observe({ project: projectName, agent_type: agentType }, durationMs / 1000);
-      agentIterations.observe({ project: projectName, agent_type: agentType }, agentTask.usage.iterations);
-      agentTokensUsed.inc({ project: projectName, agent_type: agentType, type: 'total' }, agentTask.usage.totalTokens);
+      agentIterations.observe(
+        { project: projectName, agent_type: agentType },
+        agentTask.usage.iterations
+      );
+      agentTokensUsed.inc(
+        { project: projectName, agent_type: agentType, type: 'total' },
+        agentTask.usage.totalTokens
+      );
 
       if (span?.setAttribute) {
         span.setAttribute('status', agentTask.status);
@@ -200,7 +247,8 @@ class AgentRuntime {
     context: string | undefined,
     maxIterations: number,
     timeout: number,
-    agentTask: AgentTask
+    agentTask: AgentTask,
+    projectPath?: string
   ): Promise<string> {
     const deadline = Date.now() + timeout;
 
@@ -235,7 +283,8 @@ class AgentRuntime {
         provider: 'anthropic',
       });
 
-      agentTask.usage.totalTokens += (response.promptTokens || 0) + (response.completionTokens || 0);
+      agentTask.usage.totalTokens +=
+        (response.promptTokens || 0) + (response.completionTokens || 0);
 
       const step: AgentStep = {
         iteration,
@@ -274,7 +323,12 @@ class AgentRuntime {
         let observation: string;
         let truncated = false;
         try {
-          observation = await this.executeAction(toolCall.name, toolCall.input, projectName);
+          observation = await this.executeAction(
+            toolCall.name,
+            toolCall.input,
+            projectName,
+            projectPath
+          );
           if (observation.length > 3000) {
             observation = observation.slice(0, 3000) + '\n... [truncated]';
             truncated = true;
@@ -320,25 +374,30 @@ class AgentRuntime {
       if (iteration >= 3 && this.hasConverged(agentTask.steps)) {
         messages.push({
           role: 'user',
-          content: 'Your recent observations are very similar. Please synthesize what you have found and provide a FINAL_ANSWER now.',
+          content:
+            'Your recent observations are very similar. Please synthesize what you have found and provide a FINAL_ANSWER now.',
         });
 
         const finalResponse = await llm.chat(messages, {
           systemPrompt: profile.systemPrompt,
-          tools: [],  // No tools — force text-only response
+          tools: [], // No tools — force text-only response
           temperature: profile.temperature,
           maxTokens: 4096,
           think: true,
           provider: 'anthropic',
         });
-        agentTask.usage.totalTokens += (finalResponse.promptTokens || 0) + (finalResponse.completionTokens || 0);
+        agentTask.usage.totalTokens +=
+          (finalResponse.promptTokens || 0) + (finalResponse.completionTokens || 0);
         agentTask.usage.iterations = iteration + 1;
         return finalResponse.text;
       }
     }
 
     // Max iterations reached
-    return this.extractPartialResult(agentTask) || 'Agent reached maximum iterations without a final answer.';
+    return (
+      this.extractPartialResult(agentTask) ||
+      'Agent reached maximum iterations without a final answer.'
+    );
   }
 
   // ============================================
@@ -352,14 +411,13 @@ class AgentRuntime {
     context: string | undefined,
     maxIterations: number,
     timeout: number,
-    agentTask: AgentTask
+    agentTask: AgentTask,
+    projectPath?: string
   ): Promise<string> {
     const deadline = Date.now() + timeout;
 
     // Build message history
-    const messages: ChatMessage[] = [
-      { role: 'system', content: profile.systemPrompt },
-    ];
+    const messages: ChatMessage[] = [{ role: 'system', content: profile.systemPrompt }];
 
     // User message with task and optional context
     let userPrompt = `Task: ${task}`;
@@ -384,7 +442,8 @@ class AgentRuntime {
         provider: 'ollama',
       });
 
-      agentTask.usage.totalTokens += (response.promptTokens || 0) + (response.completionTokens || 0);
+      agentTask.usage.totalTokens +=
+        (response.promptTokens || 0) + (response.completionTokens || 0);
 
       const assistantContent = response.text;
       messages.push({ role: 'assistant', content: assistantContent });
@@ -410,7 +469,11 @@ class AgentRuntime {
         // Validate action is allowed
         if (!profile.allowedActions.includes(parsed.action.tool)) {
           const observation = `Error: Action "${parsed.action.tool}" is not allowed. Allowed: ${profile.allowedActions.join(', ')}`;
-          step.action = { tool: parsed.action.tool, input: parsed.action.input, reasoning: parsed.thought };
+          step.action = {
+            tool: parsed.action.tool,
+            input: parsed.action.input,
+            reasoning: parsed.thought,
+          };
           step.observation = { tool: parsed.action.tool, result: observation, truncated: false };
           agentTask.steps.push(step);
           messages.push({ role: 'user', content: `OBSERVATION: ${observation}` });
@@ -429,7 +492,12 @@ class AgentRuntime {
         let observation: string;
         let truncated = false;
         try {
-          observation = await this.executeAction(parsed.action.tool, parsed.action.input, projectName);
+          observation = await this.executeAction(
+            parsed.action.tool,
+            parsed.action.input,
+            projectName,
+            projectPath
+          );
           // Truncate long observations to keep context manageable
           if (observation.length > 3000) {
             observation = observation.slice(0, 3000) + '\n... [truncated]';
@@ -445,7 +513,11 @@ class AgentRuntime {
           });
         }
 
-        step.action = { tool: parsed.action.tool, input: parsed.action.input, reasoning: parsed.thought };
+        step.action = {
+          tool: parsed.action.tool,
+          input: parsed.action.input,
+          reasoning: parsed.thought,
+        };
         step.observation = { tool: parsed.action.tool, result: observation, truncated };
         agentTask.steps.push(step);
 
@@ -456,7 +528,8 @@ class AgentRuntime {
         if (iteration >= 3 && this.hasConverged(agentTask.steps)) {
           messages.push({
             role: 'user',
-            content: 'Your recent observations are very similar. Please synthesize what you have found and provide a FINAL_ANSWER now.',
+            content:
+              'Your recent observations are very similar. Please synthesize what you have found and provide a FINAL_ANSWER now.',
           });
 
           const finalResponse = await llm.chat(messages, {
@@ -464,7 +537,8 @@ class AgentRuntime {
             maxTokens: 4096,
             provider: 'ollama',
           });
-          agentTask.usage.totalTokens += (finalResponse.promptTokens || 0) + (finalResponse.completionTokens || 0);
+          agentTask.usage.totalTokens +=
+            (finalResponse.promptTokens || 0) + (finalResponse.completionTokens || 0);
           agentTask.usage.iterations = iteration + 1;
 
           const finalParsed = this.parseReactResponse(finalResponse.text);
@@ -475,13 +549,17 @@ class AgentRuntime {
         agentTask.steps.push(step);
         messages.push({
           role: 'user',
-          content: 'No action or final answer detected. Please either use an ACTION or provide a FINAL_ANSWER.',
+          content:
+            'No action or final answer detected. Please either use an ACTION or provide a FINAL_ANSWER.',
         });
       }
     }
 
     // Max iterations reached
-    return this.extractPartialResult(agentTask) || 'Agent reached maximum iterations without a final answer.';
+    return (
+      this.extractPartialResult(agentTask) ||
+      'Agent reached maximum iterations without a final answer.'
+    );
   }
 
   // ============================================
@@ -493,7 +571,11 @@ class AgentRuntime {
     action?: { tool: string; input: Record<string, unknown> };
     finalAnswer?: string;
   } {
-    const result: { thought: string; action?: { tool: string; input: Record<string, unknown> }; finalAnswer?: string } = {
+    const result: {
+      thought: string;
+      action?: { tool: string; input: Record<string, unknown> };
+      finalAnswer?: string;
+    } = {
       thought: '',
     };
 
@@ -512,7 +594,9 @@ class AgentRuntime {
 
     // Check for ACTION + ACTION_INPUT
     const actionMatch = text.match(/ACTION:\s*(\S+)/i);
-    const inputMatch = text.match(/ACTION_INPUT:\s*([\s\S]*?)(?=\n(?:THOUGHT|ACTION|FINAL_ANSWER):|\s*$)/i);
+    const inputMatch = text.match(
+      /ACTION_INPUT:\s*([\s\S]*?)(?=\n(?:THOUGHT|ACTION|FINAL_ANSWER):|\s*$)/i
+    );
 
     if (actionMatch) {
       let input: Record<string, unknown> = {};
@@ -537,20 +621,21 @@ class AgentRuntime {
   private async executeAction(
     tool: string,
     input: Record<string, unknown>,
-    projectName: string
+    projectName: string,
+    projectPath?: string
   ): Promise<string> {
     const executor = this.actionExecutors[tool];
     if (!executor) {
       throw new Error(`Unknown action: ${tool}`);
     }
-    return executor(input, projectName);
+    return executor(input, projectName, projectPath);
   }
 
   private actionExecutors: Record<
     string,
-    (input: Record<string, unknown>, projectName: string) => Promise<string>
+    (input: Record<string, unknown>, projectName: string, projectPath?: string) => Promise<string>
   > = {
-    search_codebase: async (input, projectName) => {
+    search_codebase: async (input, projectName, projectPath) => {
       const query = String(input.query || '');
       const limit = Number(input.limit) || 5;
       const embedding = await embeddingService.embed(query);
@@ -565,7 +650,7 @@ class AgentRuntime {
         .join('\n\n');
     },
 
-    recall_memory: async (input, projectName) => {
+    recall_memory: async (input, projectName, projectPath) => {
       const query = String(input.query || '');
       const limit = Number(input.limit) || 5;
       const type = String(input.type || 'all');
@@ -577,11 +662,14 @@ class AgentRuntime {
       });
       if (results.length === 0) return 'No memories found.';
       return results
-        .map((r, i) => `[${i + 1}] [${r.memory.type}] ${r.memory.content} (score: ${r.score.toFixed(3)})`)
+        .map(
+          (r, i) =>
+            `[${i + 1}] [${r.memory.type}] ${r.memory.content} (score: ${r.score.toFixed(3)})`
+        )
         .join('\n');
     },
 
-    get_patterns: async (input, projectName) => {
+    get_patterns: async (input, projectName, projectPath) => {
       const query = String(input.query || 'patterns');
       const results = await memoryService.recall({
         projectName,
@@ -595,7 +683,7 @@ class AgentRuntime {
         .join('\n');
     },
 
-    get_adrs: async (input, projectName) => {
+    get_adrs: async (input, projectName, projectPath) => {
       const query = String(input.query || 'decisions');
       const results = await memoryService.recall({
         projectName,
@@ -609,7 +697,7 @@ class AgentRuntime {
         .join('\n');
     },
 
-    search_similar: async (input, projectName) => {
+    search_similar: async (input, projectName, projectPath) => {
       const code = String(input.code || input.query || '');
       const limit = Number(input.limit) || 5;
       const embedding = await embeddingService.embed(code);
@@ -626,7 +714,7 @@ class AgentRuntime {
 
     // ── Retrieval ──────────────────────────────────────────
 
-    hybrid_search: async (input, projectName) => {
+    hybrid_search: async (input, projectName, projectPath) => {
       const query = String(input.query || '');
       const limit = Number(input.limit) || 5;
       const collection = `${projectName}_codebase`;
@@ -650,7 +738,7 @@ class AgentRuntime {
         .join('\n\n');
     },
 
-    search_docs: async (input, projectName) => {
+    search_docs: async (input, projectName, projectPath) => {
       const query = String(input.query || '');
       const limit = Number(input.limit) || 3;
       const collection = `${projectName}_docs`;
@@ -673,22 +761,54 @@ class AgentRuntime {
 
     // ── Graph ──────────────────────────────────────────────
 
-    search_graph: async (input, projectName) => {
+    search_graph: async (input, projectName, projectPath) => {
       const files = Array.isArray(input.files)
         ? (input.files as string[])
         : [String(input.file || input.query || '')];
       const hops = Number(input.hops) || 1;
       const expanded = await graphStore.expand(projectName, files.slice(0, 5), hops);
       if (expanded.length === 0) return 'No graph dependencies found.';
-      const deps = expanded.filter(f => !files.includes(f));
-      return `Files: ${files.join(', ')}\nDependencies (${deps.length}):\n${deps.map(f => `  - ${f}`).join('\n')}`;
+      const deps = expanded.filter((f) => !files.includes(f));
+
+      // Enhancement: LSP call hierarchy for real-time accuracy
+      if (config.LSP_ENABLED && projectPath && files[0]) {
+        try {
+          const { lspClient } = await import('./lsp-client');
+          const absFile = path.join(projectPath, files[0]);
+          const symbols = await lspClient.documentSymbol(absFile, projectPath);
+          if (symbols) {
+            // Get incoming/outgoing calls for top callable symbols (kind 6=Method, 12=Function)
+            const callableSymbols = symbols.filter((s) => [6, 12].includes(s.kind)).slice(0, 10);
+            for (const sym of callableSymbols) {
+              const [incoming, outgoing] = await Promise.all([
+                lspClient.incomingCalls(absFile, sym.startLine, 0, projectPath),
+                lspClient.outgoingCalls(absFile, sym.startLine, 0, projectPath),
+              ]);
+              for (const call of [...(incoming || []), ...(outgoing || [])]) {
+                const relFile = path.relative(projectPath, call.file).replace(/\\/g, '/');
+                if (!expanded.includes(relFile)) {
+                  expanded.push(relFile);
+                }
+              }
+            }
+          }
+        } catch {
+          /* LSP enrichment is best-effort */
+        }
+      }
+
+      return `Files: ${files.join(', ')}\nDependencies (${deps.length}):\n${deps.map((f) => `  - ${f}`).join('\n')}`;
     },
 
-    find_symbol: async (input, projectName) => {
+    find_symbol: async (input, projectName, projectPath) => {
       const name = String(input.name || input.query || '');
       const kind = input.kind ? String(input.kind) : undefined;
       const limit = Number(input.limit) || 5;
-      const results = await symbolIndex.findSymbol(projectName, name, kind, limit);
+      const resolvedPath =
+        (input.projectPath ? String(input.projectPath) : undefined) ?? projectPath;
+      const results = resolvedPath
+        ? await symbolIndex.findSymbolEnriched(projectName, name, kind, limit, resolvedPath)
+        : await symbolIndex.findSymbol(projectName, name, kind, limit);
       if (results.length === 0) return `Symbol "${name}" not found.`;
       return results
         .map((r, i) => `[${i + 1}] ${r.kind} ${r.name} in ${r.file}:${r.startLine || '?'}`)
@@ -697,7 +817,7 @@ class AgentRuntime {
 
     // ── Memory ─────────────────────────────────────────────
 
-    remember: async (input, projectName) => {
+    remember: async (input, projectName, projectPath) => {
       const content = String(input.content || '');
       const type = String(input.type || 'note');
       const tags = Array.isArray(input.tags) ? (input.tags as string[]) : [];
@@ -710,7 +830,7 @@ class AgentRuntime {
       return `Remembered: ${content.slice(0, 100)}`;
     },
 
-    list_memories: async (input, projectName) => {
+    list_memories: async (input, projectName, projectPath) => {
       const type = input.type ? String(input.type) : undefined;
       const limit = Number(input.limit) || 10;
       const results = await memoryService.list({ projectName, type: type as any, limit });
@@ -722,19 +842,52 @@ class AgentRuntime {
 
     // ── Analysis ───────────────────────────────────────────
 
-    explain_code: async (input, projectName) => {
+    explain_code: async (input, projectName, projectPath) => {
       const query = String(input.query || input.code || '');
       // Search for relevant code first
       const embedding = await embeddingService.embed(query);
-      const results = await vectorStore.search(`${projectName}_codebase`, embedding, 3);
-      const codeContext = results
-        .map(r => `File: ${r.payload.file}\n${String(r.payload.content || '').slice(0, 800)}`)
+      const searchResults = await vectorStore.search(`${projectName}_codebase`, embedding, 3);
+      const codeContext = searchResults
+        .map((r) => `File: ${r.payload.file}\n${String(r.payload.content || '').slice(0, 800)}`)
         .join('\n\n---\n\n');
 
+      // Enhancement: LSP hover for type info
+      let typeContext = '';
+      if (config.LSP_ENABLED && projectPath) {
+        try {
+          const { lspClient } = await import('./lsp-client');
+          for (const result of searchResults.slice(0, 2)) {
+            const file = result.payload?.file as string;
+            if (!file) continue;
+            const absFile = path.join(projectPath, file);
+            const symbols = await lspClient.documentSymbol(absFile, projectPath);
+            if (symbols) {
+              const hovers = await Promise.all(
+                symbols
+                  .slice(0, 5)
+                  .map((s) =>
+                    lspClient.hover(absFile, s.startLine, 0, projectPath).catch(() => null)
+                  )
+              );
+              const valid = hovers.filter(Boolean);
+              if (valid.length > 0) {
+                typeContext =
+                  'Type information:\n' + valid.map((h) => h!.content).join('\n') + '\n\n';
+              }
+            }
+          }
+        } catch {
+          /* best effort */
+        }
+      }
+
+      const fullContext = typeContext + codeContext;
+
       const explanation = await llm.complete(
-        `Explain this code in the context of the project:\n\nQuery: ${query}\n\n${codeContext}`,
+        `Explain this code in the context of the project:\n\nQuery: ${query}\n\n${fullContext}`,
         {
-          systemPrompt: 'You are a code explanation assistant. Be concise and focus on the key concepts.',
+          systemPrompt:
+            'You are a code explanation assistant. Be concise and focus on the key concepts.',
           maxTokens: 1024,
           temperature: 0.3,
           think: false,
@@ -756,15 +909,20 @@ class AgentRuntime {
   private hasConverged(
     steps: AgentStep[],
     windowSize: number = 3,
-    threshold: number = 0.7,
+    threshold: number = 0.7
   ): boolean {
     if (steps.length < windowSize) return false;
 
     // Extract token sets from observations in the window
     const window = steps.slice(-windowSize);
-    const tokenSets = window.map(step => {
+    const tokenSets = window.map((step) => {
       const text = step.observation?.result || step.thought || '';
-      return new Set(text.toLowerCase().split(/\s+/).filter(t => t.length > 3));
+      return new Set(
+        text
+          .toLowerCase()
+          .split(/\s+/)
+          .filter((t) => t.length > 3)
+      );
     });
 
     // Pairwise Jaccard similarity — all pairs must exceed threshold

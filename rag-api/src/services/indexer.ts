@@ -18,6 +18,7 @@ import { indexingChunksByType } from '../utils/metrics';
 import { astParser } from './parsers/ast-parser';
 import { treeSitterParser } from './parsers/tree-sitter-parser';
 import { scipResolver } from './parsers/scip-resolver';
+import { lspGraphBuilder } from './lsp-graph-builder';
 import { graphStore } from './graph-store';
 import { symbolIndex } from './symbol-index';
 import { buildAnchorString } from './anchor';
@@ -99,6 +100,18 @@ const DEFAULT_EXCLUDE = [
   '**/eval/results/**',
   '**/eval/golden-queries.json',
 ];
+
+// Confidence ranking for edge source upgrades (higher = more authoritative)
+const CONFIDENCE_RANK: Record<string, number> = {
+  lsp: 4,
+  scip: 3,
+  'tree-sitter': 2,
+  heuristic: 1,
+};
+
+function shouldUpgradeConfidence(existing?: string, incoming?: string): boolean {
+  return (CONFIDENCE_RANK[incoming || ''] || 0) > (CONFIDENCE_RANK[existing || ''] || 0);
+}
 
 // File hash index for incremental indexing
 interface FileHashIndex {
@@ -507,6 +520,40 @@ export async function indexProject(options: IndexOptions): Promise<IndexStats> {
                   // Fallback to regex parser if tree-sitter has no grammar
                   edges = astParser.extractEdges(content, relativePath);
                 }
+
+                // LSP enrichment: real-time cross-file resolution + call graph
+                if (config.LSP_ENABLED && lspGraphBuilder.isAvailable(filePath)) {
+                  try {
+                    const lspEdges = await lspGraphBuilder.buildAllEdgesForFile(
+                      filePath,
+                      projectPath,
+                      edges
+                    );
+                    if (lspEdges.length > 0) {
+                      const edgeMap = new Map<string, (typeof edges)[0]>();
+                      for (const e of edges) {
+                        edgeMap.set(`${e.fromSymbol}::${e.edgeType}::${e.toSymbol}`, e);
+                      }
+                      for (const e of lspEdges) {
+                        const key = `${e.fromSymbol}::${e.edgeType}::${e.toSymbol}`;
+                        const existing = edgeMap.get(key);
+                        if (
+                          !existing ||
+                          shouldUpgradeConfidence(existing.confidence, e.confidence)
+                        ) {
+                          edgeMap.set(key, e);
+                        }
+                      }
+                      edges = [...edgeMap.values()];
+                    }
+                  } catch (lspErr: any) {
+                    logger.debug('LSP enrichment failed for file', {
+                      file: relativePath,
+                      error: lspErr.message,
+                    });
+                  }
+                }
+
                 if (edges.length > 0) {
                   await graphStore.indexFileEdges(projectName, relativePath, edges);
                 }
@@ -1349,6 +1396,37 @@ export async function reindexWithZeroDowntime(options: ReindexOptions): Promise<
             if (edges.length === 0) {
               edges = astParser.extractEdges(content, relativePath);
             }
+
+            // LSP enrichment: real-time cross-file resolution + call graph
+            if (config.LSP_ENABLED && lspGraphBuilder.isAvailable(filePath)) {
+              try {
+                const lspEdges = await lspGraphBuilder.buildAllEdgesForFile(
+                  filePath,
+                  projectPath,
+                  edges
+                );
+                if (lspEdges.length > 0) {
+                  const edgeMap = new Map<string, (typeof edges)[0]>();
+                  for (const e of edges) {
+                    edgeMap.set(`${e.fromSymbol}::${e.edgeType}::${e.toSymbol}`, e);
+                  }
+                  for (const e of lspEdges) {
+                    const key = `${e.fromSymbol}::${e.edgeType}::${e.toSymbol}`;
+                    const existing = edgeMap.get(key);
+                    if (!existing || shouldUpgradeConfidence(existing.confidence, e.confidence)) {
+                      edgeMap.set(key, e);
+                    }
+                  }
+                  edges = [...edgeMap.values()];
+                }
+              } catch (lspErr: any) {
+                logger.debug('LSP enrichment failed for file', {
+                  file: relativePath,
+                  error: lspErr.message,
+                });
+              }
+            }
+
             if (edges.length > 0) {
               await graphStore.indexFileEdges(projectName, relativePath, edges);
             }

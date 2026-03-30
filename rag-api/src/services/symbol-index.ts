@@ -10,6 +10,8 @@ import { v4 as uuidv4 } from 'uuid';
 import { vectorStore, VectorPoint } from './vector-store';
 import { embeddingService } from './embedding';
 import { logger } from '../utils/logger';
+import { lspClient } from './lsp-client';
+import config from '../config';
 
 export interface SymbolEntry {
   name: string;
@@ -60,7 +62,7 @@ class SymbolIndexService {
     if (entries.length === 0) return 0;
 
     // Batch embed all symbols
-    const texts = entries.map(e => `${e.kind} ${e.name} in ${e.file}: ${e.signature}`);
+    const texts = entries.map((e) => `${e.kind} ${e.name} in ${e.file}: ${e.signature}`);
     const embeddings = await embeddingService.embedBatch(texts);
 
     const points: VectorPoint[] = entries.map((entry, i) => ({
@@ -112,7 +114,7 @@ class SymbolIndexService {
 
       const results = await vectorStore.search(collection, embedding, limit, filter, 0.5);
 
-      return results.map(r => ({
+      return results.map((r) => ({
         name: r.payload.name as string,
         kind: r.payload.kind as SymbolEntry['kind'],
         file: r.payload.file as string,
@@ -126,6 +128,82 @@ class SymbolIndexService {
       logger.error('Symbol search failed', { error: error.message });
       return [];
     }
+  }
+
+  /**
+   * Search for a symbol combining vector search and LSP workspace/hover results.
+   * LSP results are authoritative for exact matches and used to fill gaps not in the index.
+   */
+  async findSymbolEnriched(
+    projectName: string,
+    symbolName: string,
+    kind?: string,
+    limit: number = 10,
+    projectPath?: string
+  ): Promise<SymbolEntry[]> {
+    const [vectorResults, lspResults] = await Promise.allSettled([
+      this.findSymbol(projectName, symbolName, kind, limit),
+      config.LSP_ENABLED && projectPath
+        ? lspClient.workspaceSymbol(symbolName, this.guessLanguage(symbolName), projectPath)
+        : Promise.resolve(null),
+    ]);
+
+    const vector = vectorResults.status === 'fulfilled' ? vectorResults.value : [];
+    const lsp = lspResults.status === 'fulfilled' ? lspResults.value : null;
+
+    if (!lsp || lsp.length === 0) return vector;
+
+    const merged = [...vector];
+    const existingKeys = new Set(vector.map((v) => `${v.name}:${v.file}:${v.startLine}`));
+
+    for (const sym of lsp) {
+      const key = `${sym.name}:${sym.file}:${sym.startLine}`;
+      if (!existingKeys.has(key)) {
+        merged.push({
+          name: sym.name,
+          kind: this.mapLSPKind(sym.kind),
+          file: sym.file,
+          startLine: sym.startLine,
+          endLine: sym.endLine,
+          signature: sym.containerName ? `${sym.containerName}.${sym.name}` : sym.name,
+          exports: true,
+        });
+        existingKeys.add(key);
+      }
+    }
+
+    if (config.LSP_ENABLED && projectPath && merged.length > 0) {
+      for (const entry of merged.slice(0, 3)) {
+        try {
+          const hoverResult = await lspClient.hover(entry.file, entry.startLine, 0, projectPath);
+          if (hoverResult?.content) {
+            entry.signature = hoverResult.content.slice(0, 200);
+          }
+        } catch {
+          // best effort
+        }
+      }
+    }
+
+    return merged.slice(0, limit);
+  }
+
+  private mapLSPKind(kind: number): SymbolEntry['kind'] {
+    // LSP SymbolKind: 5=Class, 6=Method, 11=Interface, 12=Function, 10=Enum, 13=Variable, 14=Constant
+    const map: Record<number, SymbolEntry['kind']> = {
+      5: 'class',
+      6: 'function',
+      10: 'enum',
+      11: 'interface',
+      12: 'function',
+      13: 'variable',
+      14: 'const',
+    };
+    return map[kind] || 'variable';
+  }
+
+  private guessLanguage(_symbolName: string): string {
+    return 'typescript';
   }
 
   /**
@@ -146,7 +224,7 @@ class SymbolIndexService {
         },
       });
 
-      return results.points.map(p => {
+      return results.points.map((p) => {
         const payload = p.payload as Record<string, unknown>;
         return {
           name: payload.name as string,
@@ -193,11 +271,13 @@ class SymbolIndexService {
 
   private inferKind(symbol: string, content: string): SymbolEntry['kind'] {
     // Check patterns in content
-    if (new RegExp(`\\binterface\\s+${this.escapeRegex(symbol)}\\b`).test(content)) return 'interface';
+    if (new RegExp(`\\binterface\\s+${this.escapeRegex(symbol)}\\b`).test(content))
+      return 'interface';
     if (new RegExp(`\\btype\\s+${this.escapeRegex(symbol)}\\b`).test(content)) return 'type';
     if (new RegExp(`\\bclass\\s+${this.escapeRegex(symbol)}\\b`).test(content)) return 'class';
     if (new RegExp(`\\benum\\s+${this.escapeRegex(symbol)}\\b`).test(content)) return 'enum';
-    if (new RegExp(`\\bfunction\\s+${this.escapeRegex(symbol)}\\b`).test(content)) return 'function';
+    if (new RegExp(`\\bfunction\\s+${this.escapeRegex(symbol)}\\b`).test(content))
+      return 'function';
     if (new RegExp(`\\bconst\\s+${this.escapeRegex(symbol)}\\b`).test(content)) return 'const';
     return 'variable';
   }
@@ -206,19 +286,30 @@ class SymbolIndexService {
     const escaped = this.escapeRegex(symbol);
 
     // Try to extract function signature
-    const funcMatch = content.match(new RegExp(`(?:export\\s+)?(?:async\\s+)?function\\s+${escaped}\\s*\\([^)]*\\)[^{]*`, 's'));
+    const funcMatch = content.match(
+      new RegExp(`(?:export\\s+)?(?:async\\s+)?function\\s+${escaped}\\s*\\([^)]*\\)[^{]*`, 's')
+    );
     if (funcMatch) return funcMatch[0].trim().slice(0, 200);
 
     // Try arrow function
-    const arrowMatch = content.match(new RegExp(`(?:export\\s+)?(?:const|let)\\s+${escaped}\\s*=\\s*(?:async\\s+)?\\([^)]*\\)[^=]*=>`, 's'));
+    const arrowMatch = content.match(
+      new RegExp(
+        `(?:export\\s+)?(?:const|let)\\s+${escaped}\\s*=\\s*(?:async\\s+)?\\([^)]*\\)[^=]*=>`,
+        's'
+      )
+    );
     if (arrowMatch) return arrowMatch[0].trim().slice(0, 200);
 
     // Try class/interface/type
-    const declMatch = content.match(new RegExp(`(?:export\\s+)?(?:class|interface|type|enum)\\s+${escaped}[^{]*`, 's'));
+    const declMatch = content.match(
+      new RegExp(`(?:export\\s+)?(?:class|interface|type|enum)\\s+${escaped}[^{]*`, 's')
+    );
     if (declMatch) return declMatch[0].trim().slice(0, 200);
 
     // Try const/variable
-    const constMatch = content.match(new RegExp(`(?:export\\s+)?(?:const|let|var)\\s+${escaped}\\s*(?::[^=]+)?=`, 's'));
+    const constMatch = content.match(
+      new RegExp(`(?:export\\s+)?(?:const|let|var)\\s+${escaped}\\s*(?::[^=]+)?=`, 's')
+    );
     if (constMatch) return constMatch[0].trim().slice(0, 200);
 
     return symbol;

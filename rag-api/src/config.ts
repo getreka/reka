@@ -174,6 +174,13 @@ export interface Config {
   EVENT_QUEUE_CONCURRENCY: number;
   EVENT_DLQ_MAX_RETRIES: number;
 
+  // LSP Integration
+  LSP_ENABLED: boolean;
+  LSP_STARTUP_TIMEOUT_MS: number;
+  LSP_REQUEST_TIMEOUT_MS: number;
+  LSP_IDLE_SHUTDOWN_MS: number;
+  LSP_MAX_CONCURRENT: number;
+
   // Logging
   LOG_LEVEL: string;
 }
@@ -229,6 +236,13 @@ const config: Config = {
   // Event-Driven Architecture (always on — BullMQ required)
   EVENT_QUEUE_CONCURRENCY: parseInt(process.env.EVENT_QUEUE_CONCURRENCY || '3', 10),
   EVENT_DLQ_MAX_RETRIES: parseInt(process.env.EVENT_DLQ_MAX_RETRIES || '3', 10),
+
+  // LSP Integration
+  LSP_ENABLED: process.env.LSP_ENABLED === 'true',
+  LSP_STARTUP_TIMEOUT_MS: parseInt(process.env.LSP_STARTUP_TIMEOUT_MS || '30000', 10),
+  LSP_REQUEST_TIMEOUT_MS: parseInt(process.env.LSP_REQUEST_TIMEOUT_MS || '10000', 10),
+  LSP_IDLE_SHUTDOWN_MS: parseInt(process.env.LSP_IDLE_SHUTDOWN_MS || '300000', 10),
+  LSP_MAX_CONCURRENT: parseInt(process.env.LSP_MAX_CONCURRENT || '5', 10),
 
   // Ingestion Pipeline
   SEPARATE_COLLECTIONS: process.env.SEPARATE_COLLECTIONS !== 'false',
