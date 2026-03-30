@@ -1,29 +1,39 @@
 <script setup lang="ts">
-import Tag from 'primevue/tag'
-import { useAppStore } from '@/stores/app'
+import Tag from "primevue/tag";
+import { useAppStore } from "@/stores/app";
 
-const app = useAppStore()
+const app = useAppStore();
 
 const navItems = [
-  { to: '/overview', icon: 'pi pi-chart-bar', label: 'Overview' },
-  { to: '/search', icon: 'pi pi-search', label: 'Search' },
-  { to: '/memory', icon: 'pi pi-database', label: 'Memory' },
-  { to: '/collections', icon: 'pi pi-server', label: 'Collections' },
-  { to: '/sessions', icon: 'pi pi-clock', label: 'Sessions' },
-  { to: '/graph', icon: 'pi pi-sitemap', label: 'Graph' },
-  { to: '/quality', icon: 'pi pi-check-circle', label: 'Quality' },
-  { to: '/vectors', icon: 'pi pi-th-large', label: 'Vectors' },
-  { to: '/agents', icon: 'pi pi-android', label: 'Agents' },
-  { to: '/settings', icon: 'pi pi-cog', label: 'Settings' },
-]
+  { to: "/overview", icon: "pi pi-chart-bar", label: "Overview" },
+  { to: "/search", icon: "pi pi-search", label: "Search" },
+  { to: "/memory", icon: "pi pi-database", label: "Memory" },
+  { to: "/collections", icon: "pi pi-server", label: "Collections" },
+  { to: "/sessions", icon: "pi pi-clock", label: "Sessions" },
+  { to: "/graph", icon: "pi pi-sitemap", label: "Graph" },
+  { to: "/quality", icon: "pi pi-check-circle", label: "Quality" },
+  { to: "/vectors", icon: "pi pi-th-large", label: "Vectors" },
+  { to: "/agents", icon: "pi pi-android", label: "Agents" },
+  { to: "/tribunal", icon: "pi pi-comments", label: "Tribunal" },
+  { to: "/metrics", icon: "pi pi-chart-line", label: "Metrics" },
+  { to: "/settings", icon: "pi pi-cog", label: "Settings" },
+  { to: "/admin", icon: "pi pi-shield", label: "Admin" },
+];
 </script>
 
 <template>
   <aside :class="['sidebar', { 'sidebar--open': app.isSidebarOpen }]">
-    <div style="padding: 0 1rem 1rem; font-size: 1.25rem; font-weight: 700; color: var(--p-primary-color);">
-      <i class="pi pi-bolt" style="margin-right: 0.5rem;" />RAG Dashboard
+    <div
+      style="
+        padding: 0 1rem 1rem;
+        font-size: 1.25rem;
+        font-weight: 700;
+        color: var(--p-primary-color);
+      "
+    >
+      <i class="pi pi-bolt" style="margin-right: 0.5rem" />RAG Dashboard
     </div>
-    <nav style="display: flex; flex-direction: column; gap: 2px;">
+    <nav style="display: flex; flex-direction: column; gap: 2px">
       <RouterLink
         v-for="item in navItems"
         :key="item.to"
@@ -34,15 +44,21 @@ const navItems = [
         <a
           :href="href"
           :class="['nav-item', { 'nav-item--active': isActive }]"
-          @click.prevent="navigate(); app.isSidebarOpen = false"
+          @click.prevent="
+            navigate();
+            app.isSidebarOpen = false;
+          "
         >
-          <i :class="item.icon" style="width: 1.25rem; text-align: center;" />
+          <i :class="item.icon" style="width: 1.25rem; text-align: center" />
           {{ item.label }}
         </a>
       </RouterLink>
     </nav>
-    <div style="margin-top: auto; padding: 1rem; text-align: center;">
-      <Tag :severity="app.isConnected ? 'success' : 'danger'" :value="app.isConnected ? 'Connected' : 'Disconnected'" />
+    <div style="margin-top: auto; padding: 1rem; text-align: center">
+      <Tag
+        :severity="app.isConnected ? 'success' : 'danger'"
+        :value="app.isConnected ? 'Connected' : 'Disconnected'"
+      />
     </div>
   </aside>
 </template>
@@ -68,7 +84,9 @@ const navItems = [
   font-size: 0.875rem;
   border-left: 3px solid transparent;
   cursor: pointer;
-  transition: background 0.15s, border-color 0.15s;
+  transition:
+    background 0.15s,
+    border-color 0.15s;
 }
 .nav-item:hover {
   background: var(--p-surface-100);

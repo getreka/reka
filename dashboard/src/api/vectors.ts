@@ -1,9 +1,9 @@
-import client from './client'
+import client from "./client";
 
 export interface VectorPoint {
-  id: string | number
-  payload: Record<string, unknown>
-  vector?: number[]
+  id: string | number;
+  payload: Record<string, unknown>;
+  vector?: number[];
 }
 
 export async function scrollVectors(
@@ -15,6 +15,6 @@ export async function scrollVectors(
   const { data } = await client.get(`/api/collections/${collection}/scroll`, {
     params: { limit, offset, vectors: withVectors },
     timeout: 30000,
-  })
-  return data
+  });
+  return data;
 }
