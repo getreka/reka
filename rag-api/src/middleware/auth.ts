@@ -69,7 +69,9 @@ function initKeys() {
   }
 
   if (keys.length > 0) {
-    logger.info(`Auth initialized with ${keys.length} API key(s): ${keys.map(k => k.name).join(', ')}`);
+    logger.info(
+      `Auth initialized with ${keys.length} API key(s): ${keys.map((k) => k.name).join(', ')}`
+    );
   }
 }
 
@@ -134,5 +136,14 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction) 
   next();
 }
 
+/**
+ * Re-initialize keys from config. Called on import and can be called
+ * in tests after modifying config.API_KEY.
+ */
+export function resetKeys(): void {
+  keys.length = 0;
+  initKeys();
+}
+
 // Initialize on import
-initKeys();
+resetKeys();

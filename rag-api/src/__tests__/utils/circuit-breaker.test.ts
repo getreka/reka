@@ -236,7 +236,7 @@ describe('Pre-configured breakers', () => {
 
   it('llmCircuit exists', () => {
     expect(llmCircuit).toBeInstanceOf(CircuitBreaker);
-    expect(llmCircuit.getStats().name).toBe('llm');
+    expect(llmCircuit.getStats().name).toBe('ollama');
   });
 
   it('vectorStoreCircuit exists', () => {

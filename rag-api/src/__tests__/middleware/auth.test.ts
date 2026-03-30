@@ -1,6 +1,6 @@
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { Request, Response, NextFunction } from 'express';
-import { authMiddleware } from '../../middleware/auth';
+import { authMiddleware, resetKeys } from '../../middleware/auth';
 import config from '../../config';
 
 // Helper to build mock req/res/next
@@ -33,6 +33,7 @@ describe('authMiddleware', () => {
   it('skips auth when API_KEY is not configured', () => {
     const original = config.API_KEY;
     (config as any).API_KEY = undefined;
+    resetKeys();
 
     const { req, res, next } = createMocks();
     authMiddleware(req, res, next);
@@ -45,6 +46,7 @@ describe('authMiddleware', () => {
 
   it('skips auth for /health endpoint', () => {
     (config as any).API_KEY = 'test-key';
+    resetKeys();
 
     const { req, res, next } = createMocks({ path: '/health' });
     authMiddleware(req, res, next);
@@ -54,6 +56,7 @@ describe('authMiddleware', () => {
 
   it('skips auth for /metrics endpoint', () => {
     (config as any).API_KEY = 'test-key';
+    resetKeys();
 
     const { req, res, next } = createMocks({ path: '/metrics' });
     authMiddleware(req, res, next);
@@ -63,6 +66,7 @@ describe('authMiddleware', () => {
 
   it('accepts valid Bearer token', () => {
     (config as any).API_KEY = 'test-key';
+    resetKeys();
 
     const { req, res, next } = createMocks({
       headers: { authorization: 'Bearer test-key' },
@@ -75,6 +79,7 @@ describe('authMiddleware', () => {
 
   it('accepts valid X-API-Key header', () => {
     (config as any).API_KEY = 'test-key';
+    resetKeys();
 
     const { req, res, next } = createMocks({
       headers: { 'x-api-key': 'test-key' },
@@ -87,19 +92,19 @@ describe('authMiddleware', () => {
 
   it('returns 401 when no key is provided', () => {
     (config as any).API_KEY = 'test-key';
+    resetKeys();
 
     const { req, res, next } = createMocks({ headers: {} });
     authMiddleware(req, res, next);
 
     expect(next).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(401);
-    expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({ code: 'AUTH_REQUIRED' })
-    );
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code: 'AUTH_REQUIRED' }));
   });
 
   it('returns 403 when key is invalid', () => {
     (config as any).API_KEY = 'test-key';
+    resetKeys();
 
     const { req, res, next } = createMocks({
       headers: { authorization: 'Bearer wrong-key' },
@@ -108,13 +113,12 @@ describe('authMiddleware', () => {
 
     expect(next).not.toHaveBeenCalled();
     expect(res.status).toHaveBeenCalledWith(403);
-    expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({ code: 'INVALID_API_KEY' })
-    );
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code: 'INVALID_API_KEY' }));
   });
 
   it('returns 403 for key with different length (timing-safe)', () => {
     (config as any).API_KEY = 'test-key';
+    resetKeys();
 
     const { req, res, next } = createMocks({
       headers: { 'x-api-key': 'short' },
