@@ -7,7 +7,12 @@
  */
 
 import type { ToolSpec, ToolContext } from "../types.js";
-import { formatMemoryResults, truncate, paginationFooter, PREVIEW } from "../formatters.js";
+import {
+  formatMemoryResults,
+  truncate,
+  paginationFooter,
+  PREVIEW,
+} from "../formatters.js";
 import { z } from "zod";
 import { TOOL_ANNOTATIONS } from "../annotations.js";
 
@@ -18,6 +23,7 @@ const typeEmojis: Record<string, string> = {
   todo: "\u{1F4CB}",
   conversation: "\u{1F4AC}",
   note: "\u{1F4DD}",
+  procedure: "\u{1F4D6}",
 };
 
 const statusEmojis: Record<string, string> = {
@@ -35,12 +41,31 @@ export function createMemoryTools(projectName: string): ToolSpec[] {
         "Store important information in agent memory. Use this to save decisions, insights, context, todos, or important conversations for future reference.",
       schema: z.object({
         content: z.string().describe("Information to remember"),
-        type: z.enum(["decision", "insight", "context", "todo", "conversation", "note"]).optional().describe("Type of memory (default: note)"),
-        tags: z.array(z.string()).optional().describe("Tags for categorization (e.g., ['feature-x', 'important'])"),
+        type: z
+          .enum([
+            "decision",
+            "insight",
+            "context",
+            "todo",
+            "conversation",
+            "note",
+            "procedure",
+          ])
+          .optional()
+          .describe("Type of memory (default: note)"),
+        tags: z
+          .array(z.string())
+          .optional()
+          .describe(
+            "Tags for categorization (e.g., ['feature-x', 'important'])",
+          ),
         relatedTo: z.string().optional().describe("Related feature or topic"),
       }),
       annotations: TOOL_ANNOTATIONS["remember"],
-      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
+      handler: async (
+        args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
         const content = args.content as string;
         const type = (args.type as string) || "note";
         const tags = (args.tags as string[]) || [];
@@ -73,12 +98,35 @@ export function createMemoryTools(projectName: string): ToolSpec[] {
         "Retrieve relevant memories based on context. Searches agent memory for past decisions, insights, and notes related to the query.",
       schema: z.object({
         query: z.string().describe("What to recall (semantic search)"),
-        type: z.enum(["decision", "insight", "context", "todo", "conversation", "note", "procedure", "all"]).optional().describe("Filter by memory type (default: all)"),
-        limit: z.coerce.number().optional().describe("Max memories to retrieve (default: 5)"),
-        graphRecall: z.boolean().optional().describe("Enable graph-aware recall with spreading activation (default: false)"),
+        type: z
+          .enum([
+            "decision",
+            "insight",
+            "context",
+            "todo",
+            "conversation",
+            "note",
+            "procedure",
+            "all",
+          ])
+          .optional()
+          .describe("Filter by memory type (default: all)"),
+        limit: z.coerce
+          .number()
+          .optional()
+          .describe("Max memories to retrieve (default: 5)"),
+        graphRecall: z
+          .boolean()
+          .optional()
+          .describe(
+            "Enable graph-aware recall with spreading activation (default: false)",
+          ),
       }),
       annotations: TOOL_ANNOTATIONS["recall"],
-      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
+      handler: async (
+        args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
         const query = args.query as string;
         const type = (args.type as string) || "all";
         const limit = (args.limit as number) || 5;
@@ -107,13 +155,33 @@ export function createMemoryTools(projectName: string): ToolSpec[] {
       description:
         "List recent memories or filter by type/tags. Shows what the agent has remembered.",
       schema: z.object({
-        type: z.enum(["decision", "insight", "context", "todo", "conversation", "note", "all"]).optional().describe("Filter by type"),
+        type: z
+          .enum([
+            "decision",
+            "insight",
+            "context",
+            "todo",
+            "conversation",
+            "note",
+            "all",
+          ])
+          .optional()
+          .describe("Filter by type"),
         tag: z.string().optional().describe("Filter by tag"),
-        limit: z.coerce.number().optional().describe("Max results (default: 10)"),
-        offset: z.coerce.number().optional().describe("Pagination offset (default: 0)"),
+        limit: z.coerce
+          .number()
+          .optional()
+          .describe("Max results (default: 10)"),
+        offset: z.coerce
+          .number()
+          .optional()
+          .describe("Pagination offset (default: 0)"),
       }),
       annotations: TOOL_ANNOTATIONS["list_memories"],
-      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
+      handler: async (
+        args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
         const type = (args.type as string) || "all";
         const tag = args.tag as string | undefined;
         const limit = (args.limit as number) || 10;
@@ -163,12 +231,31 @@ export function createMemoryTools(projectName: string): ToolSpec[] {
       name: "forget",
       description: "Delete a specific memory by ID or clear memories by type.",
       schema: z.object({
-        memoryId: z.string().optional().describe("Specific memory ID to delete"),
-        type: z.enum(["decision", "insight", "context", "todo", "conversation", "note"]).optional().describe("Delete all memories of this type"),
-        olderThanDays: z.coerce.number().optional().describe("Delete memories older than N days"),
+        memoryId: z
+          .string()
+          .optional()
+          .describe("Specific memory ID to delete"),
+        type: z
+          .enum([
+            "decision",
+            "insight",
+            "context",
+            "todo",
+            "conversation",
+            "note",
+          ])
+          .optional()
+          .describe("Delete all memories of this type"),
+        olderThanDays: z.coerce
+          .number()
+          .optional()
+          .describe("Delete memories older than N days"),
       }),
       annotations: TOOL_ANNOTATIONS["forget"],
-      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
+      handler: async (
+        args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
         const memoryId = args.memoryId as string | undefined;
         const type = args.type as string | undefined;
         const olderThanDays = args.olderThanDays as number | undefined;
@@ -206,11 +293,16 @@ export function createMemoryTools(projectName: string): ToolSpec[] {
       description: "Update status of a todo/task in memory.",
       schema: z.object({
         todoId: z.string().describe("Todo memory ID"),
-        status: z.enum(["pending", "in_progress", "done", "cancelled"]).describe("New status"),
+        status: z
+          .enum(["pending", "in_progress", "done", "cancelled"])
+          .describe("New status"),
         note: z.string().optional().describe("Optional note about the update"),
       }),
       annotations: TOOL_ANNOTATIONS["update_todo"],
-      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
+      handler: async (
+        args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
         const todoId = args.todoId as string;
         const status = args.status as string;
         const note = args.note as string | undefined;
@@ -239,20 +331,73 @@ export function createMemoryTools(projectName: string): ToolSpec[] {
       name: "batch_remember",
       description: `Efficiently store multiple memories at once in ${projectName}. Faster than individual remember calls.`,
       schema: z.object({
-        items: z.array(z.object({
-          content: z.string().describe("Content to remember"),
-          type: z.enum(["decision", "insight", "context", "todo", "conversation", "note"]).optional().describe("Memory type (default: note)"),
-          tags: z.array(z.string()).optional().describe("Tags for categorization"),
-          relatedTo: z.string().optional().describe("Related feature or topic"),
-        })).describe("Array of memories to store"),
+        items: z
+          .array(
+            z.object({
+              content: z.string().describe("Content to remember"),
+              type: z
+                .enum([
+                  "decision",
+                  "insight",
+                  "context",
+                  "todo",
+                  "conversation",
+                  "note",
+                  "procedure",
+                ])
+                .optional()
+                .describe("Memory type (default: note)"),
+              tags: z
+                .array(z.string())
+                .optional()
+                .describe("Tags for categorization"),
+              relatedTo: z
+                .string()
+                .optional()
+                .describe("Related feature or topic"),
+              metadata: z
+                .record(z.string(), z.unknown())
+                .optional()
+                .describe("Custom metadata (factEntities, factDateTs, etc.)"),
+              factCategory: z
+                .enum([
+                  "personal_info",
+                  "preference",
+                  "event",
+                  "temporal",
+                  "update",
+                  "plan",
+                ])
+                .optional()
+                .describe("Structured fact category for temporal retrieval"),
+              factEntities: z
+                .array(z.string())
+                .optional()
+                .describe(
+                  "Named entities: file names, service names, external systems",
+                ),
+              factDateTs: z
+                .number()
+                .optional()
+                .describe("Unix timestamp (seconds) for temporal filtering"),
+            }),
+          )
+          .describe("Array of memories to store"),
       }),
       annotations: TOOL_ANNOTATIONS["batch_remember"],
-      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
+      handler: async (
+        args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
         const items = args.items as Array<{
           content: string;
           type?: string;
           tags?: string[];
           relatedTo?: string;
+          metadata?: Record<string, unknown>;
+          factCategory?: string;
+          factEntities?: string[];
+          factDateTs?: number;
         }>;
 
         const response = await ctx.api.post("/api/memory/batch", {
@@ -291,10 +436,17 @@ export function createMemoryTools(projectName: string): ToolSpec[] {
       description: `Validate or reject an auto-extracted memory in ${projectName}. Helps improve future extraction accuracy.`,
       schema: z.object({
         memoryId: z.string().describe("ID of the memory to validate"),
-        validated: z.boolean().describe("true to confirm the memory is valuable, false to reject it"),
+        validated: z
+          .boolean()
+          .describe(
+            "true to confirm the memory is valuable, false to reject it",
+          ),
       }),
       annotations: TOOL_ANNOTATIONS["validate_memory"],
-      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
+      handler: async (
+        args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
         const memoryId = args.memoryId as string;
         const validated = args.validated as boolean;
 
@@ -321,11 +473,20 @@ export function createMemoryTools(projectName: string): ToolSpec[] {
       name: "review_memories",
       description: `Get auto-extracted memories pending review in ${projectName}. Shows unvalidated learnings that need human confirmation.`,
       schema: z.object({
-        limit: z.coerce.number().optional().describe("Max memories to return (default: 20)"),
-        offset: z.coerce.number().optional().describe("Pagination offset (default: 0)"),
+        limit: z.coerce
+          .number()
+          .optional()
+          .describe("Max memories to return (default: 20)"),
+        offset: z.coerce
+          .number()
+          .optional()
+          .describe("Pagination offset (default: 0)"),
       }),
       annotations: TOOL_ANNOTATIONS["review_memories"],
-      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
+      handler: async (
+        args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
         const limit = (args.limit as number) || 20;
         const offset = (args.offset as number) || 0;
 
@@ -376,13 +537,29 @@ export function createMemoryTools(projectName: string): ToolSpec[] {
       description: `Promote a quarantine memory to durable storage in ${projectName}. Requires a reason for promotion. Optionally runs quality gates before promotion.`,
       schema: z.object({
         memoryId: z.string().describe("ID of the memory to promote"),
-        reason: z.enum(["human_validated", "pr_merged", "tests_passed"]).describe("Reason for promotion"),
-        evidence: z.string().optional().describe("Optional evidence supporting the promotion"),
-        runGates: z.boolean().optional().describe("Run quality gates before promotion (default: false)"),
-        affectedFiles: z.array(z.string()).optional().describe("Files affected by this memory (for quality gate checking)"),
+        reason: z
+          .enum(["human_validated", "pr_merged", "tests_passed"])
+          .describe("Reason for promotion"),
+        evidence: z
+          .string()
+          .optional()
+          .describe("Optional evidence supporting the promotion"),
+        runGates: z
+          .boolean()
+          .optional()
+          .describe("Run quality gates before promotion (default: false)"),
+        affectedFiles: z
+          .array(z.string())
+          .optional()
+          .describe(
+            "Files affected by this memory (for quality gate checking)",
+          ),
       }),
       annotations: TOOL_ANNOTATIONS["promote_memory"],
-      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
+      handler: async (
+        args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
         const memoryId = args.memoryId as string;
         const reason = args.reason as string;
         const evidence = args.evidence as string | undefined;
@@ -417,11 +594,20 @@ export function createMemoryTools(projectName: string): ToolSpec[] {
       name: "run_quality_gates",
       description: `Run quality gates (typecheck, tests, blast radius) for ${projectName}.`,
       schema: z.object({
-        affectedFiles: z.array(z.string()).optional().describe("Files to check (for related tests and blast radius)"),
-        skipGates: z.array(z.string()).optional().describe("Gates to skip (typecheck, test, blast_radius)"),
+        affectedFiles: z
+          .array(z.string())
+          .optional()
+          .describe("Files to check (for related tests and blast radius)"),
+        skipGates: z
+          .array(z.string())
+          .optional()
+          .describe("Gates to skip (typecheck, test, blast_radius)"),
       }),
       annotations: TOOL_ANNOTATIONS["run_quality_gates"],
-      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
+      handler: async (
+        args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
         const affectedFiles = args.affectedFiles as string[] | undefined;
         const skipGates = args.skipGates as string[] | undefined;
 
@@ -462,16 +648,38 @@ export function createMemoryTools(projectName: string): ToolSpec[] {
       name: "memory_maintenance",
       description: `Run memory maintenance for ${projectName}: quarantine cleanup (expire old auto-memories), feedback-driven promote/prune, and compaction (merge similar durable memories).`,
       schema: z.object({
-        operations: z.object({
-          quarantine_cleanup: z.boolean().optional().describe("Remove expired quarantine memories (default: true)"),
-          feedback_maintenance: z.boolean().optional().describe("Auto-promote/prune by feedback (default: true)"),
-          compaction: z.boolean().optional().describe("Merge similar durable memories (default: false)"),
-          compaction_dry_run: z.boolean().optional().describe("Preview compaction without changes (default: true)"),
-        }).optional().describe("Which operations to run (default: quarantine_cleanup + feedback_maintenance)"),
+        operations: z
+          .object({
+            quarantine_cleanup: z
+              .boolean()
+              .optional()
+              .describe("Remove expired quarantine memories (default: true)"),
+            feedback_maintenance: z
+              .boolean()
+              .optional()
+              .describe("Auto-promote/prune by feedback (default: true)"),
+            compaction: z
+              .boolean()
+              .optional()
+              .describe("Merge similar durable memories (default: false)"),
+            compaction_dry_run: z
+              .boolean()
+              .optional()
+              .describe("Preview compaction without changes (default: true)"),
+          })
+          .optional()
+          .describe(
+            "Which operations to run (default: quarantine_cleanup + feedback_maintenance)",
+          ),
       }),
       annotations: TOOL_ANNOTATIONS["memory_maintenance"],
-      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
-        const operations = args.operations as Record<string, boolean> | undefined;
+      handler: async (
+        args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
+        const operations = args.operations as
+          | Record<string, boolean>
+          | undefined;
 
         const response = await ctx.api.post("/api/memory/maintenance", {
           projectName: ctx.projectName,
@@ -487,13 +695,18 @@ export function createMemoryTools(projectName: string): ToolSpec[] {
           result += `## Quarantine Cleanup\n`;
           if (qc.rejected.length > 0) {
             result += `**Expired** (${qc.rejected.length}): removed from quarantine\n`;
-            qc.rejected.slice(0, 10).forEach((id: string) => { result += `  \u{1F5D1}\u{FE0F} ${id}\n`; });
-            if (qc.rejected.length > 10) result += `  ... and ${qc.rejected.length - 10} more\n`;
+            qc.rejected.slice(0, 10).forEach((id: string) => {
+              result += `  \u{1F5D1}\u{FE0F} ${id}\n`;
+            });
+            if (qc.rejected.length > 10)
+              result += `  ... and ${qc.rejected.length - 10} more\n`;
           } else {
             result += `No expired quarantine memories.\n`;
           }
           if (qc.errors.length > 0) {
-            qc.errors.forEach((e: string) => { result += `  \u26A0\u{FE0F} ${e}\n`; });
+            qc.errors.forEach((e: string) => {
+              result += `  \u26A0\u{FE0F} ${e}\n`;
+            });
           }
           result += `\n`;
         }
@@ -504,17 +717,23 @@ export function createMemoryTools(projectName: string): ToolSpec[] {
           result += `## Feedback Maintenance\n`;
           if (fm.promoted.length > 0) {
             result += `**Promoted** (${fm.promoted.length}): moved to durable\n`;
-            fm.promoted.forEach((id: string) => { result += `  \u2705 ${id}\n`; });
+            fm.promoted.forEach((id: string) => {
+              result += `  \u2705 ${id}\n`;
+            });
           }
           if (fm.pruned.length > 0) {
             result += `**Pruned** (${fm.pruned.length}): removed\n`;
-            fm.pruned.forEach((id: string) => { result += `  \u{1F5D1}\u{FE0F} ${id}\n`; });
+            fm.pruned.forEach((id: string) => {
+              result += `  \u{1F5D1}\u{FE0F} ${id}\n`;
+            });
           }
           if (fm.promoted.length === 0 && fm.pruned.length === 0) {
             result += `No feedback-based actions needed.\n`;
           }
           if (fm.errors.length > 0) {
-            fm.errors.forEach((e: string) => { result += `  \u26A0\u{FE0F} ${e}\n`; });
+            fm.errors.forEach((e: string) => {
+              result += `  \u26A0\u{FE0F} ${e}\n`;
+            });
           }
           result += `\n`;
         }
@@ -522,14 +741,24 @@ export function createMemoryTools(projectName: string): ToolSpec[] {
         // Compaction section
         if (data.compaction) {
           const cp = data.compaction;
-          result += `## Compaction${cp.dryRun ? ' (dry run)' : ''}\n`;
+          result += `## Compaction${cp.dryRun ? " (dry run)" : ""}\n`;
           if (cp.clusters.length > 0) {
             result += `**${cp.totalClusters} cluster(s)** of similar memories found\n\n`;
-            cp.clusters.slice(0, 5).forEach((c: { originalIds: string[]; mergedId?: string; mergedContent: string }, i: number) => {
-              result += `${i + 1}. ${c.originalIds.length} memories → ${truncate(c.mergedContent, 120)}\n`;
-              if (c.mergedId) result += `   Merged ID: \`${c.mergedId}\`\n`;
-            });
-            if (cp.clusters.length > 5) result += `... and ${cp.clusters.length - 5} more clusters\n`;
+            cp.clusters.slice(0, 5).forEach(
+              (
+                c: {
+                  originalIds: string[];
+                  mergedId?: string;
+                  mergedContent: string;
+                },
+                i: number,
+              ) => {
+                result += `${i + 1}. ${c.originalIds.length} memories → ${truncate(c.mergedContent, 120)}\n`;
+                if (c.mergedId) result += `   Merged ID: \`${c.mergedId}\`\n`;
+              },
+            );
+            if (cp.clusters.length > 5)
+              result += `... and ${cp.clusters.length - 5} more clusters\n`;
           } else {
             result += `No similar memory clusters found.\n`;
           }

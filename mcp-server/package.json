@@ -1,6 +1,6 @@
 {
   "name": "@crowley/rag-mcp",
-  "version": "1.6.0",
+  "version": "1.6.1",
   "description": "Universal RAG MCP Server for any project",
   "type": "module",
   "main": "dist/index.js",
