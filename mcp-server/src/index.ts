@@ -15,9 +15,18 @@ import { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
 
 import { createApiClient } from "./api-client.js";
+import { configureConnectionPool } from "./connection-pool.js";
 import { ContextEnricher } from "./context-enrichment.js";
+import { startHttpTransport } from "./http-transport.js";
 import { wrapHandler } from "./tool-middleware.js";
 import type { ToolContext, ToolSpec } from "./types.js";
+
+// Phase 3: Configure undici connection pool for RAG API communication
+configureConnectionPool({
+  connections: parseInt(process.env.MCP_POOL_CONNECTIONS || "10"),
+  keepAliveTimeout: parseInt(process.env.MCP_POOL_KEEPALIVE || "30000"),
+  pipelining: parseInt(process.env.MCP_POOL_PIPELINING || "1"),
+});
 
 // Tool modules
 import { createSearchTools } from "./tools/search.js";
@@ -48,7 +57,12 @@ const RAG_API_KEY = process.env.RAG_API_KEY;
 const COLLECTION_PREFIX = `${PROJECT_NAME}_`;
 
 // API client
-const api = createApiClient(RAG_API_URL, PROJECT_NAME, PROJECT_PATH, RAG_API_KEY);
+const api = createApiClient(
+  RAG_API_URL,
+  PROJECT_NAME,
+  PROJECT_PATH,
+  RAG_API_KEY,
+);
 
 // Mutable tool context shared by all handlers (session state updates in-place)
 const ctx: ToolContext = {
@@ -58,6 +72,12 @@ const ctx: ToolContext = {
   collectionPrefix: COLLECTION_PREFIX,
   enrichmentEnabled: true,
 };
+
+// If session ID was injected by SessionStart hook, use it
+const hookSessionId = process.env.RAG_SESSION_ID;
+if (hookSessionId) {
+  ctx.activeSessionId = hookSessionId;
+}
 
 // Context enrichment middleware
 const enricher = new ContextEnricher({
@@ -145,28 +165,32 @@ const coreSpecs = allSpecs.filter((s) => CORE_TOOLS.has(s.name));
 // MCP Server (modern McpServer API with native Zod validation)
 const server = new McpServer(
   { name: `${PROJECT_NAME}-rag`, version: "1.1.0" },
-  { capabilities: { tools: {} } }
+  { capabilities: { tools: {} } },
 );
 
 // Register core tools with McpServer using wrapHandler middleware
 for (const spec of coreSpecs) {
   const wrapped = wrapHandler(spec.name, spec.handler, { enricher, ctx });
 
-  server.registerTool(spec.name, {
-    description: spec.description,
-    inputSchema: spec.schema,
-    ...(spec.outputSchema ? { outputSchema: spec.outputSchema } : {}),
-    annotations: spec.annotations,
-  }, async (args) => {
-    const result = await wrapped(args as Record<string, unknown>, ctx);
-    if (typeof result === "string") {
-      return { content: [{ type: "text" as const, text: result }] };
-    }
-    return {
-      content: [{ type: "text" as const, text: result.text }],
-      structuredContent: result.structured,
-    };
-  });
+  server.registerTool(
+    spec.name,
+    {
+      description: spec.description,
+      inputSchema: spec.schema,
+      ...(spec.outputSchema ? { outputSchema: spec.outputSchema } : {}),
+      annotations: spec.annotations,
+    },
+    async (args) => {
+      const result = await wrapped(args as Record<string, unknown>, ctx);
+      if (typeof result === "string") {
+        return { content: [{ type: "text" as const, text: result }] };
+      }
+      return {
+        content: [{ type: "text" as const, text: result.text }],
+        structuredContent: result.structured,
+      };
+    },
+  );
 }
 
 // Graceful shutdown: close active session on exit
@@ -187,12 +211,29 @@ async function cleanup() {
 process.on("SIGINT", cleanup);
 process.on("SIGTERM", cleanup);
 
-// Start server
+// Phase 4: Transport selection — stdio | http | both
+const MCP_TRANSPORT = process.env.MCP_TRANSPORT || "stdio";
+const MCP_HTTP_PORT = parseInt(process.env.MCP_HTTP_PORT || "3101");
+
 async function main() {
-  const transport = new StdioServerTransport();
-  await server.connect(transport);
-  console.error(`${PROJECT_NAME} RAG MCP server running (collection prefix: ${COLLECTION_PREFIX})`);
-  console.error(`Registered ${coreSpecs.length}/${allSpecs.length} core tools (${allSpecs.length - coreSpecs.length} hidden, accessible via run_agent)`);
+  if (MCP_TRANSPORT === "stdio" || MCP_TRANSPORT === "both") {
+    const transport = new StdioServerTransport();
+    await server.connect(transport);
+  }
+
+  if (MCP_TRANSPORT === "http" || MCP_TRANSPORT === "both") {
+    await startHttpTransport(server, {
+      port: MCP_HTTP_PORT,
+      apiKey: RAG_API_KEY,
+    });
+  }
+
+  console.error(
+    `${PROJECT_NAME} RAG MCP server running (transport: ${MCP_TRANSPORT}, prefix: ${COLLECTION_PREFIX})`,
+  );
+  console.error(
+    `Registered ${coreSpecs.length}/${allSpecs.length} core tools (${allSpecs.length - coreSpecs.length} hidden, accessible via run_agent)`,
+  );
 }
 
 main().catch(console.error);

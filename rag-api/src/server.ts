@@ -227,12 +227,30 @@ export async function startServer(): Promise<void> {
 
     logger.info('Actor system started', { actors: ['memory', 'session', 'maintenance', 'index'] });
 
-    // Start server
-    app.listen(config.API_PORT, config.API_HOST, () => {
-      logger.info(`Shared RAG API running at http://${config.API_HOST}:${config.API_PORT}`);
-      logger.info(`Embedding: ${config.EMBEDDING_PROVIDER}, LLM: ${config.LLM_PROVIDER}`);
-      logger.info(`Cache: ${cacheService.isEnabled() ? 'enabled' : 'disabled'}`);
-    });
+    // Phase 5: Unix domain socket support via API_SOCKET_PATH
+    const socketPath = process.env.API_SOCKET_PATH;
+    if (socketPath) {
+      const fs = await import('fs');
+      // Clean up stale socket from previous crash
+      try {
+        fs.unlinkSync(socketPath);
+      } catch {
+        /* no stale socket */
+      }
+
+      app.listen(socketPath, () => {
+        fs.chmodSync(socketPath, 0o777);
+        logger.info(`Shared RAG API listening on Unix socket: ${socketPath}`);
+        logger.info(`Embedding: ${config.EMBEDDING_PROVIDER}, LLM: ${config.LLM_PROVIDER}`);
+        logger.info(`Cache: ${cacheService.isEnabled() ? 'enabled' : 'disabled'}`);
+      });
+    } else {
+      app.listen(config.API_PORT, config.API_HOST, () => {
+        logger.info(`Shared RAG API running at http://${config.API_HOST}:${config.API_PORT}`);
+        logger.info(`Embedding: ${config.EMBEDDING_PROVIDER}, LLM: ${config.LLM_PROVIDER}`);
+        logger.info(`Cache: ${cacheService.isEnabled() ? 'enabled' : 'disabled'}`);
+      });
+    }
   } catch (error: any) {
     logger.error('Failed to start server', { error: error?.message || error, stack: error?.stack });
     process.exit(1);
@@ -253,6 +271,16 @@ process.on('SIGTERM', async () => {
   const { lspClient } = await import('./services/lsp-client');
   await lspClient.shutdown();
   await shutdownTracing();
+  // Phase 5: Clean up Unix socket on shutdown
+  const socketPath = process.env.API_SOCKET_PATH;
+  if (socketPath) {
+    const fs = await import('fs');
+    try {
+      fs.unlinkSync(socketPath);
+    } catch {
+      /* already removed */
+    }
+  }
   process.exit(0);
 });
 

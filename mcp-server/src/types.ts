@@ -2,7 +2,7 @@
  * Shared types for the MCP server tool modules.
  */
 
-import type { AxiosInstance } from "axios";
+import type { ApiClient } from "./api-client.js";
 import type { z } from "zod";
 import type { ToolAnnotations } from "./annotations.js";
 
@@ -23,7 +23,7 @@ export interface ToolDefinition {
 
 /** Context passed to every tool handler */
 export interface ToolContext {
-  api: AxiosInstance;
+  api: ApiClient;
   projectName: string;
   projectPath: string;
   collectionPrefix: string;
@@ -39,7 +39,7 @@ export type ToolHandlerResult =
 /** A tool handler function */
 export type ToolHandler = (
   args: Record<string, unknown>,
-  ctx: ToolContext
+  ctx: ToolContext,
 ) => Promise<ToolHandlerResult>;
 
 /** A tool module exports definitions and handlers */
