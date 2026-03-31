@@ -36,9 +36,13 @@ coverage/
 
 # MCP config (contains API keys)
 .mcp.json
+.npmrc
 
 # Claude Code local settings (may contain keys in allowlist)
 .claude/settings.local.json
+
+# API key store (self-hosted)
+data/keys.json
 
 # Sensitive files
 *.pem
@@ -57,3 +61,7 @@ vault/
 landing/
 design_rag
 brand/
+docs/
+scripts/
+ROADMAP-REKA.md
+MIGRATION.md
