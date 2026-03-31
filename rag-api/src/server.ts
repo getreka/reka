@@ -48,7 +48,12 @@ const app: Express = express();
 // Middleware
 const corsOrigins = process.env.CORS_ORIGIN
   ? process.env.CORS_ORIGIN.split(',').map((o) => o.trim())
-  : ['http://localhost:3000', 'http://127.0.0.1:3000'];
+  : [
+      'http://localhost:3000',
+      'http://127.0.0.1:3000',
+      'https://demo.akeryuu.com',
+      'https://cdl.akeryuu.com',
+    ];
 app.use(
   cors({
     origin: corsOrigins,
