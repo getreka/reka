@@ -18,8 +18,6 @@ import { cacheService } from './services/cache';
 import { errorHandler } from './middleware/error-handler';
 import { authMiddleware } from './middleware/auth';
 import { rateLimitMiddleware } from './middleware/rate-limit';
-import { edgeRouter } from './middleware/edge-router';
-import { meteringMiddleware } from './middleware/metering';
 import searchRoutes from './routes/search';
 import indexRoutes from './routes/index';
 import memoryRoutes from './routes/memory';
@@ -32,7 +30,6 @@ import qualityRoutes from './routes/quality';
 import eventsRoutes from './routes/events';
 import tribunalRoutes from './routes/tribunal';
 import sensoryRoutes from './routes/sensory';
-import billingRoutes from './routes/billing';
 import adminRoutes from './routes/admin';
 
 // Extend Express Request type
@@ -97,12 +94,6 @@ app.use(authMiddleware);
 // Rate limiting (tiered: default/llm/indexing)
 app.use(rateLimitMiddleware);
 
-// Edge router (proxies to cloud when REKA_CLOUD_URL is set)
-app.use(edgeRouter.middleware());
-
-// Usage metering (tracks API calls when REKA_BILLING_ENABLED=true)
-app.use(meteringMiddleware);
-
 // Health check
 app.get('/health', async (req: Request, res: Response) => {
   const cacheStats = await cacheService.getStats();
@@ -115,7 +106,6 @@ app.get('/health', async (req: Request, res: Response) => {
       vectorSize: config.VECTOR_SIZE,
     },
     cache: cacheStats,
-    edge: edgeRouter.getStatus(),
   });
 });
 
@@ -147,7 +137,6 @@ app.use('/api', qualityRoutes);
 app.use('/api', eventsRoutes);
 app.use('/api', tribunalRoutes);
 app.use('/api', sensoryRoutes);
-app.use('/api/billing', billingRoutes);
 app.use('/api/admin', adminRoutes);
 
 // Legacy routes for backward compatibility with cypro-rag MCP

@@ -1,12 +1,15 @@
 /**
- * API Key Authentication Middleware
+ * API Key Authentication Middleware (Self-Hosted)
  *
- * Supports multiple API keys with scoping:
- * - Legacy single key via API_KEY env var
+ * Self-hosted mode: auth is optional. If no API_KEY is set, all requests pass through.
+ * If API_KEY is set, it protects the API (useful when exposing to a network).
+ *
+ * Supports:
+ * - Single key via API_KEY env var
  * - Multi-key via API_KEYS env var (comma-separated, format: name:key or just key)
  * - Both "Authorization: Bearer <key>" and "X-API-Key: <key>" headers
  *
- * Skips auth for /health, /metrics, and /api/health endpoints, and when no keys configured.
+ * Skips auth for /health, /metrics, and /api/health endpoints.
  */
 
 import { Request, Response, NextFunction } from 'express';

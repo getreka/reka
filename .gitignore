@@ -36,3 +36,24 @@ coverage/
 
 # MCP config (contains API keys)
 .mcp.json
+
+# Claude Code local settings (may contain keys in allowlist)
+.claude/settings.local.json
+
+# Sensitive files
+*.pem
+*.key
+*.secret
+
+# Playwright test artifacts
+test-results/
+playwright-report/
+
+# Vault (private data)
+vault/
+
+# Internal development
+.claude/
+landing/
+design_rag
+brand/
