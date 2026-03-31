@@ -1,11 +1,14 @@
 {
-  "name": "@crowley/rag-mcp",
-  "version": "1.6.1",
-  "description": "Universal RAG MCP Server for any project",
+  "name": "@getreka/mcp",
+  "version": "0.1.0",
+  "description": "Reka MCP Server — connect AI assistants to your codebase memory",
   "type": "module",
   "main": "dist/index.js",
   "bin": {
-    "rag-mcp": "dist/index.js"
+    "reka-mcp": "dist/index.js"
+  },
+  "publishConfig": {
+    "access": "public"
   },
   "files": [
     "dist/"
@@ -24,13 +27,17 @@
     "model-context-protocol",
     "ai",
     "embeddings",
-    "vector-search"
+    "vector-search",
+    "coding-agent",
+    "memory"
   ],
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/AKerby/shared-ai-infra.git"
+    "url": "https://github.com/getreka/reka.git",
+    "directory": "mcp-server"
   },
-  "license": "MIT",
+  "homepage": "https://getreka.dev",
+  "license": "BSL-1.1",
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.0",
     "glob": "^11.0.0",

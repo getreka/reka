@@ -1,0 +1,267 @@
+# Shared AI Infrastructure
+# This infrastructure is shared across all projects
+# Each project uses its own collection/namespace in Qdrant
+
+version: "3.8"
+
+services:
+  # Vector Database - stores embeddings for all projects
+  # Each project uses a separate collection (e.g., "cypro_codebase", "other_project_codebase")
+  qdrant:
+    image: qdrant/qdrant:v1.15.2
+    container_name: shared-qdrant
+    ports:
+      - "127.0.0.1:6333:6333"
+      - "127.0.0.1:6334:6334"
+    volumes:
+      - qdrant_data:/qdrant/storage
+    environment:
+      - QDRANT__SERVICE__GRPC_PORT=6334
+    deploy:
+      resources:
+        limits:
+          memory: 4G
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/6333'"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # Local LLM - Ollama
+  ollama:
+    image: ollama/ollama:latest
+    container_name: shared-ollama
+    ports:
+      - "127.0.0.1:11434:11434"
+    volumes:
+      - ollama_data:/root/.ollama
+    environment:
+      - OLLAMA_DEBUG=INFO
+      - OLLAMA_NUM_PARALLEL=1
+      - OLLAMA_MAX_LOADED_MODELS=1
+      - OLLAMA_FLASH_ATTENTION=true
+      - OLLAMA_CONTEXT_LENGTH=4096
+    deploy:
+      resources:
+        limits:
+          memory: 24G
+        reservations:
+          devices:
+            - driver: nvidia
+              count: all
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD-SHELL", "bash -c 'echo > /dev/tcp/localhost/11434'"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # Embedding + Reranker Server (BGE-M3 for legacy embedding, BGE-Reranker-v2-m3 for reranking)
+  bge-m3:
+    build:
+      context: ./docker/bge-m3
+      dockerfile: Dockerfile
+    container_name: shared-bge-m3
+    ports:
+      - "127.0.0.1:8080:8080"
+    environment:
+      - MODEL_NAME=BAAI/bge-m3
+      - RERANKER_MODEL=BAAI/bge-reranker-v2-m3
+      - MAX_LENGTH=8192
+      - USE_GPU=false
+    volumes:
+      - bge_m3_cache:/root/.cache
+    deploy:
+      resources:
+        limits:
+          memory: 6G
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  # Redis for caching (shared)
+  redis:
+    image: redis:7-alpine
+    container_name: shared-redis
+    ports:
+      - "127.0.0.1:6380:6379" # Different port to avoid conflicts with project-specific Redis
+    volumes:
+      - redis_data:/data
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+    restart: unless-stopped
+
+  # RAG API Server - serves all projects
+  rag-api:
+    build:
+      context: ./rag-api
+      dockerfile: Dockerfile
+    container_name: shared-rag-api
+    ports:
+      - "127.0.0.1:3100:3100"
+    environment:
+      - QDRANT_URL=http://qdrant:6333
+      - OLLAMA_URL=http://ollama:11434
+      - BGE_M3_URL=http://bge-m3:8080
+      - REDIS_URL=redis://redis:6379
+      - API_PORT=3100
+      - API_HOST=0.0.0.0
+      - CORS_ORIGIN=http://localhost:3000,http://dashboard:3000
+      - NODE_OPTIONS=--max-old-space-size=2048
+      - RATE_LIMIT_DEFAULT=100
+      - CONSOLIDATION_ENABLED=true
+      - RECONSOLIDATION_ENABLED=true
+      - GRAPH_RECALL_ENABLED=true
+    deploy:
+      resources:
+        limits:
+          memory: 2G
+    depends_on:
+      qdrant:
+        condition: service_healthy
+      ollama:
+        condition: service_healthy
+      bge-m3:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    healthcheck:
+      test:
+        [
+          "CMD-SHELL",
+          'node -e "fetch(''http://localhost:3100/health'').then(r=>{if(!r.ok)process.exit(1)}).catch(()=>process.exit(1))"',
+        ]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
+    restart: unless-stopped
+
+  # RAG Dashboard - Vue 3 web UI
+  dashboard:
+    build:
+      context: ./dashboard
+      dockerfile: Dockerfile
+    container_name: shared-dashboard
+    ports:
+      - "127.0.0.1:3000:3000"
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    depends_on:
+      rag-api:
+        condition: service_healthy
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  # --- Monitoring (profile: monitoring) ---
+  # Usage: docker-compose --profile monitoring up -d
+
+  prometheus:
+    image: prom/prometheus:v2.51.0
+    container_name: shared-prometheus
+    profiles: ["monitoring"]
+    ports:
+      - "127.0.0.1:9090:9090"
+    volumes:
+      - ./docker/prometheus/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    command:
+      - "--config.file=/etc/prometheus/prometheus.yml"
+      - "--storage.tsdb.retention.time=30d"
+      - "--storage.tsdb.retention.size=2GB"
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:9090/-/healthy"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  jaeger:
+    image: jaegertracing/all-in-one:1.55
+    container_name: shared-jaeger
+    profiles: ["monitoring"]
+    ports:
+      - "127.0.0.1:16686:16686" # Jaeger UI
+      - "127.0.0.1:4318:4318" # OTLP HTTP receiver
+    environment:
+      - COLLECTOR_OTLP_ENABLED=true
+    deploy:
+      resources:
+        limits:
+          memory: 512M
+    healthcheck:
+      test: ["CMD", "wget", "--spider", "-q", "http://localhost:16686/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+  grafana:
+    image: grafana/grafana:10.4.1
+    container_name: shared-grafana
+    profiles: ["monitoring"]
+    ports:
+      - "127.0.0.1:3200:3000"
+    environment:
+      - GF_SECURITY_ADMIN_USER=admin
+      - GF_SECURITY_ADMIN_PASSWORD=admin
+      - GF_USERS_ALLOW_SIGN_UP=false
+    volumes:
+      - ./docker/grafana/provisioning:/etc/grafana/provisioning:ro
+      - ./docker/grafana/dashboards:/var/lib/grafana/dashboards:ro
+      - grafana_data:/var/lib/grafana
+    deploy:
+      resources:
+        limits:
+          memory: 256M
+    depends_on:
+      - prometheus
+    healthcheck:
+      test:
+        ["CMD", "wget", "--spider", "-q", "http://localhost:3000/api/health"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+    restart: unless-stopped
+
+volumes:
+  qdrant_data:
+    name: shared_qdrant_data
+  ollama_data:
+    name: shared_ollama_data
+  bge_m3_cache:
+    name: shared_bge_m3_cache
+  redis_data:
+    name: shared_redis_data
+  prometheus_data:
+    name: shared_prometheus_data
+  grafana_data:
+    name: shared_grafana_data
+
+networks:
+  default:
+    name: shared-ai-network

@@ -16,7 +16,7 @@ import { recordHttpRequest, getMetrics, getMetricsContentType } from './utils/me
 import { vectorStore } from './services/vector-store';
 import { cacheService } from './services/cache';
 import { errorHandler } from './middleware/error-handler';
-import { authMiddleware } from './middleware/auth';
+import { authMiddleware, generateKey, listKeys, revokeKey } from './middleware/auth';
 import { rateLimitMiddleware } from './middleware/rate-limit';
 import searchRoutes from './routes/search';
 import indexRoutes from './routes/index';
@@ -122,6 +122,35 @@ app.get('/api/health', (req: Request, res: Response) => {
     uptime: process.uptime(),
     timestamp: new Date().toISOString(),
   });
+});
+
+// Key management (self-hosted, before auth)
+app.post('/api/keys', (req: Request, res: Response) => {
+  const { projectName, label } = req.body;
+  if (!projectName || typeof projectName !== 'string') {
+    return res.status(400).json({ error: 'projectName is required' });
+  }
+  const entry = generateKey(projectName, label);
+  res.json({ key: entry.key, projectName: entry.projectName, id: entry.id });
+});
+
+app.get('/api/keys', (_req: Request, res: Response) => {
+  res.json(listKeys());
+});
+
+app.delete('/api/keys/:id', (req: Request, res: Response) => {
+  const revoked = revokeKey(req.params.id);
+  if (!revoked) return res.status(404).json({ error: 'Key not found' });
+  res.json({ revoked: true });
+});
+
+// Resolve project from key (used by MCP server on connect)
+app.get('/api/whoami', (req: Request, res: Response) => {
+  const ctx = req.authContext;
+  if (!ctx?.authenticated) {
+    return res.status(401).json({ error: 'Not authenticated' });
+  }
+  res.json({ projectName: ctx.projectName, keyName: ctx.keyName });
 });
 
 // API routes

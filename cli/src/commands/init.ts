@@ -1,55 +1,99 @@
-import * as fs from 'fs';
-import * as path from 'path';
-import chalk from 'chalk';
+import * as fs from "fs";
+import * as path from "path";
+import chalk from "chalk";
+import { createClient } from "../api";
+import { loadConfig } from "../config";
 
-const TEMPLATE = `# Reka Configuration
-# Docs: https://github.com/reka-dev/reka
+const MCP_TEMPLATE = `{
+  "mcpServers": {
+    "reka": {
+      "command": "npx",
+      "args": ["-y", "@getreka/mcp"],
+      "env": {
+        "REKA_API_KEY": "{{API_KEY}}"
+      }
+    }
+  }
+}`;
 
-api:
-  url: http://localhost:3100
-  # key: your-api-key-here
-
-project:
-  name: {{PROJECT_NAME}}
-  path: {{PROJECT_PATH}}
-
-# Models (optional — defaults to local Ollama + BGE-M3)
-# models:
-#   embeddings:
-#     provider: bge-m3        # bge-m3 | ollama | openai
-#     url: http://localhost:8080
-#     dimensions: 1024
-#
-#   llm:
-#     utility:
-#       provider: ollama
-#       model: qwen3.5:35b
-#     complex:
-#       provider: anthropic
-#       model: claude-sonnet-4-6
-`;
-
-export async function initCommand(opts: { name?: string; path?: string; force?: boolean }) {
+export async function initCommand(opts: {
+  project?: string;
+  path?: string;
+  force?: boolean;
+  cloud?: boolean;
+  key?: string;
+  apiUrl?: string;
+}) {
   const projectPath = opts.path || process.cwd();
-  const projectName = opts.name || path.basename(projectPath);
-  const configPath = path.join(projectPath, 'reka.config.yaml');
+  const projectName = opts.project || path.basename(projectPath);
 
-  if (fs.existsSync(configPath) && !opts.force) {
-    console.log(chalk.yellow(`\n  reka.config.yaml already exists. Use --force to overwrite.\n`));
+  // Cloud mode: use provided key, skip keygen
+  if (opts.cloud || opts.key) {
+    if (!opts.key) {
+      console.log(
+        chalk.red("\n  --key is required for cloud mode. Get one at https://getreka.dev/dashboard\n"),
+      );
+      return;
+    }
+    writeMcpConfig(projectPath, opts.key, opts.force);
+    console.log(chalk.green(`\n  ✓ Connected to Reka Cloud`));
+    console.log(`  Project will be resolved from your API key.\n`);
     return;
   }
 
-  const content = TEMPLATE
-    .replace('{{PROJECT_NAME}}', projectName)
-    .replace('{{PROJECT_PATH}}', projectPath);
+  // Self-hosted: generate key via local API
+  const config = loadConfig({
+    api: { url: opts.apiUrl },
+    project: { name: projectName, path: projectPath },
+  });
+  const client = createClient(config);
 
-  fs.writeFileSync(configPath, content, 'utf-8');
+  console.log(`\n  Generating API key for project ${chalk.bold(projectName)}...`);
 
-  console.log(chalk.green(`\n  ✓ Created ${configPath}`));
-  console.log('');
-  console.log('  Next steps:');
-  console.log(`    1. Edit ${chalk.bold('reka.config.yaml')} to set your API key`);
-  console.log(`    2. Run ${chalk.bold('reka index')} to index your codebase`);
-  console.log(`    3. Run ${chalk.bold('reka search "your query"')} to search`);
-  console.log('');
+  try {
+    const { data } = await client.post("/api/keys", {
+      projectName,
+      label: `init-${Date.now()}`,
+    });
+
+    const apiKey = data.key as string;
+
+    writeMcpConfig(projectPath, apiKey, opts.force);
+
+    console.log(chalk.green(`  ✓ API key created: ${apiKey.slice(0, 20)}...`));
+    console.log(chalk.green(`  ✓ .mcp.json written`));
+    console.log("");
+    console.log("  Your AI assistant now has memory. Try asking it about your codebase!");
+    console.log("");
+  } catch (err: any) {
+    const msg = err.response?.data?.error || err.message;
+    console.log(chalk.red(`\n  Failed to generate key: ${msg}`));
+    console.log(
+      chalk.yellow(`  Is the Reka API running? Start with: docker-compose up -d\n`),
+    );
+  }
+}
+
+function writeMcpConfig(projectPath: string, apiKey: string, force?: boolean) {
+  const mcpPath = path.join(projectPath, ".mcp.json");
+
+  if (fs.existsSync(mcpPath) && !force) {
+    // Merge into existing .mcp.json
+    try {
+      const existing = JSON.parse(fs.readFileSync(mcpPath, "utf-8"));
+      existing.mcpServers = existing.mcpServers || {};
+      existing.mcpServers.reka = {
+        command: "npx",
+        args: ["-y", "@getreka/mcp"],
+        env: { REKA_API_KEY: apiKey },
+      };
+      fs.writeFileSync(mcpPath, JSON.stringify(existing, null, 2) + "\n", "utf-8");
+      return;
+    } catch {
+      // Fall through to overwrite
+    }
+  }
+
+  const content = MCP_TEMPLATE.replace("{{API_KEY}}", apiKey);
+  fs.writeFileSync(mcpPath, content + "\n", "utf-8");
 }

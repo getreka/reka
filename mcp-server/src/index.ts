@@ -50,26 +50,49 @@ import { createAgentTools } from "./tools/agents.js";
 import { createQualityTools } from "./tools/quality.js";
 
 // Configuration from environment
-const PROJECT_NAME = process.env.PROJECT_NAME || "default";
+// Priority: REKA_API_KEY (new) > RAG_API_KEY (legacy)
+const API_KEY = process.env.REKA_API_KEY || process.env.RAG_API_KEY;
+const RAG_API_URL = process.env.REKA_API_URL || process.env.RAG_API_URL || "http://localhost:3100";
 const PROJECT_PATH = process.env.PROJECT_PATH || process.cwd();
-const RAG_API_URL = process.env.RAG_API_URL || "http://localhost:3100";
-const RAG_API_KEY = process.env.RAG_API_KEY;
-const COLLECTION_PREFIX = `${PROJECT_NAME}_`;
 
-// API client
+// Project name: resolved from API key via /api/whoami, fallback to env/dirname
+let PROJECT_NAME = process.env.PROJECT_NAME || "";
+const COLLECTION_PREFIX_FN = () => `${PROJECT_NAME}_`;
+
+// API client (PROJECT_NAME may be empty initially, resolved after whoami)
 const api = createApiClient(
   RAG_API_URL,
-  PROJECT_NAME,
+  PROJECT_NAME || "resolving",
   PROJECT_PATH,
-  RAG_API_KEY,
+  API_KEY,
 );
+
+// Resolve project name from API key
+async function resolveProject(): Promise<void> {
+  if (PROJECT_NAME) return; // already set via env
+  if (!API_KEY) {
+    PROJECT_NAME = "default";
+    return;
+  }
+  try {
+    const res = await api.get<{ projectName: string }>("/api/whoami");
+    if (res.data?.projectName) {
+      PROJECT_NAME = res.data.projectName;
+      api.setProjectName(PROJECT_NAME);
+    }
+  } catch {
+    // Fallback to directory name
+    const path = await import("path");
+    PROJECT_NAME = path.basename(PROJECT_PATH);
+  }
+}
 
 // Mutable tool context shared by all handlers (session state updates in-place)
 const ctx: ToolContext = {
   api,
-  projectName: PROJECT_NAME,
+  projectName: PROJECT_NAME || "resolving",
   projectPath: PROJECT_PATH,
-  collectionPrefix: COLLECTION_PREFIX,
+  collectionPrefix: COLLECTION_PREFIX_FN(),
   enrichmentEnabled: true,
 };
 
@@ -216,6 +239,11 @@ const MCP_TRANSPORT = process.env.MCP_TRANSPORT || "stdio";
 const MCP_HTTP_PORT = parseInt(process.env.MCP_HTTP_PORT || "3101");
 
 async function main() {
+  // Resolve project name from API key before starting
+  await resolveProject();
+  ctx.projectName = PROJECT_NAME;
+  ctx.collectionPrefix = COLLECTION_PREFIX_FN();
+
   if (MCP_TRANSPORT === "stdio" || MCP_TRANSPORT === "both") {
     const transport = new StdioServerTransport();
     await server.connect(transport);
@@ -224,12 +252,12 @@ async function main() {
   if (MCP_TRANSPORT === "http" || MCP_TRANSPORT === "both") {
     await startHttpTransport(server, {
       port: MCP_HTTP_PORT,
-      apiKey: RAG_API_KEY,
+      apiKey: API_KEY,
     });
   }
 
   console.error(
-    `${PROJECT_NAME} RAG MCP server running (transport: ${MCP_TRANSPORT}, prefix: ${COLLECTION_PREFIX})`,
+    `${PROJECT_NAME} RAG MCP server running (transport: ${MCP_TRANSPORT}, prefix: ${COLLECTION_PREFIX_FN()})`,
   );
   console.error(
     `Registered ${coreSpecs.length}/${allSpecs.length} core tools (${allSpecs.length - coreSpecs.length} hidden, accessible via run_agent)`,
