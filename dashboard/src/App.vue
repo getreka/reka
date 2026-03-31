@@ -1,11 +1,15 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted } from "vue";
+import { onMounted, onUnmounted, computed } from "vue";
+import { useRoute } from "vue-router";
 import Toast from "primevue/toast";
 import ConfirmDialog from "primevue/confirmdialog";
 import AppLayout from "@/components/layout/AppLayout.vue";
 import { useAppStore } from "@/stores/app";
 import { usePolling } from "@/composables/usePolling";
 import { useToast } from "primevue/usetoast";
+
+const route = useRoute();
+const isAuthPage = computed(() => route.path.startsWith("/auth"));
 
 const app = useAppStore();
 const toast = useToast();
@@ -30,7 +34,12 @@ onUnmounted(() => {
 <template>
   <Toast />
   <ConfirmDialog />
-  <AppLayout>
+  <template v-if="isAuthPage">
     <router-view />
-  </AppLayout>
+  </template>
+  <template v-else>
+    <AppLayout>
+      <router-view />
+    </AppLayout>
+  </template>
 </template>
