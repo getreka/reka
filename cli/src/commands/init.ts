@@ -28,40 +28,64 @@ export async function initCommand(opts: {
   const projectPath = opts.path || process.cwd();
   const projectName = opts.project || path.basename(projectPath);
 
-  // Demo mode: connect to public demo instance
+  // Demo mode: device authorization flow
   if (opts.demo) {
-    const demoUrl = "https://rag.akeryuu.com";
-    console.log("");
-    console.log(chalk.bold("  Connecting to Reka Demo..."));
+    const demoApiUrl = "https://rag.akeryuu.com";
+    const axios = (await import("axios")).default;
+
+    console.log(chalk.bold("\n  Connecting to Reka Demo...\n"));
 
     try {
-      const demoClient = createClient(
-        loadConfig({
-          api: { url: demoUrl },
-          project: { name: projectName, path: projectPath },
-        }),
-      );
-      const { data } = await demoClient.post("/api/keys", {
-        projectName: `demo-${projectName}`,
-        label: `demo-${Date.now()}`,
-      });
+      // Step 1: Create device session
+      const { data: device } = await axios.post(`${demoApiUrl}/api/auth/device`);
 
-      writeMcpConfig(projectPath, data.key, opts.force, demoUrl);
+      // Step 2: Open browser
+      console.log(`  Your verification code: ${chalk.bold.cyan(device.userCode)}`);
+      console.log(`  Opening browser to sign in...\n`);
 
-      console.log(chalk.green(`  ✓ Connected to demo at ${demoUrl}`));
-      console.log(chalk.green(`  ✓ .mcp.json written`));
-      console.log("");
-      console.log(
-        "  Open your AI assistant — it now has memory via the Reka demo.",
-      );
-      console.log(chalk.yellow("  Note: demo data may be reset periodically."));
-      console.log("");
+      try {
+        const open = (await import("open")).default;
+        await open(device.verificationUrl);
+      } catch {
+        console.log(`  Open this URL in your browser:`);
+        console.log(`  ${chalk.cyan(device.verificationUrl)}\n`);
+      }
+
+      // Step 3: Poll for completion
+      const ora = (await import("ora")).default;
+      const spinner = ora("  Waiting for authentication...").start();
+      const deadline = Date.now() + device.expiresIn * 1000;
+
+      while (Date.now() < deadline) {
+        await new Promise((r) => setTimeout(r, device.interval * 1000));
+
+        const { data: poll } = await axios.get(
+          `${demoApiUrl}/api/auth/poll?device_code=${device.deviceCode}`,
+        );
+
+        if (poll.status === "completed") {
+          spinner.succeed("Authenticated!");
+          writeMcpConfig(projectPath, poll.apiKey, opts.force, poll.apiUrl);
+          console.log(chalk.green(`  ✓ Project: ${poll.projectName}`));
+          console.log(chalk.green(`  ✓ .mcp.json written`));
+          console.log("");
+          console.log("  Your AI assistant now has memory. Open it and start asking!");
+          console.log(chalk.yellow("  Note: demo data may be reset periodically."));
+          console.log("");
+          return;
+        }
+
+        if (poll.status === "expired") {
+          spinner.fail("Authentication expired. Run the command again.");
+          return;
+        }
+      }
+
+      spinner.fail("Authentication timed out. Run the command again.");
     } catch (err: any) {
       const msg = err.response?.data?.error || err.message;
       console.log(chalk.red(`\n  Demo unavailable: ${msg}`));
-      console.log(
-        chalk.yellow(`  Try self-hosted instead: docker-compose up -d\n`),
-      );
+      console.log(chalk.yellow(`  Try self-hosted instead: docker-compose up -d\n`));
     }
     return;
   }

@@ -1,6 +1,6 @@
 {
   "name": "@shared/rag-api",
-  "version": "2.2.0",
+  "version": "2.2.1",
   "description": "Shared RAG API for multi-project support",
   "main": "dist/server.js",
   "scripts": {
@@ -31,6 +31,7 @@
     "@qdrant/js-client-rest": "^1.16.2",
     "@types/ioredis": "^4.28.10",
     "axios": "^1.6.0",
+    "bcryptjs": "^3.0.3",
     "bullmq": "^5.71.1",
     "cors": "^2.8.5",
     "dotenv": "^17.2.3",
@@ -48,6 +49,7 @@
     "zod": "^4.0.0"
   },
   "devDependencies": {
+    "@types/bcryptjs": "^2.4.6",
     "@types/cors": "^2.8.17",
     "@types/express": "^4.17.21",
     "@types/js-yaml": "^4.0.9",

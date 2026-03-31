@@ -29,13 +29,14 @@
     "chalk": "^4.1.2",
     "commander": "^12.1.0",
     "js-yaml": "^4.1.0",
+    "open": "^11.0.0",
     "ora": "^5.4.1"
   },
   "devDependencies": {
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^20.14.0",
-    "typescript": "^5.5.0",
-    "ts-node": "^10.9.2"
+    "ts-node": "^10.9.2",
+    "typescript": "^5.5.0"
   },
   "engines": {
     "node": ">=18"

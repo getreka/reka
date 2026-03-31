@@ -124,6 +124,11 @@ export interface Config {
   // Authentication
   API_KEY?: string;
 
+  // Demo mode
+  DEMO_MODE: boolean;
+  DEMO_DASHBOARD_URL: string;
+  DEMO_API_URL: string;
+
   // Memory Governance
   MEMORY_QUARANTINE_TTL_DAYS: number;
   MEMORY_DECAY_RATE: number;
@@ -282,6 +287,11 @@ const config: Config = {
 
   // Authentication
   API_KEY: process.env.API_KEY,
+
+  // Demo mode
+  DEMO_MODE: process.env.DEMO_MODE === 'true',
+  DEMO_DASHBOARD_URL: process.env.DEMO_DASHBOARD_URL || 'https://demo.akeryuu.com',
+  DEMO_API_URL: process.env.DEMO_API_URL || 'https://rag.akeryuu.com',
 
   // Memory Governance
   MEMORY_QUARANTINE_TTL_DAYS: parseInt(process.env.MEMORY_QUARANTINE_TTL_DAYS || '7', 10),

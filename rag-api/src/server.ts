@@ -18,6 +18,7 @@ import { cacheService } from './services/cache';
 import { errorHandler } from './middleware/error-handler';
 import { authMiddleware, generateKey, listKeys, revokeKey } from './middleware/auth';
 import { rateLimitMiddleware } from './middleware/rate-limit';
+import demoAuthRoutes from './routes/demo-auth';
 import searchRoutes from './routes/search';
 import indexRoutes from './routes/index';
 import memoryRoutes from './routes/memory';
@@ -87,6 +88,9 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 
   next();
 });
+
+// Demo auth routes (public, before API key auth)
+app.use('/api/auth', demoAuthRoutes);
 
 // API key authentication (skips /health and /metrics)
 app.use(authMiddleware);
