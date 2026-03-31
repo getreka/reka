@@ -217,13 +217,19 @@ async function completeDevice() {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--p-surface-ground);
+  background: #0a0a0a;
+  font-family:
+    "Inter",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
 }
 .auth-card {
   width: 420px;
   max-width: 90vw;
-  background: var(--p-surface-card);
-  border: 1px solid var(--p-surface-border);
+  background: #111111;
+  border: 1px solid #1a1a1a;
   border-radius: 16px;
   padding: 40px;
   display: flex;
@@ -236,21 +242,24 @@ async function completeDevice() {
   justify-content: center;
   gap: 8px;
 }
+.auth-logo i {
+  color: #a855f7 !important;
+}
 .auth-logo-text {
   font-size: 1.5rem;
   font-weight: 700;
-  color: var(--p-text-color);
+  color: #ffffff;
 }
 .auth-title {
   text-align: center;
   font-size: 1.25rem;
   font-weight: 600;
   margin: 0;
-  color: var(--p-text-color);
+  color: #ffffff;
 }
 .auth-subtitle {
   text-align: center;
-  color: var(--p-text-muted-color);
+  color: #a1a1aa;
   font-size: 0.875rem;
   margin: -12px 0 0;
 }
@@ -260,24 +269,27 @@ async function completeDevice() {
   justify-content: center;
   gap: 8px;
   padding: 12px 20px;
-  background: var(--p-surface-100);
-  border: 1px solid var(--p-surface-border);
+  background: #1a1a1a;
+  border: 1px solid #27272a;
   border-radius: 12px;
 }
+.auth-code-badge i {
+  color: #a855f7 !important;
+}
 .auth-code-label {
-  color: var(--p-text-muted-color);
+  color: #71717a;
   font-size: 0.8125rem;
 }
 .auth-code-value {
-  color: var(--p-primary-color);
-  font-family: "JetBrains Mono", monospace;
+  color: #a855f7;
+  font-family: "JetBrains Mono", "Fira Code", monospace;
   font-size: 1.125rem;
   font-weight: 700;
   letter-spacing: 2px;
 }
 .auth-tabs {
   display: flex;
-  border-bottom: 1px solid var(--p-surface-border);
+  border-bottom: 1px solid #1a1a1a;
 }
 .auth-tab {
   flex: 1;
@@ -286,15 +298,18 @@ async function completeDevice() {
   background: none;
   border: none;
   border-bottom: 2px solid transparent;
-  color: var(--p-text-muted-color);
+  color: #71717a;
   cursor: pointer;
   font-size: 0.875rem;
   transition: all 0.2s;
 }
 .auth-tab.active {
-  color: var(--p-text-color);
-  border-bottom-color: var(--p-primary-color);
+  color: #ffffff;
+  border-bottom-color: #a855f7;
   font-weight: 500;
+}
+.auth-tab:hover:not(.active) {
+  color: #a1a1aa;
 }
 .auth-form {
   display: flex;
@@ -309,12 +324,38 @@ async function completeDevice() {
 .auth-field label {
   font-size: 0.8125rem;
   font-weight: 500;
-  color: var(--p-text-muted-color);
+  color: #a1a1aa;
+}
+.auth-field :deep(.p-inputtext),
+.auth-field :deep(.p-password-input) {
+  background: #1a1a1a !important;
+  border-color: #27272a !important;
+  color: #ffffff !important;
+}
+.auth-field :deep(.p-inputtext::placeholder) {
+  color: #71717a !important;
+}
+.auth-field :deep(.p-inputtext:focus),
+.auth-field :deep(.p-password-input:focus) {
+  border-color: #a855f7 !important;
+  box-shadow: 0 0 0 1px rgba(168, 85, 247, 0.3) !important;
+}
+.auth-field :deep(.p-password-toggle-button) {
+  color: #71717a !important;
+}
+.auth-form :deep(.p-button) {
+  background: #a855f7 !important;
+  border-color: #a855f7 !important;
+  color: #ffffff !important;
+}
+.auth-form :deep(.p-button:hover) {
+  background: #9333ea !important;
+  border-color: #9333ea !important;
 }
 .auth-terms {
   text-align: center;
   font-size: 0.75rem;
-  color: var(--p-text-muted-color);
+  color: #71717a;
   margin: 0;
 }
 .auth-success {
@@ -324,12 +365,15 @@ async function completeDevice() {
   gap: 16px;
   padding: 20px 0;
 }
+.auth-success i {
+  color: #22c55e !important;
+}
 .auth-success h2 {
   margin: 0;
-  color: var(--p-text-color);
+  color: #ffffff;
 }
 .auth-success p {
-  color: var(--p-text-muted-color);
+  color: #a1a1aa;
   text-align: center;
 }
 </style>

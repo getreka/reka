@@ -89,13 +89,19 @@ async function handleLogin() {
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--p-surface-ground);
+  background: #0a0a0a;
+  font-family:
+    "Inter",
+    -apple-system,
+    BlinkMacSystemFont,
+    "Segoe UI",
+    sans-serif;
 }
 .auth-card {
   width: 420px;
   max-width: 90vw;
-  background: var(--p-surface-card);
-  border: 1px solid var(--p-surface-border);
+  background: #111111;
+  border: 1px solid #1a1a1a;
   border-radius: 16px;
   padding: 40px;
   display: flex;
@@ -108,21 +114,24 @@ async function handleLogin() {
   justify-content: center;
   gap: 8px;
 }
+.auth-logo i {
+  color: #a855f7 !important;
+}
 .auth-logo-text {
   font-size: 1.5rem;
   font-weight: 700;
-  color: var(--p-text-color);
+  color: #ffffff;
 }
 .auth-title {
   text-align: center;
   font-size: 1.25rem;
   font-weight: 600;
   margin: 0;
-  color: var(--p-text-color);
+  color: #ffffff;
 }
 .auth-subtitle {
   text-align: center;
-  color: var(--p-text-muted-color);
+  color: #a1a1aa;
   font-size: 0.875rem;
   margin: -12px 0 0;
 }
@@ -139,16 +148,45 @@ async function handleLogin() {
 .auth-field label {
   font-size: 0.8125rem;
   font-weight: 500;
-  color: var(--p-text-muted-color);
+  color: #a1a1aa;
+}
+.auth-field :deep(.p-inputtext),
+.auth-field :deep(.p-password-input) {
+  background: #1a1a1a !important;
+  border-color: #27272a !important;
+  color: #ffffff !important;
+}
+.auth-field :deep(.p-inputtext::placeholder) {
+  color: #71717a !important;
+}
+.auth-field :deep(.p-inputtext:focus),
+.auth-field :deep(.p-password-input:focus) {
+  border-color: #a855f7 !important;
+  box-shadow: 0 0 0 1px rgba(168, 85, 247, 0.3) !important;
+}
+.auth-field :deep(.p-password-toggle-button) {
+  color: #71717a !important;
+}
+.auth-form :deep(.p-button) {
+  background: #a855f7 !important;
+  border-color: #a855f7 !important;
+  color: #ffffff !important;
+}
+.auth-form :deep(.p-button:hover) {
+  background: #9333ea !important;
+  border-color: #9333ea !important;
 }
 .auth-link {
   text-align: center;
   font-size: 0.8125rem;
-  color: var(--p-text-muted-color);
+  color: #71717a;
   margin: 0;
 }
 .auth-link a {
-  color: var(--p-primary-color);
+  color: #a855f7;
   text-decoration: none;
+}
+.auth-link a:hover {
+  text-decoration: underline;
 }
 </style>
