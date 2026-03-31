@@ -47,6 +47,14 @@ npx @getreka/cli init --project my-app
 
 That's it. Open your AI assistant -- it now has memory.
 
+### Try the demo (no install needed)
+
+```bash
+npx @getreka/cli init --demo --project my-app
+```
+
+This connects to a live Reka instance so you can try memory, search, and indexing before deploying your own. Demo data may be reset periodically.
+
 ### What `reka init` does
 
 1. Creates an API key mapped to your project
@@ -148,10 +156,10 @@ No cross-contamination between projects. One backend serves them all.
 | **Price**          | Free                     | $12/dev/mo                    | $35/dev/mo           |
 | **Infrastructure** | Your machine             | Local + Reka Cloud            | Fully managed        |
 | **Data residency** | 100% local               | Code local, vectors in cloud  | Cloud                |
-| **Setup**          | `docker-compose up`      | `reka init --cloud`           | `reka init --cloud`  |
+| **Setup**          | `docker-compose up`      | Coming soon                   | Coming soon          |
 | **Best for**       | Privacy-first, solo devs | Teams wanting zero-ops search | Enterprise, no infra |
 
-Self-hosted is the full platform with zero limitations. Cloud adds managed infrastructure and team features.
+Self-hosted is the full platform with zero limitations. Hybrid and Cloud are coming soon -- [join the waitlist](https://getreka.dev).
 
 ---
 

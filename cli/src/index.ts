@@ -26,12 +26,15 @@ program
 // reka init
 program
   .command("init")
-  .description("Initialize Reka for current project — generates API key and .mcp.json")
+  .description(
+    "Initialize Reka for current project — generates API key and .mcp.json",
+  )
   .option("--project <name>", "Project name (defaults to directory name)")
   .option("-p, --path <path>", "Project path")
   .option("-f, --force", "Overwrite existing .mcp.json")
-  .option("--cloud", "Connect to Reka Cloud instead of local")
-  .option("--key <key>", "API key (required for --cloud)")
+  .option("--demo", "Connect to the Reka demo instance")
+  .option("--cloud", "Connect to Reka Cloud (coming soon)")
+  .option("--key <key>", "API key for cloud or demo")
   .option("--api-url <url>", "RAG API URL (default: http://localhost:3100)")
   .action(async (opts) => {
     await initCommand(opts);
