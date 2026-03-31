@@ -21,6 +21,12 @@ client.interceptors.request.use((config) => {
     config.headers["X-Project-Name"] = project;
   }
 
+  // Demo mode: add session token
+  const demoToken = localStorage.getItem("demo_token");
+  if (demoToken) {
+    config.headers["Authorization"] = `Bearer ${demoToken}`;
+  }
+
   return config;
 });
 
