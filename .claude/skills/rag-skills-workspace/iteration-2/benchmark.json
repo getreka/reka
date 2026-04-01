@@ -11,198 +11,744 @@
   },
   "runs": [
     {
-      "eval_id": 1, "eval_name": "session-start", "configuration": "with_skill", "run_number": 1,
-      "result": { "pass_rate": 1.0, "passed": 6, "failed": 0, "total": 6, "time_seconds": 105.5, "tokens": 31534, "tool_calls": 9, "errors": 0 },
+      "eval_id": 1,
+      "eval_name": "session-start",
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 6,
+        "failed": 0,
+        "total": 6,
+        "time_seconds": 105.5,
+        "tokens": 31534,
+        "tool_calls": 9,
+        "errors": 0
+      },
       "expectations": [
-        {"text": "Calls start_session with a descriptive sessionId", "passed": true, "evidence": "sessionId='2026-02-26-optimize-vector-store-search'"},
-        {"text": "Calls context_briefing with task mentioning vector-store.ts", "passed": true, "evidence": "Called with task+files containing vector-store.ts"},
-        {"text": "Runs at least 2 tool calls in parallel", "passed": true, "evidence": "Two parallel batches: (start_session+get_developer_profile) and (context_briefing+warm_cache)"},
-        {"text": "Briefing mentions specific file paths relevant to vector-store.ts", "passed": true, "evidence": "Lists 5 files: vector-store.ts, embedding.ts, context-pack.ts, graph-store.ts, indexer.ts"},
-        {"text": "Output contains at least 3 distinct sections", "passed": true, "evidence": "5 sections: Previous Context, Relevant Code, Active Patterns & ADRs, Dependencies, Developer Profile"},
-        {"text": "Briefing references project-specific concepts", "passed": true, "evidence": "Binary Quantization, BGE-M3, HNSW, {project} collections"}
+        {
+          "text": "Calls start_session with a descriptive sessionId",
+          "passed": true,
+          "evidence": "sessionId='2026-02-26-optimize-vector-store-search'"
+        },
+        {
+          "text": "Calls context_briefing with task mentioning vector-store.ts",
+          "passed": true,
+          "evidence": "Called with task+files containing vector-store.ts"
+        },
+        {
+          "text": "Runs at least 2 tool calls in parallel",
+          "passed": true,
+          "evidence": "Two parallel batches: (start_session+get_developer_profile) and (context_briefing+warm_cache)"
+        },
+        {
+          "text": "Briefing mentions specific file paths relevant to vector-store.ts",
+          "passed": true,
+          "evidence": "Lists 5 files: vector-store.ts, embedding.ts, context-pack.ts, graph-store.ts, indexer.ts"
+        },
+        {
+          "text": "Output contains at least 3 distinct sections",
+          "passed": true,
+          "evidence": "5 sections: Previous Context, Relevant Code, Active Patterns & ADRs, Dependencies, Developer Profile"
+        },
+        {
+          "text": "Briefing references project-specific concepts",
+          "passed": true,
+          "evidence": "Binary Quantization, BGE-M3, HNSW, {project} collections"
+        }
       ]
     },
     {
-      "eval_id": 1, "eval_name": "session-start", "configuration": "without_skill", "run_number": 1,
-      "result": { "pass_rate": 0.67, "passed": 4, "failed": 2, "total": 6, "time_seconds": 121.0, "tokens": 53896, "tool_calls": 11, "errors": 0 },
+      "eval_id": 1,
+      "eval_name": "session-start",
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.67,
+        "passed": 4,
+        "failed": 2,
+        "total": 6,
+        "time_seconds": 121.0,
+        "tokens": 53896,
+        "tool_calls": 11,
+        "errors": 0
+      },
       "expectations": [
-        {"text": "Calls start_session with a descriptive sessionId", "passed": false, "evidence": "No sessionId parameter — got auto-generated UUID"},
-        {"text": "Calls context_briefing with task mentioning vector-store.ts", "passed": false, "evidence": "Never called — used separate recall, hybrid_search, get_patterns, get_adrs instead"},
-        {"text": "Runs at least 2 tool calls in parallel", "passed": true, "evidence": "4 parallel batches found"},
-        {"text": "Briefing mentions specific file paths relevant to vector-store.ts", "passed": true, "evidence": "Detailed file inventory with method-level breakdown"},
-        {"text": "Output contains at least 3 distinct sections", "passed": true, "evidence": "8 distinct sections"},
-        {"text": "Briefing references project-specific concepts", "passed": true, "evidence": "Qdrant RRF fusion, BGE-M3 batch endpoint, actual eval metrics"}
+        {
+          "text": "Calls start_session with a descriptive sessionId",
+          "passed": false,
+          "evidence": "No sessionId parameter — got auto-generated UUID"
+        },
+        {
+          "text": "Calls context_briefing with task mentioning vector-store.ts",
+          "passed": false,
+          "evidence": "Never called — used separate recall, hybrid_search, get_patterns, get_adrs instead"
+        },
+        {
+          "text": "Runs at least 2 tool calls in parallel",
+          "passed": true,
+          "evidence": "4 parallel batches found"
+        },
+        {
+          "text": "Briefing mentions specific file paths relevant to vector-store.ts",
+          "passed": true,
+          "evidence": "Detailed file inventory with method-level breakdown"
+        },
+        {
+          "text": "Output contains at least 3 distinct sections",
+          "passed": true,
+          "evidence": "8 distinct sections"
+        },
+        {
+          "text": "Briefing references project-specific concepts",
+          "passed": true,
+          "evidence": "Qdrant RRF fusion, BGE-M3 batch endpoint, actual eval metrics"
+        }
       ]
     },
     {
-      "eval_id": 2, "eval_name": "implement-rate-limit", "configuration": "with_skill", "run_number": 1,
-      "result": { "pass_rate": 1.0, "passed": 6, "failed": 0, "total": 6, "time_seconds": 503.7, "tokens": 63547, "tool_calls": 37, "errors": 0 },
+      "eval_id": 2,
+      "eval_name": "implement-rate-limit",
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 6,
+        "failed": 0,
+        "total": 6,
+        "time_seconds": 503.7,
+        "tokens": 63547,
+        "tool_calls": 37,
+        "errors": 0
+      },
       "expectations": [
-        {"text": "Calls context_briefing before any code changes", "passed": true, "evidence": "Phase 1: context_briefing called before any Write"},
-        {"text": "Calls review_code or check_architecture after writing code", "passed": true, "evidence": "Both called in Phase 4; check_architecture confirmed no violations"},
-        {"text": "Calls remember or record_adr to capture the decision", "passed": true, "evidence": "remember() called with type 'insight', ID 2c636816"},
-        {"text": "Implementation plan lists specific files to modify with rationale", "passed": true, "evidence": "plan.md has Files to Create/Modify with per-file rationale"},
-        {"text": "Plan includes blast radius section identifying dependent files", "passed": true, "evidence": "Dedicated 'Blast Radius' section identifying 38+ connected files"},
-        {"text": "Written code implements rate limiting logic", "passed": true, "evidence": "Map<string,number[]> for per-IP timestamps, binary search pruning, 429 on limit"}
+        {
+          "text": "Calls context_briefing before any code changes",
+          "passed": true,
+          "evidence": "Phase 1: context_briefing called before any Write"
+        },
+        {
+          "text": "Calls review_code or check_architecture after writing code",
+          "passed": true,
+          "evidence": "Both called in Phase 4; check_architecture confirmed no violations"
+        },
+        {
+          "text": "Calls remember or record_adr to capture the decision",
+          "passed": true,
+          "evidence": "remember() called with type 'insight', ID 2c636816"
+        },
+        {
+          "text": "Implementation plan lists specific files to modify with rationale",
+          "passed": true,
+          "evidence": "plan.md has Files to Create/Modify with per-file rationale"
+        },
+        {
+          "text": "Plan includes blast radius section identifying dependent files",
+          "passed": true,
+          "evidence": "Dedicated 'Blast Radius' section identifying 38+ connected files"
+        },
+        {
+          "text": "Written code implements rate limiting logic",
+          "passed": true,
+          "evidence": "Map<string,number[]> for per-IP timestamps, binary search pruning, 429 on limit"
+        }
       ]
     },
     {
-      "eval_id": 2, "eval_name": "implement-rate-limit", "configuration": "without_skill", "run_number": 1,
-      "result": { "pass_rate": 0.33, "passed": 2, "failed": 4, "total": 6, "time_seconds": 180.8, "tokens": 55720, "tool_calls": 20, "errors": 0 },
+      "eval_id": 2,
+      "eval_name": "implement-rate-limit",
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.33,
+        "passed": 2,
+        "failed": 4,
+        "total": 6,
+        "time_seconds": 180.8,
+        "tokens": 55720,
+        "tool_calls": 20,
+        "errors": 0
+      },
       "expectations": [
-        {"text": "Calls context_briefing before any code changes", "passed": false, "evidence": "No RAG tool calls — started coding directly"},
-        {"text": "Calls review_code or check_architecture after writing code", "passed": false, "evidence": "No review tools called"},
-        {"text": "Calls remember or record_adr to capture the decision", "passed": false, "evidence": "No memory/ADR tools called"},
-        {"text": "Implementation plan lists specific files to modify with rationale", "passed": true, "evidence": "plan.md has Files to Create/Modify table"},
-        {"text": "Plan includes blast radius section identifying dependent files", "passed": false, "evidence": "No blast radius section in plan.md"},
-        {"text": "Written code implements rate limiting logic", "passed": true, "evidence": "SlidingWindowStore class with Map-based per-IP tracking"}
+        {
+          "text": "Calls context_briefing before any code changes",
+          "passed": false,
+          "evidence": "No RAG tool calls — started coding directly"
+        },
+        {
+          "text": "Calls review_code or check_architecture after writing code",
+          "passed": false,
+          "evidence": "No review tools called"
+        },
+        {
+          "text": "Calls remember or record_adr to capture the decision",
+          "passed": false,
+          "evidence": "No memory/ADR tools called"
+        },
+        {
+          "text": "Implementation plan lists specific files to modify with rationale",
+          "passed": true,
+          "evidence": "plan.md has Files to Create/Modify table"
+        },
+        {
+          "text": "Plan includes blast radius section identifying dependent files",
+          "passed": false,
+          "evidence": "No blast radius section in plan.md"
+        },
+        {
+          "text": "Written code implements rate limiting logic",
+          "passed": true,
+          "evidence": "SlidingWindowStore class with Map-based per-IP tracking"
+        }
       ]
     },
     {
-      "eval_id": 3, "eval_name": "session-end", "configuration": "with_skill", "run_number": 1,
-      "result": { "pass_rate": 1.0, "passed": 5, "failed": 0, "total": 5, "time_seconds": 301.6, "tokens": 31786, "tool_calls": 14, "errors": 0 },
+      "eval_id": 3,
+      "eval_name": "session-end",
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 5,
+        "failed": 0,
+        "total": 5,
+        "time_seconds": 301.6,
+        "tokens": 31786,
+        "tool_calls": 14,
+        "errors": 0
+      },
       "expectations": [
-        {"text": "Calls summarize_changes to capture what was done", "passed": true, "evidence": "Called with includeCode: true"},
-        {"text": "Calls end_session with a summary", "passed": true, "evidence": "Called with meaningful summary, autoSaveLearnings: true"},
-        {"text": "Presents a summary that mentions specific files or changes", "passed": true, "evidence": "Mentions vector-store.ts, context-pack.ts, graph-boosted search, batch size limits"},
-        {"text": "Saves at least one memory with meaningful content", "passed": true, "evidence": "2 memories: insight (ID 2e946ccb) and decision (ID 2efc7b73)"},
-        {"text": "Summary is structured with clear sections", "passed": true, "evidence": "3 sections: What Was Done, Saved for Future, Open Items"}
+        {
+          "text": "Calls summarize_changes to capture what was done",
+          "passed": true,
+          "evidence": "Called with includeCode: true"
+        },
+        {
+          "text": "Calls end_session with a summary",
+          "passed": true,
+          "evidence": "Called with meaningful summary, autoSaveLearnings: true"
+        },
+        {
+          "text": "Presents a summary that mentions specific files or changes",
+          "passed": true,
+          "evidence": "Mentions vector-store.ts, context-pack.ts, graph-boosted search, batch size limits"
+        },
+        {
+          "text": "Saves at least one memory with meaningful content",
+          "passed": true,
+          "evidence": "2 memories: insight (ID 2e946ccb) and decision (ID 2efc7b73)"
+        },
+        {
+          "text": "Summary is structured with clear sections",
+          "passed": true,
+          "evidence": "3 sections: What Was Done, Saved for Future, Open Items"
+        }
       ]
     },
     {
-      "eval_id": 3, "eval_name": "session-end", "configuration": "without_skill", "run_number": 1,
-      "result": { "pass_rate": 0.6, "passed": 3, "failed": 2, "total": 5, "time_seconds": 43.2, "tokens": 31118, "tool_calls": 5, "errors": 0 },
+      "eval_id": 3,
+      "eval_name": "session-end",
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.6,
+        "passed": 3,
+        "failed": 2,
+        "total": 5,
+        "time_seconds": 43.2,
+        "tokens": 31118,
+        "tool_calls": 5,
+        "errors": 0
+      },
       "expectations": [
-        {"text": "Calls summarize_changes to capture what was done", "passed": false, "evidence": "Not called — built context via recall + list_memories"},
-        {"text": "Calls end_session with a summary", "passed": false, "evidence": "Never called"},
-        {"text": "Presents a summary that mentions specific files or changes", "passed": true, "evidence": "Mentions 12 specific files"},
-        {"text": "Saves at least one memory with meaningful content", "passed": true, "evidence": "1 memory with substantive content and ID"},
-        {"text": "Summary is structured with clear sections", "passed": true, "evidence": "Sections: Session Focus, What Was Done, Uncommitted Changes, Remaining Opportunities, Memories Saved"}
+        {
+          "text": "Calls summarize_changes to capture what was done",
+          "passed": false,
+          "evidence": "Not called — built context via recall + list_memories"
+        },
+        {
+          "text": "Calls end_session with a summary",
+          "passed": false,
+          "evidence": "Never called"
+        },
+        {
+          "text": "Presents a summary that mentions specific files or changes",
+          "passed": true,
+          "evidence": "Mentions 12 specific files"
+        },
+        {
+          "text": "Saves at least one memory with meaningful content",
+          "passed": true,
+          "evidence": "1 memory with substantive content and ID"
+        },
+        {
+          "text": "Summary is structured with clear sections",
+          "passed": true,
+          "evidence": "Sections: Session Focus, What Was Done, Uncommitted Changes, Remaining Opportunities, Memories Saved"
+        }
       ]
     },
     {
-      "eval_id": 4, "eval_name": "research-memory-governance", "configuration": "with_skill", "run_number": 1,
-      "result": { "pass_rate": 1.0, "passed": 5, "failed": 0, "total": 5, "time_seconds": 256.5, "tokens": 66813, "tool_calls": 23, "errors": 0 },
+      "eval_id": 4,
+      "eval_name": "research-memory-governance",
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 5,
+        "failed": 0,
+        "total": 5,
+        "time_seconds": 256.5,
+        "tokens": 66813,
+        "tool_calls": 23,
+        "errors": 0
+      },
       "expectations": [
-        {"text": "Uses at least 3 different RAG search tools", "passed": true, "evidence": "5 RAG tools: hybrid_search, search_graph, get_patterns, find_feature, find_symbol"},
-        {"text": "Reads at least 2 source files to verify findings", "passed": true, "evidence": "9 source files read"},
-        {"text": "Explains the quarantine-to-promotion flow with specific file:line references", "passed": true, "evidence": "memory-governance.ts:39-85, :168-231, :236-248, :333-425, memory.ts:167-190"},
-        {"text": "Identifies at least 2 files involved in memory governance", "passed": true, "evidence": "8 files identified with roles"},
-        {"text": "Answer distinguishes between auto-memories (quarantine) and manual memories (durable)", "passed": true, "evidence": "Explicitly documented with routing logic and code snippets"}
+        {
+          "text": "Uses at least 3 different RAG search tools",
+          "passed": true,
+          "evidence": "5 RAG tools: hybrid_search, search_graph, get_patterns, find_feature, find_symbol"
+        },
+        {
+          "text": "Reads at least 2 source files to verify findings",
+          "passed": true,
+          "evidence": "9 source files read"
+        },
+        {
+          "text": "Explains the quarantine-to-promotion flow with specific file:line references",
+          "passed": true,
+          "evidence": "memory-governance.ts:39-85, :168-231, :236-248, :333-425, memory.ts:167-190"
+        },
+        {
+          "text": "Identifies at least 2 files involved in memory governance",
+          "passed": true,
+          "evidence": "8 files identified with roles"
+        },
+        {
+          "text": "Answer distinguishes between auto-memories (quarantine) and manual memories (durable)",
+          "passed": true,
+          "evidence": "Explicitly documented with routing logic and code snippets"
+        }
       ]
     },
     {
-      "eval_id": 4, "eval_name": "research-memory-governance", "configuration": "without_skill", "run_number": 1,
-      "result": { "pass_rate": 0.6, "passed": 3, "failed": 2, "total": 5, "time_seconds": 128.4, "tokens": 87645, "tool_calls": 20, "errors": 0 },
+      "eval_id": 4,
+      "eval_name": "research-memory-governance",
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.6,
+        "passed": 3,
+        "failed": 2,
+        "total": 5,
+        "time_seconds": 128.4,
+        "tokens": 87645,
+        "tool_calls": 20,
+        "errors": 0
+      },
       "expectations": [
-        {"text": "Uses at least 3 different RAG search tools", "passed": false, "evidence": "Zero RAG tools used — only Grep, Read, Bash, Write"},
-        {"text": "Reads at least 2 source files to verify findings", "passed": true, "evidence": "13 source files read"},
-        {"text": "Explains the quarantine-to-promotion flow with specific file:line references", "passed": false, "evidence": "Flow described well but NO line numbers in the answer — only file paths"},
-        {"text": "Identifies at least 2 files involved in memory governance", "passed": true, "evidence": "10+ files identified with roles"},
-        {"text": "Answer distinguishes between auto-memories (quarantine) and manual memories (durable)", "passed": true, "evidence": "Core principle section clearly explains the distinction"}
+        {
+          "text": "Uses at least 3 different RAG search tools",
+          "passed": false,
+          "evidence": "Zero RAG tools used — only Grep, Read, Bash, Write"
+        },
+        {
+          "text": "Reads at least 2 source files to verify findings",
+          "passed": true,
+          "evidence": "13 source files read"
+        },
+        {
+          "text": "Explains the quarantine-to-promotion flow with specific file:line references",
+          "passed": false,
+          "evidence": "Flow described well but NO line numbers in the answer — only file paths"
+        },
+        {
+          "text": "Identifies at least 2 files involved in memory governance",
+          "passed": true,
+          "evidence": "10+ files identified with roles"
+        },
+        {
+          "text": "Answer distinguishes between auto-memories (quarantine) and manual memories (durable)",
+          "passed": true,
+          "evidence": "Core principle section clearly explains the distinction"
+        }
       ]
     },
     {
-      "eval_id": 5, "eval_name": "review-embedding", "configuration": "with_skill", "run_number": 1,
-      "result": { "pass_rate": 1.0, "passed": 6, "failed": 0, "total": 6, "time_seconds": 374.0, "tokens": 54585, "tool_calls": 20, "errors": 0 },
+      "eval_id": 5,
+      "eval_name": "review-embedding",
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 6,
+        "failed": 0,
+        "total": 6,
+        "time_seconds": 374.0,
+        "tokens": 54585,
+        "tool_calls": 20,
+        "errors": 0
+      },
       "expectations": [
-        {"text": "Reads embedding.ts before running review tools", "passed": true, "evidence": "Read twice before any RAG review tools"},
-        {"text": "Calls review_code or check_architecture", "passed": true, "evidence": "Both called with full file content"},
-        {"text": "Identifies at least 2 specific code issues with line references", "passed": true, "evidence": "10 issues with line numbers (e.g., embedding.ts:47, :230, :189)"},
-        {"text": "References at least one project pattern or ADR by name", "passed": true, "evidence": "Service Layer (Singleton), BGE-M3 ADR, Qdrant ADR referenced"},
-        {"text": "Review uses severity levels to categorize findings", "passed": true, "evidence": "Warning/Info labels, P1-P4 priority table"},
-        {"text": "Mentions test coverage status or suggests specific tests", "passed": true, "evidence": "6 existing tests listed, 9 missing test cases suggested"}
+        {
+          "text": "Reads embedding.ts before running review tools",
+          "passed": true,
+          "evidence": "Read twice before any RAG review tools"
+        },
+        {
+          "text": "Calls review_code or check_architecture",
+          "passed": true,
+          "evidence": "Both called with full file content"
+        },
+        {
+          "text": "Identifies at least 2 specific code issues with line references",
+          "passed": true,
+          "evidence": "10 issues with line numbers (e.g., embedding.ts:47, :230, :189)"
+        },
+        {
+          "text": "References at least one project pattern or ADR by name",
+          "passed": true,
+          "evidence": "Service Layer (Singleton), BGE-M3 ADR, Qdrant ADR referenced"
+        },
+        {
+          "text": "Review uses severity levels to categorize findings",
+          "passed": true,
+          "evidence": "Warning/Info labels, P1-P4 priority table"
+        },
+        {
+          "text": "Mentions test coverage status or suggests specific tests",
+          "passed": true,
+          "evidence": "6 existing tests listed, 9 missing test cases suggested"
+        }
       ]
     },
     {
-      "eval_id": 5, "eval_name": "review-embedding", "configuration": "without_skill", "run_number": 1,
-      "result": { "pass_rate": 0.67, "passed": 4, "failed": 2, "total": 6, "time_seconds": 112.0, "tokens": 53877, "tool_calls": 16, "errors": 0 },
+      "eval_id": 5,
+      "eval_name": "review-embedding",
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.67,
+        "passed": 4,
+        "failed": 2,
+        "total": 6,
+        "time_seconds": 112.0,
+        "tokens": 53877,
+        "tool_calls": 16,
+        "errors": 0
+      },
       "expectations": [
-        {"text": "Reads embedding.ts before running review tools", "passed": true, "evidence": "Read embedding.ts"},
-        {"text": "Calls review_code or check_architecture", "passed": false, "evidence": "No MCP RAG review tools called at all"},
-        {"text": "Identifies at least 2 specific code issues with line references", "passed": true, "evidence": "13 findings with line references"},
-        {"text": "References at least one project pattern or ADR by name", "passed": false, "evidence": "Generic terms only — no named project patterns/ADRs"},
-        {"text": "Review uses severity levels to categorize findings", "passed": true, "evidence": "Critical/Medium/Low severity tiers"},
-        {"text": "Mentions test coverage status or suggests specific tests", "passed": true, "evidence": "Test coverage gaps listed"}
+        {
+          "text": "Reads embedding.ts before running review tools",
+          "passed": true,
+          "evidence": "Read embedding.ts"
+        },
+        {
+          "text": "Calls review_code or check_architecture",
+          "passed": false,
+          "evidence": "No MCP RAG review tools called at all"
+        },
+        {
+          "text": "Identifies at least 2 specific code issues with line references",
+          "passed": true,
+          "evidence": "13 findings with line references"
+        },
+        {
+          "text": "References at least one project pattern or ADR by name",
+          "passed": false,
+          "evidence": "Generic terms only — no named project patterns/ADRs"
+        },
+        {
+          "text": "Review uses severity levels to categorize findings",
+          "passed": true,
+          "evidence": "Critical/Medium/Low severity tiers"
+        },
+        {
+          "text": "Mentions test coverage status or suggests specific tests",
+          "passed": true,
+          "evidence": "Test coverage gaps listed"
+        }
       ]
     },
     {
-      "eval_id": 6, "eval_name": "arch-caching", "configuration": "with_skill", "run_number": 1,
-      "result": { "pass_rate": 1.0, "passed": 5, "failed": 0, "total": 5, "time_seconds": 103.3, "tokens": 55190, "tool_calls": 17, "errors": 0 },
+      "eval_id": 6,
+      "eval_name": "arch-caching",
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 5,
+        "failed": 0,
+        "total": 5,
+        "time_seconds": 103.3,
+        "tokens": 55190,
+        "tool_calls": 17,
+        "errors": 0
+      },
       "expectations": [
-        {"text": "Calls get_adrs to find existing caching decisions", "passed": true, "evidence": "Called first"},
-        {"text": "Calls get_patterns or get_tech_debt for additional context", "passed": true, "evidence": "Both get_patterns and get_tech_debt called"},
-        {"text": "Presents at least 2 options with explicit pros and cons", "passed": true, "evidence": "3 options (LRU, Redis optimize, Hybrid) with Pros/Cons sections"},
-        {"text": "Options reference the actual project stack", "passed": true, "evidence": "References Qdrant, BGE-M3, Redis :6380, existing L1/L2/L3 cache"},
-        {"text": "Does not auto-record ADR — waits for user to choose", "passed": true, "evidence": "Decision Gate section defers; record_adr never called"}
+        {
+          "text": "Calls get_adrs to find existing caching decisions",
+          "passed": true,
+          "evidence": "Called first"
+        },
+        {
+          "text": "Calls get_patterns or get_tech_debt for additional context",
+          "passed": true,
+          "evidence": "Both get_patterns and get_tech_debt called"
+        },
+        {
+          "text": "Presents at least 2 options with explicit pros and cons",
+          "passed": true,
+          "evidence": "3 options (LRU, Redis optimize, Hybrid) with Pros/Cons sections"
+        },
+        {
+          "text": "Options reference the actual project stack",
+          "passed": true,
+          "evidence": "References Qdrant, BGE-M3, Redis :6380, existing L1/L2/L3 cache"
+        },
+        {
+          "text": "Does not auto-record ADR — waits for user to choose",
+          "passed": true,
+          "evidence": "Decision Gate section defers; record_adr never called"
+        }
       ]
     },
     {
-      "eval_id": 6, "eval_name": "arch-caching", "configuration": "without_skill", "run_number": 1,
-      "result": { "pass_rate": 1.0, "passed": 5, "failed": 0, "total": 5, "time_seconds": 122.5, "tokens": 67662, "tool_calls": 18, "errors": 0 },
+      "eval_id": 6,
+      "eval_name": "arch-caching",
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 5,
+        "failed": 0,
+        "total": 5,
+        "time_seconds": 122.5,
+        "tokens": 67662,
+        "tool_calls": 18,
+        "errors": 0
+      },
       "expectations": [
-        {"text": "Calls get_adrs to find existing caching decisions", "passed": true, "evidence": "Called twice"},
-        {"text": "Calls get_patterns or get_tech_debt for additional context", "passed": true, "evidence": "get_patterns called plus extensive file reading"},
-        {"text": "Presents at least 2 options with explicit pros and cons", "passed": true, "evidence": "2 options + hybrid recommendation"},
-        {"text": "Options reference the actual project stack", "passed": true, "evidence": "Accurate stack references: Redis, BGE-M3, Qdrant"},
-        {"text": "Does not auto-record ADR — waits for user to choose", "passed": true, "evidence": "No record_adr called; presented as recommendation"}
+        {
+          "text": "Calls get_adrs to find existing caching decisions",
+          "passed": true,
+          "evidence": "Called twice"
+        },
+        {
+          "text": "Calls get_patterns or get_tech_debt for additional context",
+          "passed": true,
+          "evidence": "get_patterns called plus extensive file reading"
+        },
+        {
+          "text": "Presents at least 2 options with explicit pros and cons",
+          "passed": true,
+          "evidence": "2 options + hybrid recommendation"
+        },
+        {
+          "text": "Options reference the actual project stack",
+          "passed": true,
+          "evidence": "Accurate stack references: Redis, BGE-M3, Qdrant"
+        },
+        {
+          "text": "Does not auto-record ADR — waits for user to choose",
+          "passed": true,
+          "evidence": "No record_adr called; presented as recommendation"
+        }
       ]
     },
     {
-      "eval_id": 7, "eval_name": "debug-recall-empty", "configuration": "with_skill", "run_number": 1,
-      "result": { "pass_rate": 1.0, "passed": 5, "failed": 0, "total": 5, "time_seconds": 460.3, "tokens": 110222, "tool_calls": 79, "errors": 0 },
+      "eval_id": 7,
+      "eval_name": "debug-recall-empty",
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 5,
+        "failed": 0,
+        "total": 5,
+        "time_seconds": 460.3,
+        "tokens": 110222,
+        "tool_calls": 79,
+        "errors": 0
+      },
       "expectations": [
-        {"text": "Calls context_briefing with debug task description", "passed": true, "evidence": "Called with task and 3 file paths"},
-        {"text": "Uses search_graph or find_symbol to trace the recall implementation", "passed": true, "evidence": "Both called in parallel in Step 3"},
-        {"text": "Identifies the specific files in the recall chain", "passed": true, "evidence": "Complete chain: MCP tool -> API route -> memoryService.recall -> embed -> vectorStore.search"},
-        {"text": "Proposes at least one plausible root cause with evidence from code", "passed": true, "evidence": "3 root causes: supersededBy filter, wrong field in context-enrichment.ts, silent 404"},
-        {"text": "Suggests a specific code fix", "passed": true, "evidence": "4 fixes: threshold 0.85->0.92, field 'memories'->'results', warn log, debug log for 404"}
+        {
+          "text": "Calls context_briefing with debug task description",
+          "passed": true,
+          "evidence": "Called with task and 3 file paths"
+        },
+        {
+          "text": "Uses search_graph or find_symbol to trace the recall implementation",
+          "passed": true,
+          "evidence": "Both called in parallel in Step 3"
+        },
+        {
+          "text": "Identifies the specific files in the recall chain",
+          "passed": true,
+          "evidence": "Complete chain: MCP tool -> API route -> memoryService.recall -> embed -> vectorStore.search"
+        },
+        {
+          "text": "Proposes at least one plausible root cause with evidence from code",
+          "passed": true,
+          "evidence": "3 root causes: supersededBy filter, wrong field in context-enrichment.ts, silent 404"
+        },
+        {
+          "text": "Suggests a specific code fix",
+          "passed": true,
+          "evidence": "4 fixes: threshold 0.85->0.92, field 'memories'->'results', warn log, debug log for 404"
+        }
       ]
     },
     {
-      "eval_id": 7, "eval_name": "debug-recall-empty", "configuration": "without_skill", "run_number": 1,
-      "result": { "pass_rate": 0.6, "passed": 3, "failed": 2, "total": 5, "time_seconds": 153.4, "tokens": 102730, "tool_calls": 26, "errors": 0 },
+      "eval_id": 7,
+      "eval_name": "debug-recall-empty",
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.6,
+        "passed": 3,
+        "failed": 2,
+        "total": 5,
+        "time_seconds": 153.4,
+        "tokens": 102730,
+        "tool_calls": 26,
+        "errors": 0
+      },
       "expectations": [
-        {"text": "Calls context_briefing with debug task description", "passed": false, "evidence": "Never called — started with recall and list_memories"},
-        {"text": "Uses search_graph or find_symbol to trace the recall implementation", "passed": false, "evidence": "Used Grep/Read only — no graph or symbol tools"},
-        {"text": "Identifies the specific files in the recall chain", "passed": true, "evidence": "All key files identified with roles"},
-        {"text": "Proposes at least one plausible root cause with evidence from code", "passed": true, "evidence": "6 root causes with code evidence"},
-        {"text": "Suggests a specific code fix", "passed": true, "evidence": "6 specific fixes"}
+        {
+          "text": "Calls context_briefing with debug task description",
+          "passed": false,
+          "evidence": "Never called — started with recall and list_memories"
+        },
+        {
+          "text": "Uses search_graph or find_symbol to trace the recall implementation",
+          "passed": false,
+          "evidence": "Used Grep/Read only — no graph or symbol tools"
+        },
+        {
+          "text": "Identifies the specific files in the recall chain",
+          "passed": true,
+          "evidence": "All key files identified with roles"
+        },
+        {
+          "text": "Proposes at least one plausible root cause with evidence from code",
+          "passed": true,
+          "evidence": "6 root causes with code evidence"
+        },
+        {
+          "text": "Suggests a specific code fix",
+          "passed": true,
+          "evidence": "6 specific fixes"
+        }
       ]
     },
     {
-      "eval_id": 8, "eval_name": "onboard-new-project", "configuration": "with_skill", "run_number": 1,
-      "result": { "pass_rate": 1.0, "passed": 5, "failed": 0, "total": 5, "time_seconds": 97.5, "tokens": 37493, "tool_calls": 21, "errors": 0 },
+      "eval_id": 8,
+      "eval_name": "onboard-new-project",
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 5,
+        "failed": 0,
+        "total": 5,
+        "time_seconds": 97.5,
+        "tokens": 37493,
+        "tool_calls": 21,
+        "errors": 0
+      },
       "expectations": [
-        {"text": "Calls setup_project with projectPath /home/ake/myapp", "passed": true, "evidence": "Called twice with correct input"},
-        {"text": "Calls index_codebase for the project", "passed": true, "evidence": "Called with path /home/ake/myapp, 0 files (dir missing)"},
-        {"text": "Verifies infrastructure is accessible", "passed": true, "evidence": "get_index_status confirmed services up; report lists RAG API, Qdrant, BGE-M3 as UP"},
-        {"text": "Presents a report with actual collection stats", "passed": true, "evidence": "Real data: 105 files, 1024 vectors from get_project_stats"},
-        {"text": "Includes actionable next steps for the user", "passed": true, "evidence": "4-step Action Required with bash commands; .mcp.json template"}
+        {
+          "text": "Calls setup_project with projectPath /home/ake/myapp",
+          "passed": true,
+          "evidence": "Called twice with correct input"
+        },
+        {
+          "text": "Calls index_codebase for the project",
+          "passed": true,
+          "evidence": "Called with path /home/ake/myapp, 0 files (dir missing)"
+        },
+        {
+          "text": "Verifies infrastructure is accessible",
+          "passed": true,
+          "evidence": "get_index_status confirmed services up; report lists RAG API, Qdrant, BGE-M3 as UP"
+        },
+        {
+          "text": "Presents a report with actual collection stats",
+          "passed": true,
+          "evidence": "Real data: 105 files, 1024 vectors from get_project_stats"
+        },
+        {
+          "text": "Includes actionable next steps for the user",
+          "passed": true,
+          "evidence": "4-step Action Required with bash commands; .mcp.json template"
+        }
       ]
     },
     {
-      "eval_id": 8, "eval_name": "onboard-new-project", "configuration": "without_skill", "run_number": 1,
-      "result": { "pass_rate": 1.0, "passed": 5, "failed": 0, "total": 5, "time_seconds": 155.1, "tokens": 48147, "tool_calls": 37, "errors": 0 },
+      "eval_id": 8,
+      "eval_name": "onboard-new-project",
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 5,
+        "failed": 0,
+        "total": 5,
+        "time_seconds": 155.1,
+        "tokens": 48147,
+        "tool_calls": 37,
+        "errors": 0
+      },
       "expectations": [
-        {"text": "Calls setup_project with projectPath /home/ake/myapp", "passed": true, "evidence": "Called with correct projectPath"},
-        {"text": "Calls index_codebase for the project", "passed": true, "evidence": "Called (after mkdir)"},
-        {"text": "Verifies infrastructure is accessible", "passed": true, "evidence": "curl health + get_platform_stats + get_index_status"},
-        {"text": "Presents a report with actual collection stats", "passed": true, "evidence": "Real stats: beep 104K vectors, rag 7.7K vectors, Redis 165 keys"},
-        {"text": "Includes actionable next steps for the user", "passed": true, "evidence": "Full .mcp.json template, CLAUDE.md content, step-by-step commands"}
+        {
+          "text": "Calls setup_project with projectPath /home/ake/myapp",
+          "passed": true,
+          "evidence": "Called with correct projectPath"
+        },
+        {
+          "text": "Calls index_codebase for the project",
+          "passed": true,
+          "evidence": "Called (after mkdir)"
+        },
+        {
+          "text": "Verifies infrastructure is accessible",
+          "passed": true,
+          "evidence": "curl health + get_platform_stats + get_index_status"
+        },
+        {
+          "text": "Presents a report with actual collection stats",
+          "passed": true,
+          "evidence": "Real stats: beep 104K vectors, rag 7.7K vectors, Redis 165 keys"
+        },
+        {
+          "text": "Includes actionable next steps for the user",
+          "passed": true,
+          "evidence": "Full .mcp.json template, CLAUDE.md content, step-by-step commands"
+        }
       ]
     }
   ],
   "run_summary": {
     "with_skill": {
-      "pass_rate": {"mean": 1.0, "stddev": 0.0, "min": 1.0, "max": 1.0},
-      "time_seconds": {"mean": 275.3, "stddev": 152.2, "min": 97.5, "max": 503.7},
-      "tokens": {"mean": 56396, "stddev": 25363, "min": 31534, "max": 110222}
+      "pass_rate": { "mean": 1.0, "stddev": 0.0, "min": 1.0, "max": 1.0 },
+      "time_seconds": {
+        "mean": 275.3,
+        "stddev": 152.2,
+        "min": 97.5,
+        "max": 503.7
+      },
+      "tokens": { "mean": 56396, "stddev": 25363, "min": 31534, "max": 110222 }
     },
     "without_skill": {
-      "pass_rate": {"mean": 0.68, "stddev": 0.22, "min": 0.33, "max": 1.0},
-      "time_seconds": {"mean": 127.1, "stddev": 42.1, "min": 43.2, "max": 180.8},
-      "tokens": {"mean": 62599, "stddev": 22688, "min": 31118, "max": 102730}
+      "pass_rate": { "mean": 0.68, "stddev": 0.22, "min": 0.33, "max": 1.0 },
+      "time_seconds": {
+        "mean": 127.1,
+        "stddev": 42.1,
+        "min": 43.2,
+        "max": 180.8
+      },
+      "tokens": { "mean": 62599, "stddev": 22688, "min": 31118, "max": 102730 }
     },
     "delta": {
       "pass_rate": "+0.32",
@@ -211,8 +757,16 @@
     }
   },
   "comparison_with_iteration_1": {
-    "with_skill": {"pass_rate_change": "+0.04 (0.96 -> 1.00)", "time_change": "-75.5s (350.8 -> 275.3)", "token_change": "-3359 (59755 -> 56396)"},
-    "without_skill": {"pass_rate_change": "+0.28 (0.40 -> 0.68)", "time_change": "-144.3s (271.4 -> 127.1)", "token_change": "-3558 (66157 -> 62599)"}
+    "with_skill": {
+      "pass_rate_change": "+0.04 (0.96 -> 1.00)",
+      "time_change": "-75.5s (350.8 -> 275.3)",
+      "token_change": "-3359 (59755 -> 56396)"
+    },
+    "without_skill": {
+      "pass_rate_change": "+0.28 (0.40 -> 0.68)",
+      "time_change": "-144.3s (271.4 -> 127.1)",
+      "token_change": "-3558 (66157 -> 62599)"
+    }
   },
   "notes": [
     "With-skill achieves 100% pass rate across all 8 evals — up from 96% in iteration 1",

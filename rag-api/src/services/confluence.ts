@@ -34,11 +34,11 @@ export interface ConfluenceSpace {
 
 export interface IndexConfluenceOptions {
   projectName: string;
-  spaceKeys?: string[];  // Specific spaces to index, or all if empty
-  pageIds?: string[];    // Specific pages to index
-  labels?: string[];     // Filter by labels
-  maxPages?: number;     // Limit number of pages
-  force?: boolean;       // Re-index even if already indexed
+  spaceKeys?: string[]; // Specific spaces to index, or all if empty
+  pageIds?: string[]; // Specific pages to index
+  labels?: string[]; // Filter by labels
+  maxPages?: number; // Limit number of pages
+  force?: boolean; // Re-index even if already indexed
 }
 
 export interface ConfluenceIndexStats {
@@ -63,7 +63,9 @@ class ConfluenceService {
     const token = process.env.CONFLUENCE_API_TOKEN;
 
     if (!url || !email || !token) {
-      logger.warn('Confluence not configured. Set CONFLUENCE_URL, CONFLUENCE_EMAIL, CONFLUENCE_API_TOKEN');
+      logger.warn(
+        'Confluence not configured. Set CONFLUENCE_URL, CONFLUENCE_EMAIL, CONFLUENCE_API_TOKEN'
+      );
       return;
     }
 
@@ -73,8 +75,8 @@ class ConfluenceService {
     this.client = axios.create({
       baseURL: `${this.baseUrl}/wiki/api/v2`,
       headers: {
-        'Authorization': `Basic ${auth}`,
-        'Accept': 'application/json',
+        Authorization: `Basic ${auth}`,
+        Accept: 'application/json',
         'Content-Type': 'application/json',
       },
       timeout: 30000,
@@ -114,7 +116,9 @@ class ConfluenceService {
         });
       }
 
-      cursor = response.data._links?.next ? this.extractCursor(response.data._links.next) : undefined;
+      cursor = response.data._links?.next
+        ? this.extractCursor(response.data._links.next)
+        : undefined;
     } while (cursor);
 
     return spaces;
@@ -155,7 +159,9 @@ class ConfluenceService {
         if (pages.length >= limit) break;
       }
 
-      cursor = response.data._links?.next ? this.extractCursor(response.data._links.next) : undefined;
+      cursor = response.data._links?.next
+        ? this.extractCursor(response.data._links.next)
+        : undefined;
     } while (cursor && pages.length < limit);
 
     return pages;
@@ -266,17 +272,20 @@ class ConfluenceService {
       }
       // Get pages by labels
       else if (labels && labels.length > 0) {
-        const labelQuery = labels.map(l => `label = "${l}"`).join(' OR ');
+        const labelQuery = labels.map((l) => `label = "${l}"`).join(' OR ');
         pages = await this.searchPages(labelQuery, maxPages);
       }
       // Get pages from spaces
       else {
-        const spacesToIndex = spaceKeys || (await this.getSpaces()).map(s => s.key);
+        const spacesToIndex = spaceKeys || (await this.getSpaces()).map((s) => s.key);
         stats.spaces = spacesToIndex.length;
 
         for (const spaceKey of spacesToIndex) {
           try {
-            const spacePages = await this.getSpacePages(spaceKey, Math.ceil(maxPages / spacesToIndex.length));
+            const spacePages = await this.getSpacePages(
+              spaceKey,
+              Math.ceil(maxPages / spacesToIndex.length)
+            );
             pages.push(...spacePages);
 
             if (pages.length >= maxPages) break;
@@ -372,35 +381,40 @@ class ConfluenceService {
    * Convert HTML/storage format to plain text
    */
   private htmlToText(html: string): string {
-    return html
-      // Remove CDATA
-      .replace(/<!\[CDATA\[(.*?)\]\]>/gs, '$1')
-      // Convert headers to markdown-like
-      .replace(/<h([1-6])[^>]*>(.*?)<\/h[1-6]>/gi, (_, level, text) => {
-        return '\n' + '#'.repeat(parseInt(level)) + ' ' + text.replace(/<[^>]+>/g, '') + '\n';
-      })
-      // Convert lists
-      .replace(/<li[^>]*>(.*?)<\/li>/gi, '• $1\n')
-      // Convert paragraphs
-      .replace(/<p[^>]*>(.*?)<\/p>/gi, '$1\n\n')
-      // Convert line breaks
-      .replace(/<br\s*\/?>/gi, '\n')
-      // Convert code blocks
-      .replace(/<ac:structured-macro[^>]*ac:name="code"[^>]*>.*?<ac:plain-text-body>(.*?)<\/ac:plain-text-body>.*?<\/ac:structured-macro>/gs, '\n```\n$1\n```\n')
-      // Remove all remaining HTML tags
-      .replace(/<[^>]+>/g, ' ')
-      // Decode HTML entities
-      .replace(/&nbsp;/g, ' ')
-      .replace(/&amp;/g, '&')
-      .replace(/&lt;/g, '<')
-      .replace(/&gt;/g, '>')
-      .replace(/&quot;/g, '"')
-      .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(parseInt(code)))
-      // Clean up whitespace
-      .replace(/\s+/g, ' ')
-      .replace(/\n\s+/g, '\n')
-      .replace(/\n{3,}/g, '\n\n')
-      .trim();
+    return (
+      html
+        // Remove CDATA
+        .replace(/<!\[CDATA\[(.*?)\]\]>/gs, '$1')
+        // Convert headers to markdown-like
+        .replace(/<h([1-6])[^>]*>(.*?)<\/h[1-6]>/gi, (_, level, text) => {
+          return '\n' + '#'.repeat(parseInt(level)) + ' ' + text.replace(/<[^>]+>/g, '') + '\n';
+        })
+        // Convert lists
+        .replace(/<li[^>]*>(.*?)<\/li>/gi, '• $1\n')
+        // Convert paragraphs
+        .replace(/<p[^>]*>(.*?)<\/p>/gi, '$1\n\n')
+        // Convert line breaks
+        .replace(/<br\s*\/?>/gi, '\n')
+        // Convert code blocks
+        .replace(
+          /<ac:structured-macro[^>]*ac:name="code"[^>]*>.*?<ac:plain-text-body>(.*?)<\/ac:plain-text-body>.*?<\/ac:structured-macro>/gs,
+          '\n```\n$1\n```\n'
+        )
+        // Remove all remaining HTML tags
+        .replace(/<[^>]+>/g, ' ')
+        // Decode HTML entities
+        .replace(/&nbsp;/g, ' ')
+        .replace(/&amp;/g, '&')
+        .replace(/&lt;/g, '<')
+        .replace(/&gt;/g, '>')
+        .replace(/&quot;/g, '"')
+        .replace(/&#(\d+);/g, (_, code) => String.fromCharCode(parseInt(code)))
+        // Clean up whitespace
+        .replace(/\s+/g, ' ')
+        .replace(/\n\s+/g, '\n')
+        .replace(/\n{3,}/g, '\n\n')
+        .trim()
+    );
   }
 
   /**

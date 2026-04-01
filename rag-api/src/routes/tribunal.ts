@@ -14,7 +14,12 @@ import { v4 as uuidv4 } from 'uuid';
 import { tribunalService } from '../services/tribunal';
 import { eventBus, type BusEvent } from '../services/event-bus';
 import { asyncHandler } from '../middleware/async-handler';
-import { validate, validateProjectName, tribunalDebateSchema, tribunalHistorySchema } from '../utils/validation';
+import {
+  validate,
+  validateProjectName,
+  tribunalDebateSchema,
+  tribunalHistorySchema,
+} from '../utils/validation';
 
 const router = Router();
 
@@ -88,9 +93,12 @@ router.get(
   '/tribunal/history',
   validateProjectName,
   asyncHandler(async (req: Request, res: Response) => {
-    const projectName = (req.headers['x-project-name'] as string) || (req.query.projectName as string);
+    const projectName =
+      (req.headers['x-project-name'] as string) || (req.query.projectName as string);
     if (!projectName) {
-      return res.status(400).json({ error: 'projectName is required (header X-Project-Name or query param)' });
+      return res
+        .status(400)
+        .json({ error: 'projectName is required (header X-Project-Name or query param)' });
     }
 
     const parsed = tribunalHistorySchema.parse(req.query);
@@ -110,7 +118,7 @@ router.get('/tribunal/events/:id', (req: Request, res: Response) => {
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
-    'Connection': 'keep-alive',
+    Connection: 'keep-alive',
     'X-Accel-Buffering': 'no',
   });
   res.write('event: ping\ndata: {}\n\n');
@@ -127,8 +135,12 @@ router.get('/tribunal/events/:id', (req: Request, res: Response) => {
 
   // Listen to all tribunal events
   for (const type of [
-    'tribunal:framing', 'tribunal:argument', 'tribunal:rebuttal',
-    'tribunal:verdict', 'tribunal:completed', 'tribunal:failed',
+    'tribunal:framing',
+    'tribunal:argument',
+    'tribunal:rebuttal',
+    'tribunal:verdict',
+    'tribunal:completed',
+    'tribunal:failed',
   ] as const) {
     eventBus.on(type, listener);
   }
@@ -136,8 +148,12 @@ router.get('/tribunal/events/:id', (req: Request, res: Response) => {
   // Cleanup on close
   req.on('close', () => {
     for (const type of [
-      'tribunal:framing', 'tribunal:argument', 'tribunal:rebuttal',
-      'tribunal:verdict', 'tribunal:completed', 'tribunal:failed',
+      'tribunal:framing',
+      'tribunal:argument',
+      'tribunal:rebuttal',
+      'tribunal:verdict',
+      'tribunal:completed',
+      'tribunal:failed',
     ] as const) {
       eventBus.off(type, listener);
     }

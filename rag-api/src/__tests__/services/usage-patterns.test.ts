@@ -25,7 +25,12 @@ describe('UsagePatternService', () => {
 
     it('summarizeContext returns empty data', async () => {
       const result = await usagePatterns.summarizeContext('test');
-      expect(result).toEqual({ recentTools: [], recentQueries: [], activeFeatures: [], suggestedNextSteps: [] });
+      expect(result).toEqual({
+        recentTools: [],
+        recentQueries: [],
+        activeFeatures: [],
+        suggestedNextSteps: [],
+      });
     });
 
     it('summarizeChanges returns disabled message', async () => {
@@ -95,11 +100,31 @@ describe('UsagePatternService', () => {
     it('paginates through scroll results', async () => {
       mockQdrantClient.scroll
         .mockResolvedValueOnce({
-          points: [{ id: '1', payload: { toolName: 'a', timestamp: '2025-01-01T00:00:00Z', durationMs: 10, sessionId: 's1' } }],
+          points: [
+            {
+              id: '1',
+              payload: {
+                toolName: 'a',
+                timestamp: '2025-01-01T00:00:00Z',
+                durationMs: 10,
+                sessionId: 's1',
+              },
+            },
+          ],
           next_page_offset: 'next',
         })
         .mockResolvedValueOnce({
-          points: [{ id: '2', payload: { toolName: 'b', timestamp: '2025-01-01T01:00:00Z', durationMs: 20, sessionId: 's1' } }],
+          points: [
+            {
+              id: '2',
+              payload: {
+                toolName: 'b',
+                timestamp: '2025-01-01T01:00:00Z',
+                durationMs: 20,
+                sessionId: 's1',
+              },
+            },
+          ],
           next_page_offset: undefined,
         });
 

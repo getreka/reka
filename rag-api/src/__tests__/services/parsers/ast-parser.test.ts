@@ -49,7 +49,7 @@ describe('ASTParser', () => {
       const edges = parser.extractEdges(content, 'src/main.ts');
 
       expect(edges.length).toBeGreaterThanOrEqual(2);
-      const fooEdge = edges.find(e => e.fromSymbol === 'foo');
+      const fooEdge = edges.find((e) => e.fromSymbol === 'foo');
       expect(fooEdge).toBeDefined();
       expect(fooEdge!.edgeType).toBe('imports');
       expect(fooEdge!.fromFile).toBe('src/main.ts');
@@ -61,7 +61,7 @@ describe('ASTParser', () => {
       const edges = parser.extractEdges(content, 'src/app.ts');
 
       expect(edges.length).toBeGreaterThanOrEqual(1);
-      const edge = edges.find(e => e.fromSymbol === 'MyService');
+      const edge = edges.find((e) => e.fromSymbol === 'MyService');
       expect(edge).toBeDefined();
       expect(edge!.edgeType).toBe('imports');
     });
@@ -70,7 +70,7 @@ describe('ASTParser', () => {
       const content = `import { helper } from './lib/helper';`;
       const edges = parser.extractEdges(content, 'src/app.ts');
 
-      const edge = edges.find(e => e.fromSymbol === 'helper');
+      const edge = edges.find((e) => e.fromSymbol === 'helper');
       expect(edge).toBeDefined();
       expect(edge!.toFile).toMatch(/lib\/helper/);
     });
@@ -79,7 +79,7 @@ describe('ASTParser', () => {
       const content = `import express from 'express';`;
       const edges = parser.extractEdges(content, 'src/server.ts');
 
-      const edge = edges.find(e => e.fromSymbol === 'express');
+      const edge = edges.find((e) => e.fromSymbol === 'express');
       expect(edge).toBeDefined();
       expect(edge!.toFile).toBe('express');
     });
@@ -88,7 +88,7 @@ describe('ASTParser', () => {
       const content = `import { foo as myFoo } from './utils';`;
       const edges = parser.extractEdges(content, 'src/main.ts');
 
-      const edge = edges.find(e => e.fromSymbol === 'foo');
+      const edge = edges.find((e) => e.fromSymbol === 'foo');
       expect(edge).toBeDefined();
       expect(edge!.toSymbol).toBe('foo');
     });
@@ -97,7 +97,7 @@ describe('ASTParser', () => {
       const content = `const { helper } = require('./helper');`;
       const edges = parser.extractEdges(content, 'src/app.js');
 
-      const edge = edges.find(e => e.fromSymbol === 'helper');
+      const edge = edges.find((e) => e.fromSymbol === 'helper');
       expect(edge).toBeDefined();
       expect(edge!.edgeType).toBe('imports');
     });
@@ -108,7 +108,7 @@ import { b } from './b';
 import { c } from './c';`;
       const edges = parser.extractEdges(content, 'src/index.ts');
 
-      const importEdges = edges.filter(e => e.edgeType === 'imports');
+      const importEdges = edges.filter((e) => e.edgeType === 'imports');
       expect(importEdges.length).toBeGreaterThanOrEqual(3);
     });
   });
@@ -120,7 +120,7 @@ import { c } from './c';`;
 }`;
       const edges = parser.extractEdges(content, 'src/dog.ts');
 
-      const extendsEdge = edges.find(e => e.edgeType === 'extends');
+      const extendsEdge = edges.find((e) => e.edgeType === 'extends');
       expect(extendsEdge).toBeDefined();
       expect(extendsEdge!.fromSymbol).toBe('Dog');
       expect(extendsEdge!.toSymbol).toBe('Animal');
@@ -133,7 +133,7 @@ import { c } from './c';`;
 }`;
       const edges = parser.extractEdges(content, 'src/repo.ts');
 
-      const implEdge = edges.find(e => e.edgeType === 'implements');
+      const implEdge = edges.find((e) => e.edgeType === 'implements');
       expect(implEdge).toBeDefined();
       expect(implEdge!.fromSymbol).toBe('MyRepo');
       expect(implEdge!.toSymbol).toBe('IRepository');
@@ -145,9 +145,9 @@ import { c } from './c';`;
 }`;
       const edges = parser.extractEdges(content, 'src/myclass.ts');
 
-      const implEdges = edges.filter(e => e.edgeType === 'implements');
+      const implEdges = edges.filter((e) => e.edgeType === 'implements');
       expect(implEdges.length).toBeGreaterThanOrEqual(3);
-      const targets = implEdges.map(e => e.toSymbol);
+      const targets = implEdges.map((e) => e.toSymbol);
       expect(targets).toContain('IFoo');
       expect(targets).toContain('IBar');
       expect(targets).toContain('IBaz');
@@ -159,8 +159,8 @@ import { c } from './c';`;
 }`;
       const edges = parser.extractEdges(content, 'src/child.ts');
 
-      const extendsEdge = edges.find(e => e.edgeType === 'extends');
-      const implEdge = edges.find(e => e.edgeType === 'implements');
+      const extendsEdge = edges.find((e) => e.edgeType === 'extends');
+      const implEdge = edges.find((e) => e.edgeType === 'implements');
       expect(extendsEdge?.toSymbol).toBe('Parent');
       expect(implEdge?.toSymbol).toBe('IChild');
     });
@@ -171,7 +171,7 @@ import { c } from './c';`;
         pass`;
       const edges = parser.extractEdges(content, 'src/dog.py');
 
-      const extendsEdge = edges.find(e => e.edgeType === 'extends');
+      const extendsEdge = edges.find((e) => e.edgeType === 'extends');
       expect(extendsEdge).toBeDefined();
       expect(extendsEdge!.fromSymbol).toBe('Dog');
       expect(extendsEdge!.toSymbol).toBe('Animal');
@@ -182,7 +182,7 @@ import { c } from './c';`;
     pass`;
       const edges = parser.extractEdges(content, 'src/foo.py');
 
-      const extendsEdges = edges.filter(e => e.edgeType === 'extends');
+      const extendsEdges = edges.filter((e) => e.edgeType === 'extends');
       expect(extendsEdges).toHaveLength(0);
     });
 
@@ -192,7 +192,7 @@ import { c } from './c';`;
 }`;
       const edges = parser.extractEdges(content, 'src/Dog.java');
 
-      const extendsEdge = edges.find(e => e.edgeType === 'extends');
+      const extendsEdge = edges.find((e) => e.edgeType === 'extends');
       expect(extendsEdge).toBeDefined();
       expect(extendsEdge!.fromSymbol).toBe('Dog');
       expect(extendsEdge!.toSymbol).toBe('Animal');
@@ -204,7 +204,7 @@ import { c } from './c';`;
 }`;
       const edges = parser.extractEdges(content, 'src/MyRepo.java');
 
-      const implEdge = edges.find(e => e.edgeType === 'implements');
+      const implEdge = edges.find((e) => e.edgeType === 'implements');
       expect(implEdge).toBeDefined();
       expect(implEdge!.fromSymbol).toBe('MyRepo');
       expect(implEdge!.toSymbol).toBe('IRepository');
@@ -216,7 +216,7 @@ import { c } from './c';`;
       const content = `from os.path import join, exists`;
       const edges = parser.extractEdges(content, 'src/utils.py');
 
-      const joinEdge = edges.find(e => e.fromSymbol === 'join');
+      const joinEdge = edges.find((e) => e.fromSymbol === 'join');
       expect(joinEdge).toBeDefined();
       expect(joinEdge!.edgeType).toBe('imports');
       expect(joinEdge!.toFile).toContain('os/path');
@@ -226,7 +226,7 @@ import { c } from './c';`;
       const content = `import os\nimport sys`;
       const edges = parser.extractEdges(content, 'src/main.py');
 
-      const osEdge = edges.find(e => e.fromSymbol === 'os');
+      const osEdge = edges.find((e) => e.fromSymbol === 'os');
       expect(osEdge).toBeDefined();
       expect(osEdge!.edgeType).toBe('imports');
     });
@@ -241,7 +241,7 @@ import { c } from './c';`;
       const edges = parser.extractEdges(content, 'src/main.go');
 
       expect(edges.length).toBeGreaterThanOrEqual(2);
-      const edgeTypes = edges.map(e => e.edgeType);
+      const edgeTypes = edges.map((e) => e.edgeType);
       expect(edgeTypes).toContain('imports');
     });
   });

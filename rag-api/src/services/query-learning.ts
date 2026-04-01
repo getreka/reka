@@ -48,11 +48,7 @@ class QueryLearningService {
 
     try {
       // 1. Check feedback-based suggestions first
-      const feedbackSuggestions = await feedbackService.getSuggestedQueries(
-        projectName,
-        query,
-        3
-      );
+      const feedbackSuggestions = await feedbackService.getSuggestedQueries(projectName, query, 3);
 
       for (const s of feedbackSuggestions) {
         suggestions.push({
@@ -79,7 +75,7 @@ class QueryLearningService {
       // Sort by confidence and deduplicate
       const seen = new Set<string>();
       return suggestions
-        .filter(s => {
+        .filter((s) => {
           const key = s.suggestedQuery.toLowerCase();
           if (seen.has(key)) return false;
           seen.add(key);
@@ -160,10 +156,7 @@ class QueryLearningService {
   /**
    * Get learned patterns for a project
    */
-  async getPatterns(
-    projectName: string,
-    limit: number = 20
-  ): Promise<QueryPattern[]> {
+  async getPatterns(projectName: string, limit: number = 20): Promise<QueryPattern[]> {
     const collection = this.getPatternCollection(projectName);
 
     try {
@@ -172,8 +165,8 @@ class QueryLearningService {
       const results = await vectorStore.search(collection, embedding, limit);
 
       return results
-        .map(r => r.payload as unknown as QueryPattern)
-        .filter(p => p.successRate > 0.5 && p.usageCount >= 2)
+        .map((r) => r.payload as unknown as QueryPattern)
+        .filter((p) => p.successRate > 0.5 && p.usageCount >= 2)
         .sort((a, b) => b.successRate - a.successRate);
     } catch (error: any) {
       if (error.status === 404) {
@@ -218,7 +211,7 @@ class QueryLearningService {
     for (const term of genericTerms) {
       if (new RegExp(`\\b${term}\\b`, 'i').test(query) && query.split(/\s+/).length < 4) {
         issues.push(`Query is too generic (contains "${term}")`);
-        suggestions.push('Be more specific about what you\'re looking for');
+        suggestions.push("Be more specific about what you're looking for");
         break;
       }
     }
@@ -248,11 +241,7 @@ class QueryLearningService {
 
     try {
       // 1. Check feedback-based rewrites (highest priority)
-      const feedbackSuggestions = await feedbackService.getSuggestedQueries(
-        projectName,
-        query,
-        1
-      );
+      const feedbackSuggestions = await feedbackService.getSuggestedQueries(projectName, query, 1);
 
       if (feedbackSuggestions.length > 0 && feedbackSuggestions[0].score >= minConfidence) {
         return {
@@ -264,7 +253,7 @@ class QueryLearningService {
 
       // 2. Check learned patterns
       const patternSuggestions = await this.matchPatterns(projectName, query);
-      const bestPattern = patternSuggestions.find(s => s.confidence >= minConfidence);
+      const bestPattern = patternSuggestions.find((s) => s.confidence >= minConfidence);
       if (bestPattern) {
         return {
           query: bestPattern.suggestedQuery,
@@ -284,10 +273,7 @@ class QueryLearningService {
   // Private Helpers
   // ============================================
 
-  private async matchPatterns(
-    projectName: string,
-    query: string
-  ): Promise<QueryImprovement[]> {
+  private async matchPatterns(projectName: string, query: string): Promise<QueryImprovement[]> {
     const collection = this.getPatternCollection(projectName);
     const improvements: QueryImprovement[] = [];
 

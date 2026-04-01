@@ -18,7 +18,13 @@
 import { llm } from './llm';
 import { sensoryBuffer, type SensoryEvent } from './sensory-buffer';
 import { workingMemory, type WorkingMemorySlot } from './working-memory';
-import { memoryLtm, type SemanticSubtype, type Anchor, type StoreEpisodicOptions, type StoreSemanticOptions } from './memory-ltm';
+import {
+  memoryLtm,
+  type SemanticSubtype,
+  type Anchor,
+  type StoreEpisodicOptions,
+  type StoreSemanticOptions,
+} from './memory-ltm';
 import { relationshipClassifier, type ClassifiedRelation } from './relationship-classifier';
 import { vectorStore } from './vector-store';
 import { embeddingService } from './embedding';
@@ -41,9 +47,9 @@ export interface ConsolidationResult {
 interface ExtractedPattern {
   type: 'repeated_query' | 'error_chain' | 'file_cluster' | 'decision_point';
   description: string;
-  events: string[];        // event summaries
+  events: string[]; // event summaries
   files: string[];
-  significance: number;    // 0-1
+  significance: number; // 0-1
 }
 
 interface AbstractedMemory {
@@ -52,7 +58,7 @@ interface AbstractedMemory {
   confidence: number;
   tags: string[];
   files: string[];
-  isEpisodic: boolean;     // true = store as episodic, false = semantic
+  isEpisodic: boolean; // true = store as episodic, false = semantic
 }
 
 // ── Prompts ───────────────────────────────────────────────
@@ -130,17 +136,23 @@ class ConsolidationAgentService {
       }
 
       // Step 2: PATTERN DETECTION
-      const patterns = await this.detectPatterns(wmSlots, events, timeout - (Date.now() - startTime));
+      const patterns = await this.detectPatterns(
+        wmSlots,
+        events,
+        timeout - (Date.now() - startTime)
+      );
       result.patternsDetected = patterns.length;
 
       if (Date.now() - startTime > timeout) return this.finalize(result, startTime);
 
       // Step 3: SIGNIFICANCE TAGGING (implicit in pattern detection scores)
-      const significantPatterns = patterns.filter(p => p.significance >= 0.5);
+      const significantPatterns = patterns.filter((p) => p.significance >= 0.5);
 
       // Step 4: ABSTRACTION — convert patterns + WM slots to memories
       const abstracted = await this.abstract(
-        wmSlots, significantPatterns, timeout - (Date.now() - startTime)
+        wmSlots,
+        significantPatterns,
+        timeout - (Date.now() - startTime)
       );
 
       if (Date.now() - startTime > timeout) return this.finalize(result, startTime);
@@ -170,17 +182,21 @@ class ConsolidationAgentService {
             let relationships: MemoryRelation[] = [];
             try {
               relationships = await this.classifyWithExisting(
-                projectName, mem.content, mem.subtype
+                projectName,
+                mem.content,
+                mem.subtype
               );
               result.relationships.push(
-                ...relationships.map(r => ({
+                ...relationships.map((r) => ({
                   targetId: r.targetId,
                   type: r.type as any,
                   reason: r.reason ?? '',
                   confidence: 0.7,
                 }))
               );
-            } catch { /* non-critical */ }
+            } catch {
+              /* non-critical */
+            }
 
             // Store as semantic
             const stored = await memoryLtm.storeSemantic({
@@ -219,8 +235,16 @@ class ConsolidationAgentService {
 
     // Build event summary for LLM
     const eventSummary = [
-      ...wmSlots.map(s => `[WM] ${s.toolName}: ${s.content} (salience=${s.salience.toFixed(1)}, files=${s.files.join(',')})`),
-      ...events.slice(-50).map(e => `[${e.success ? 'OK' : 'ERR'}] ${e.toolName}: ${e.inputSummary} (${e.durationMs}ms)`),
+      ...wmSlots.map(
+        (s) =>
+          `[WM] ${s.toolName}: ${s.content} (salience=${s.salience.toFixed(1)}, files=${s.files.join(',')})`
+      ),
+      ...events
+        .slice(-50)
+        .map(
+          (e) =>
+            `[${e.success ? 'OK' : 'ERR'}] ${e.toolName}: ${e.inputSummary} (${e.durationMs}ms)`
+        ),
     ].join('\n');
 
     try {
@@ -248,10 +272,12 @@ class ConsolidationAgentService {
     if (wmSlots.length === 0 && patterns.length === 0) return [];
 
     const observations = [
-      ...patterns.map(p => `[PATTERN: ${p.type}] ${p.description} (files: ${p.files.join(', ')})`),
+      ...patterns.map(
+        (p) => `[PATTERN: ${p.type}] ${p.description} (files: ${p.files.join(', ')})`
+      ),
       ...wmSlots
-        .filter(s => s.salience >= 0.5)
-        .map(s => `[${s.toolName}] ${s.content} (files: ${s.files.join(', ')})`),
+        .filter((s) => s.salience >= 0.5)
+        .map((s) => `[${s.toolName}] ${s.content} (files: ${s.files.join(', ')})`),
     ].join('\n');
 
     try {
@@ -267,10 +293,10 @@ class ConsolidationAgentService {
       // Validate and normalize
       const validSubtypes = new Set<string>(['decision', 'insight', 'pattern', 'procedure']);
       return parsed.memories
-        .filter(m => m.content && m.content.length > 10)
-        .map(m => ({
+        .filter((m) => m.content && m.content.length > 10)
+        .map((m) => ({
           content: m.content.slice(0, 2000),
-          subtype: validSubtypes.has(m.subtype) ? m.subtype : 'insight' as SemanticSubtype,
+          subtype: validSubtypes.has(m.subtype) ? m.subtype : ('insight' as SemanticSubtype),
           confidence: Math.min(1, Math.max(0, m.confidence ?? 0.6)),
           tags: Array.isArray(m.tags) ? m.tags.slice(0, 10) : [],
           files: Array.isArray(m.files) ? m.files.slice(0, 20) : [],
@@ -305,14 +331,14 @@ class ConsolidationAgentService {
     // Use LLM classifier
     const classified = await relationshipClassifier.classify(
       { content, type: subtype },
-      candidates.map(c => ({
+      candidates.map((c) => ({
         id: c.id,
         content: (c.payload.content as string) ?? '',
         type: (c.payload.subtype as string) ?? 'insight',
       }))
     );
 
-    return classified.map(c => ({
+    return classified.map((c) => ({
       targetId: c.targetId,
       type: c.type as any,
       reason: c.reason,
@@ -326,7 +352,7 @@ class ConsolidationAgentService {
 
     // File anchors from explicit file list
     for (const file of files) {
-      if (file && file.includes('/') || file.includes('.')) {
+      if ((file && file.includes('/')) || file.includes('.')) {
         anchors.push({ type: 'file', path: file });
       }
     }
@@ -335,7 +361,7 @@ class ConsolidationAgentService {
     const filePattern = /(?:[\w@/.-]+\/)?[\w.-]+\.(ts|js|tsx|jsx|py|go|rs|vue|json|yaml|yml)/g;
     const contentFiles = content.match(filePattern) ?? [];
     for (const f of contentFiles) {
-      if (!anchors.some(a => a.path === f)) {
+      if (!anchors.some((a) => a.path === f)) {
         anchors.push({ type: 'file', path: f });
       }
     }

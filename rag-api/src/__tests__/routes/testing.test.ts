@@ -42,7 +42,7 @@ describe('Testing Routes', () => {
           projectName: 'test',
           code: 'function add(a: number, b: number) { return a + b; }',
           framework: 'vitest',
-        }),
+        })
       );
 
       expect(res.status).toBe(200);
@@ -62,7 +62,7 @@ describe('Testing Routes', () => {
           projectName: 'test',
           code: 'const x = 1;',
           framework: 'vitest',
-        }),
+        })
       );
 
       expect(res.status).toBe(200);
@@ -108,9 +108,7 @@ describe('Testing Routes', () => {
     });
 
     it('returns 400 without code or requirements', async () => {
-      const res = await request(app)
-        .post('/api/generate-test-cases')
-        .send({});
+      const res = await request(app).post('/api/generate-test-cases').send({});
 
       expect(res.status).toBe(400);
     });
@@ -143,9 +141,7 @@ describe('Testing Routes', () => {
     });
 
     it('returns 400 without testCode', async () => {
-      const res = await request(app)
-        .post('/api/analyze-tests')
-        .send({});
+      const res = await request(app).post('/api/analyze-tests').send({});
 
       expect(res.status).toBe(400);
     });

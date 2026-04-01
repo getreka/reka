@@ -197,12 +197,12 @@ class ProjectProfileService {
 
     const patternList = conventions.patterns
       .slice(0, 5)
-      .map(p => p.description)
+      .map((p) => p.description)
       .join('; ');
 
     const adrList = conventions.adrs
       .slice(0, 5)
-      .map(a => a.decision)
+      .map((a) => a.decision)
       .join('; ');
 
     const prompt = `Summarize this project in 2-3 sentences:
@@ -213,7 +213,8 @@ Patterns: ${patternList || 'none documented'}
 Decisions: ${adrList || 'none documented'}`;
 
     const result = await llm.complete(prompt, {
-      systemPrompt: 'You are a project analyst. Provide a concise 2-3 sentence summary of the project. Focus on what it does and its key technical characteristics.',
+      systemPrompt:
+        'You are a project analyst. Provide a concise 2-3 sentence summary of the project. Focus on what it does and its key technical characteristics.',
       maxTokens: 200,
       temperature: 0.3,
       think: false,

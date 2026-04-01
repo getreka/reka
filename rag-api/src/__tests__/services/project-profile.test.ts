@@ -45,7 +45,10 @@ describe('ProjectProfileService', () => {
       languages: { typescript: 30, javascript: 10, python: 5 },
     });
     mockedMemory.recall.mockResolvedValue([]);
-    mockedLLM.complete.mockResolvedValue({ text: 'A TypeScript RAG infrastructure project.', usage: {} as any });
+    mockedLLM.complete.mockResolvedValue({
+      text: 'A TypeScript RAG infrastructure project.',
+      usage: {} as any,
+    });
     mockedCache.get.mockResolvedValue(null);
     mockedCache.set.mockResolvedValue(undefined as any);
   });
@@ -122,7 +125,8 @@ describe('ProjectProfileService', () => {
 
     it('detects Vue.js from vue language', async () => {
       mockedVS.aggregateStats.mockResolvedValue({
-        totalFiles: 10, totalVectors: 50,
+        totalFiles: 10,
+        totalVectors: 50,
         languages: { vue: 10, typescript: 5 },
       });
 
@@ -140,9 +144,11 @@ describe('ProjectProfileService', () => {
 
   describe('buildConventions (via getProfile)', () => {
     it('includes patterns from memory recall', async () => {
-      mockedMemory.recall.mockResolvedValueOnce([
-        { memory: { content: 'Service Layer pattern', relatedTo: 'architecture' }, score: 0.8 },
-      ] as any).mockResolvedValueOnce([]); // ADR call
+      mockedMemory.recall
+        .mockResolvedValueOnce([
+          { memory: { content: 'Service Layer pattern', relatedTo: 'architecture' }, score: 0.8 },
+        ] as any)
+        .mockResolvedValueOnce([]); // ADR call
 
       const profile = await projectProfileService.getProfile('test');
       expect(profile.conventions.patterns).toHaveLength(1);
@@ -150,9 +156,11 @@ describe('ProjectProfileService', () => {
     });
 
     it('filters out low-score patterns', async () => {
-      mockedMemory.recall.mockResolvedValueOnce([
-        { memory: { content: 'Weak match', relatedTo: 'weak' }, score: 0.3 },
-      ] as any).mockResolvedValueOnce([]);
+      mockedMemory.recall
+        .mockResolvedValueOnce([
+          { memory: { content: 'Weak match', relatedTo: 'weak' }, score: 0.3 },
+        ] as any)
+        .mockResolvedValueOnce([]);
 
       const profile = await projectProfileService.getProfile('test');
       expect(profile.conventions.patterns).toHaveLength(0);

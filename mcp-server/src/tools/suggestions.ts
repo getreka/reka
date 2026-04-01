@@ -82,7 +82,11 @@ function formatSmartDispatchResult(task: string, data: any): string {
     result += "\n";
   }
 
-  if (result.endsWith(`_Routing: ${data.reasoning} (${data.plan?.join(", ")}) [${data.timing?.totalMs}ms]_\n\n`)) {
+  if (
+    result.endsWith(
+      `_Routing: ${data.reasoning} (${data.plan?.join(", ")}) [${data.timing?.totalMs}ms]_\n\n`,
+    )
+  ) {
     result += "_No relevant context found. Proceed with implementation._\n";
   }
 
@@ -99,10 +103,16 @@ export function createSuggestionTools(projectName: string): ToolSpec[] {
       description: `REQUIRED before code changes. Parallel lookup of recall + search + patterns + ADRs + graph for ${projectName}. One call replaces 5 separate RAG lookups.`,
       schema: z.object({
         task: z.string().describe("What you will implement/change"),
-        files: z.array(z.string()).optional().describe("Files you plan to modify"),
+        files: z
+          .array(z.string())
+          .optional()
+          .describe("Files you plan to modify"),
       }),
       annotations: TOOL_ANNOTATIONS["context_briefing"],
-      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
+      handler: async (
+        args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
         const { task, files } = args as {
           task: string;
           files?: string[];
@@ -173,7 +183,8 @@ export function createSuggestionTools(projectName: string): ToolSpec[] {
 
         let result = `# Context Briefing: ${task}\n\n`;
 
-        const memories = memoriesRes?.data?.results || memoriesRes?.data?.memories || [];
+        const memories =
+          memoriesRes?.data?.results || memoriesRes?.data?.memories || [];
         if (memories.length > 0) {
           result += `## Memories (${memories.length})\n`;
           for (const m of memories) {
@@ -194,32 +205,40 @@ export function createSuggestionTools(projectName: string): ToolSpec[] {
           result += "\n";
         }
 
-        const patterns = (patternsRes?.data?.results || []).filter(
-          (r: any) => r.memory?.tags?.includes("pattern")
+        const patterns = (patternsRes?.data?.results || []).filter((r: any) =>
+          r.memory?.tags?.includes("pattern"),
         );
         if (patterns.length > 0) {
           result += `## Patterns (${patterns.length})\n`;
           for (const p of patterns) {
-            const name = p.memory?.metadata?.patternName || p.memory?.relatedTo || "Pattern";
+            const name =
+              p.memory?.metadata?.patternName ||
+              p.memory?.relatedTo ||
+              "Pattern";
             result += `- **${name}**: ${truncate(p.memory?.content || "", 120)}\n`;
           }
           result += "\n";
         }
 
-        const adrs = (adrsRes?.data?.results || []).filter(
-          (r: any) => r.memory?.tags?.includes("adr")
+        const adrs = (adrsRes?.data?.results || []).filter((r: any) =>
+          r.memory?.tags?.includes("adr"),
         );
         if (adrs.length > 0) {
           result += `## ADRs (${adrs.length})\n`;
           for (const a of adrs) {
-            const title = a.memory?.metadata?.adrTitle || a.memory?.relatedTo || "ADR";
+            const title =
+              a.memory?.metadata?.adrTitle || a.memory?.relatedTo || "ADR";
             result += `- **${title}**: ${truncate(a.memory?.content || "", 120)}\n`;
           }
           result += "\n";
         }
 
-        const graphResults = graphRes?.data?.results || graphRes?.data?.directResults || [];
-        const connectedFiles = graphRes?.data?.connectedFiles || graphRes?.data?.expandedResults || [];
+        const graphResults =
+          graphRes?.data?.results || graphRes?.data?.directResults || [];
+        const connectedFiles =
+          graphRes?.data?.connectedFiles ||
+          graphRes?.data?.expandedResults ||
+          [];
         if (graphResults.length > 0 || connectedFiles.length > 0) {
           result += `## Dependencies\n`;
           for (const g of graphResults) {
@@ -232,7 +251,8 @@ export function createSuggestionTools(projectName: string): ToolSpec[] {
         }
 
         if (result.endsWith(`# Context Briefing: ${task}\n\n`)) {
-          result += "_No relevant context found. Proceed with implementation._\n";
+          result +=
+            "_No relevant context found. Proceed with implementation._\n";
         }
 
         return result;
@@ -244,11 +264,20 @@ export function createSuggestionTools(projectName: string): ToolSpec[] {
       description: `Intelligent task routing for ${projectName}. LLM analyzes your task and runs only the needed lookups (2-5 of 7 available) in parallel. More efficient than context_briefing for narrow tasks.`,
       schema: z.object({
         task: z.string().describe("What you will implement/change"),
-        files: z.array(z.string()).optional().describe("Files you plan to modify"),
-        intent: z.enum(["code", "research", "debug", "review", "architecture"]).optional().describe("Task intent for better routing"),
+        files: z
+          .array(z.string())
+          .optional()
+          .describe("Files you plan to modify"),
+        intent: z
+          .enum(["code", "research", "debug", "review", "architecture"])
+          .optional()
+          .describe("Task intent for better routing"),
       }),
       annotations: TOOL_ANNOTATIONS["context_briefing"], // Same annotations as context_briefing
-      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
+      handler: async (
+        args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
         const { task, files, intent } = args as {
           task: string;
           files?: string[];
@@ -270,13 +299,25 @@ export function createSuggestionTools(projectName: string): ToolSpec[] {
       name: "get_contextual_suggestions",
       description: `Get contextual suggestions based on current work context for ${projectName}. Returns relevant suggestions, triggers, and related memories.`,
       schema: z.object({
-        currentFile: z.string().optional().describe("Currently active file path"),
-        currentCode: z.string().optional().describe("Currently selected or visible code"),
-        recentFiles: z.array(z.string()).optional().describe("Recently opened file paths"),
+        currentFile: z
+          .string()
+          .optional()
+          .describe("Currently active file path"),
+        currentCode: z
+          .string()
+          .optional()
+          .describe("Currently selected or visible code"),
+        recentFiles: z
+          .array(z.string())
+          .optional()
+          .describe("Recently opened file paths"),
         task: z.string().optional().describe("Current task description"),
       }),
       annotations: TOOL_ANNOTATIONS["get_contextual_suggestions"],
-      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
+      handler: async (
+        args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
         const { currentFile, currentCode, recentFiles, task } = args as {
           currentFile?: string;
           currentCode?: string;
@@ -314,7 +355,8 @@ export function createSuggestionTools(projectName: string): ToolSpec[] {
             result += `- **${s.title}** [${s.type}]\n`;
             if (s.description) result += `  ${s.description}\n`;
             if (s.reason) result += `  *Reason: ${s.reason}*\n`;
-            if (s.relevance !== undefined) result += `  Relevance: ${pct(s.relevance)}\n`;
+            if (s.relevance !== undefined)
+              result += `  Relevance: ${pct(s.relevance)}\n`;
           }
           result += "\n";
         }
@@ -334,13 +376,29 @@ export function createSuggestionTools(projectName: string): ToolSpec[] {
       name: "suggest_related_code",
       description: `Find code related to a given file or snippet in ${projectName}. Shows similar implementations and related modules.`,
       schema: z.object({
-        file: z.string().optional().describe("File path to find related code for"),
-        code: z.string().optional().describe("Code snippet to find related code for"),
-        limit: z.coerce.number().optional().describe("Max results (default: 5)"),
+        file: z
+          .string()
+          .optional()
+          .describe("File path to find related code for"),
+        code: z
+          .string()
+          .optional()
+          .describe("Code snippet to find related code for"),
+        limit: z.coerce
+          .number()
+          .optional()
+          .describe("Max results (default: 5)"),
       }),
       annotations: TOOL_ANNOTATIONS["suggest_related_code"],
-      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
-        const { file, code, limit = 5 } = args as {
+      handler: async (
+        args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
+        const {
+          file,
+          code,
+          limit = 5,
+        } = args as {
           file?: string;
           code?: string;
           limit?: number;
@@ -365,7 +423,10 @@ export function createSuggestionTools(projectName: string): ToolSpec[] {
           if (r.line) result += ` | Line ${r.line}`;
           result += "\n";
           if (r.content || r.code) {
-            result += "```\n" + truncate(r.content || r.code, PREVIEW.MEDIUM) + "\n```\n";
+            result +=
+              "```\n" +
+              truncate(r.content || r.code, PREVIEW.MEDIUM) +
+              "\n```\n";
           }
           result += "\n";
         }
@@ -383,18 +444,24 @@ export function createSuggestionTools(projectName: string): ToolSpec[] {
         language: z.string().optional().describe("Target programming language"),
       }),
       annotations: TOOL_ANNOTATIONS["suggest_implementation"],
-      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
+      handler: async (
+        args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
         const { description, currentFile, language } = args as {
           description: string;
           currentFile?: string;
           language?: string;
         };
-        const response = await ctx.api.post("/api/code/suggest-implementation", {
-          projectName: ctx.projectName,
-          description,
-          currentFile,
-          language,
-        });
+        const response = await ctx.api.post(
+          "/api/code/suggest-implementation",
+          {
+            projectName: ctx.projectName,
+            description,
+            currentFile,
+            language,
+          },
+        );
         const data = response.data;
         const patterns = data.patterns || data.results || [];
 
@@ -432,10 +499,16 @@ export function createSuggestionTools(projectName: string): ToolSpec[] {
       schema: z.object({
         file: z.string().optional().describe("File to suggest tests for"),
         code: z.string().optional().describe("Code to suggest tests for"),
-        framework: z.string().optional().describe("Test framework preference (jest, mocha, pytest, etc.)"),
+        framework: z
+          .string()
+          .optional()
+          .describe("Test framework preference (jest, mocha, pytest, etc.)"),
       }),
       annotations: TOOL_ANNOTATIONS["suggest_tests"],
-      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
+      handler: async (
+        args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
         const { file, code, framework } = args as {
           file?: string;
           code?: string;
@@ -467,7 +540,8 @@ export function createSuggestionTools(projectName: string): ToolSpec[] {
           if (t.framework) result += `**Framework:** ${t.framework}\n`;
           if (t.coverage) result += `**Coverage:** ${t.coverage}\n`;
           if (t.content || t.code) {
-            result += "```\n" + truncate(t.content || t.code, PREVIEW.LONG) + "\n```\n";
+            result +=
+              "```\n" + truncate(t.content || t.code, PREVIEW.LONG) + "\n```\n";
           }
           result += "\n";
         }
@@ -484,7 +558,10 @@ export function createSuggestionTools(projectName: string): ToolSpec[] {
         code: z.string().optional().describe("Code snippet for context"),
       }),
       annotations: TOOL_ANNOTATIONS["get_code_context"],
-      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
+      handler: async (
+        args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
         const { file, code } = args as { file?: string; code?: string };
         const response = await ctx.api.post("/api/code/context", {
           projectName: ctx.projectName,
@@ -533,13 +610,27 @@ export function createSuggestionTools(projectName: string): ToolSpec[] {
         "Configure Claude Code for RAG integration. Creates/updates .mcp.json, adds RAG instructions to CLAUDE.md, and configures permissions. Call after index_codebase on a new project.",
       schema: z.object({
         projectPath: z.string().describe("Absolute path to project root"),
-        projectName: z.string().describe("Project name in Qdrant (collection prefix)"),
-        ragApiUrl: z.string().optional().describe("RAG API URL (default: from MCP env)"),
-        ragApiKey: z.string().optional().describe("RAG API key (default: from MCP env)"),
-        updateClaudeMd: z.boolean().optional().describe("Add RAG section to CLAUDE.md (default: true)"),
+        projectName: z
+          .string()
+          .describe("Project name in Qdrant (collection prefix)"),
+        ragApiUrl: z
+          .string()
+          .optional()
+          .describe("RAG API URL (default: from MCP env)"),
+        ragApiKey: z
+          .string()
+          .optional()
+          .describe("RAG API key (default: from MCP env)"),
+        updateClaudeMd: z
+          .boolean()
+          .optional()
+          .describe("Add RAG section to CLAUDE.md (default: true)"),
       }),
       annotations: TOOL_ANNOTATIONS["setup_project"],
-      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
+      handler: async (
+        args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
         const {
           projectPath,
           projectName: targetProject,
@@ -554,7 +645,8 @@ export function createSuggestionTools(projectName: string): ToolSpec[] {
           updateClaudeMd?: boolean;
         };
 
-        const apiUrl = ragApiUrl || process.env.RAG_API_URL || "http://localhost:3100";
+        const apiUrl =
+          ragApiUrl || process.env.RAG_API_URL || "http://localhost:3100";
         const apiKey = ragApiKey || process.env.RAG_API_KEY;
         const serverName = `${targetProject}-rag`;
         const changes: string[] = [];
@@ -584,7 +676,10 @@ export function createSuggestionTools(projectName: string): ToolSpec[] {
           env: serverEnv,
         };
 
-        fs.writeFileSync(mcpJsonPath, JSON.stringify(mcpConfig, null, 2) + "\n");
+        fs.writeFileSync(
+          mcpJsonPath,
+          JSON.stringify(mcpConfig, null, 2) + "\n",
+        );
         changes.push(`.mcp.json — added \`${serverName}\` server`);
 
         // 2. Update CLAUDE.md with RAG section
@@ -612,7 +707,9 @@ After completing significant changes:
           if (claudeMd.includes("## RAG")) {
             changes.push("CLAUDE.md — RAG section already exists, skipped");
           } else {
-            claudeMd = claudeMd ? claudeMd.trimEnd() + "\n" + ragSection : `# CLAUDE.md\n${ragSection}`;
+            claudeMd = claudeMd
+              ? claudeMd.trimEnd() + "\n" + ragSection
+              : `# CLAUDE.md\n${ragSection}`;
             fs.writeFileSync(claudeMdPath, claudeMd);
             changes.push("CLAUDE.md — added RAG Integration section");
           }
@@ -635,21 +732,32 @@ After completing significant changes:
         const mcpPermission = `mcp__${serverName}__*`;
         if (!settings.permissions.allow.includes(mcpPermission)) {
           settings.permissions.allow.push(mcpPermission);
-          if (!fs.existsSync(claudeDir)) fs.mkdirSync(claudeDir, { recursive: true });
-          fs.writeFileSync(settingsPath, JSON.stringify(settings, null, 2) + "\n");
-          changes.push(`.claude/settings.local.json — added \`${mcpPermission}\` permission`);
+          if (!fs.existsSync(claudeDir))
+            fs.mkdirSync(claudeDir, { recursive: true });
+          fs.writeFileSync(
+            settingsPath,
+            JSON.stringify(settings, null, 2) + "\n",
+          );
+          changes.push(
+            `.claude/settings.local.json — added \`${mcpPermission}\` permission`,
+          );
         } else {
-          changes.push(".claude/settings.local.json — permission already exists, skipped");
+          changes.push(
+            ".claude/settings.local.json — permission already exists, skipped",
+          );
         }
 
         // 4. Check index status
         let indexInfo = "";
         try {
-          const statusRes = await ctx.api.get(`/api/index/status/${targetProject}_codebase`);
+          const statusRes = await ctx.api.get(
+            `/api/index/status/${targetProject}_codebase`,
+          );
           const data = statusRes.data;
           indexInfo = `\n## Index Status\n- **Vectors:** ${data.vectorCount ?? "N/A"}\n- **Status:** ${data.status || "unknown"}\n`;
         } catch {
-          indexInfo = "\n## Index Status\n_Not indexed yet. Run `index_codebase` first._\n";
+          indexInfo =
+            "\n## Index Status\n_Not indexed yet. Run `index_codebase` first._\n";
         }
 
         let result = `# Project Setup: ${targetProject}\n\n`;

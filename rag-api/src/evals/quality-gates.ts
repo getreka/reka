@@ -22,7 +22,7 @@ export interface QualityMetrics {
 export const QUALITY_THRESHOLDS = {
   jsonParseRate: 0.95,
   maxLatencyP95: 30000,
-  thinkingRate: 0.90,
+  thinkingRate: 0.9,
   minOutputLength: 50,
 };
 
@@ -35,13 +35,12 @@ class QualityGateService {
    */
   async record(metric: QualityMetrics): Promise<void> {
     try {
-      const existing = await cacheService.get<QualityMetrics[]>(METRICS_KEY) || [];
+      const existing = (await cacheService.get<QualityMetrics[]>(METRICS_KEY)) || [];
       existing.push(metric);
 
       // Rolling window: keep only last MAX_ENTRIES
-      const trimmed = existing.length > MAX_ENTRIES
-        ? existing.slice(existing.length - MAX_ENTRIES)
-        : existing;
+      const trimmed =
+        existing.length > MAX_ENTRIES ? existing.slice(existing.length - MAX_ENTRIES) : existing;
 
       // Cache for 24h
       await cacheService.set(METRICS_KEY, trimmed, 86400);
@@ -65,63 +64,82 @@ class QualityGateService {
       avgTokens: number;
     };
     alerts: string[];
-    byEndpoint: Record<string, {
-      count: number;
-      avgLatencyMs: number;
-      jsonParseRate: number;
-      thinkingRate: number;
-    }>;
+    byEndpoint: Record<
+      string,
+      {
+        count: number;
+        avgLatencyMs: number;
+        jsonParseRate: number;
+        thinkingRate: number;
+      }
+    >;
   }> {
-    const all = await cacheService.get<QualityMetrics[]>(METRICS_KEY) || [];
-    const metrics = filterEndpoint
-      ? all.filter(m => m.endpoint === filterEndpoint)
-      : all;
+    const all = (await cacheService.get<QualityMetrics[]>(METRICS_KEY)) || [];
+    const metrics = filterEndpoint ? all.filter((m) => m.endpoint === filterEndpoint) : all;
 
     if (metrics.length === 0) {
       return {
         total: 0,
         metrics: {
-          avgLatencyMs: 0, p95LatencyMs: 0, jsonParseRate: 1,
-          thinkingRate: 0, avgOutputLength: 0, avgThinkingLength: 0, avgTokens: 0,
+          avgLatencyMs: 0,
+          p95LatencyMs: 0,
+          jsonParseRate: 1,
+          thinkingRate: 0,
+          avgOutputLength: 0,
+          avgThinkingLength: 0,
+          avgTokens: 0,
         },
         alerts: [],
         byEndpoint: {},
       };
     }
 
-    const latencies = metrics.map(m => m.latencyMs).sort((a, b) => a - b);
+    const latencies = metrics.map((m) => m.latencyMs).sort((a, b) => a - b);
     const avgLatencyMs = Math.round(latencies.reduce((s, l) => s + l, 0) / latencies.length);
     const p95LatencyMs = latencies[Math.floor(latencies.length * 0.95)] || 0;
 
-    const jsonParseable = metrics.filter(m => m.jsonParseable).length;
+    const jsonParseable = metrics.filter((m) => m.jsonParseable).length;
     // Only count metrics where JSON was expected (non-zero output)
-    const jsonCandidates = metrics.filter(m => m.outputLength > 0);
+    const jsonCandidates = metrics.filter((m) => m.outputLength > 0);
     const jsonParseRate = jsonCandidates.length > 0 ? jsonParseable / jsonCandidates.length : 1;
 
-    const thinkingPresent = metrics.filter(m => m.thinkingPresent).length;
+    const thinkingPresent = metrics.filter((m) => m.thinkingPresent).length;
     const thinkingRate = metrics.length > 0 ? thinkingPresent / metrics.length : 0;
 
-    const avgOutputLength = Math.round(metrics.reduce((s, m) => s + m.outputLength, 0) / metrics.length);
-    const avgThinkingLength = Math.round(
-      metrics.filter(m => m.thinkingPresent).reduce((s, m) => s + m.thinkingLength, 0) /
-      Math.max(thinkingPresent, 1)
+    const avgOutputLength = Math.round(
+      metrics.reduce((s, m) => s + m.outputLength, 0) / metrics.length
     );
-    const avgTokens = Math.round(metrics.reduce((s, m) => s + m.tokenUsage.total, 0) / metrics.length);
+    const avgThinkingLength = Math.round(
+      metrics.filter((m) => m.thinkingPresent).reduce((s, m) => s + m.thinkingLength, 0) /
+        Math.max(thinkingPresent, 1)
+    );
+    const avgTokens = Math.round(
+      metrics.reduce((s, m) => s + m.tokenUsage.total, 0) / metrics.length
+    );
 
     // Check alerts
     const alerts: string[] = [];
     if (jsonParseRate < QUALITY_THRESHOLDS.jsonParseRate) {
-      alerts.push(`JSON parse rate ${(jsonParseRate * 100).toFixed(1)}% below threshold ${QUALITY_THRESHOLDS.jsonParseRate * 100}%`);
+      alerts.push(
+        `JSON parse rate ${(jsonParseRate * 100).toFixed(1)}% below threshold ${QUALITY_THRESHOLDS.jsonParseRate * 100}%`
+      );
     }
     if (p95LatencyMs > QUALITY_THRESHOLDS.maxLatencyP95) {
-      alerts.push(`P95 latency ${p95LatencyMs}ms exceeds threshold ${QUALITY_THRESHOLDS.maxLatencyP95}ms`);
+      alerts.push(
+        `P95 latency ${p95LatencyMs}ms exceeds threshold ${QUALITY_THRESHOLDS.maxLatencyP95}ms`
+      );
     }
     if (thinkingRate < QUALITY_THRESHOLDS.thinkingRate) {
-      alerts.push(`Thinking rate ${(thinkingRate * 100).toFixed(1)}% below threshold ${QUALITY_THRESHOLDS.thinkingRate * 100}%`);
+      alerts.push(
+        `Thinking rate ${(thinkingRate * 100).toFixed(1)}% below threshold ${QUALITY_THRESHOLDS.thinkingRate * 100}%`
+      );
     }
 
     // Group by endpoint
-    const byEndpoint: Record<string, { count: number; latencies: number[]; jsonOk: number; thinkingOk: number }> = {};
+    const byEndpoint: Record<
+      string,
+      { count: number; latencies: number[]; jsonOk: number; thinkingOk: number }
+    > = {};
     for (const m of metrics) {
       if (!byEndpoint[m.endpoint]) {
         byEndpoint[m.endpoint] = { count: 0, latencies: [], jsonOk: 0, thinkingOk: 0 };
@@ -136,8 +154,13 @@ class QualityGateService {
     return {
       total: metrics.length,
       metrics: {
-        avgLatencyMs, p95LatencyMs, jsonParseRate,
-        thinkingRate, avgOutputLength, avgThinkingLength, avgTokens,
+        avgLatencyMs,
+        p95LatencyMs,
+        jsonParseRate,
+        thinkingRate,
+        avgOutputLength,
+        avgThinkingLength,
+        avgTokens,
       },
       alerts,
       byEndpoint: Object.fromEntries(

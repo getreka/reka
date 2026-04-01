@@ -52,7 +52,10 @@ import { createQualityTools } from "./tools/quality.js";
 // Configuration from environment
 // Priority: REKA_API_KEY (new) > RAG_API_KEY (legacy)
 const API_KEY = process.env.REKA_API_KEY || process.env.RAG_API_KEY;
-const RAG_API_URL = process.env.REKA_API_URL || process.env.RAG_API_URL || "http://localhost:3100";
+const RAG_API_URL =
+  process.env.REKA_API_URL ||
+  process.env.RAG_API_URL ||
+  "http://localhost:3100";
 const PROJECT_PATH = process.env.PROJECT_PATH || process.cwd();
 
 // Project name: resolved from API key via /api/whoami, fallback to env/dirname

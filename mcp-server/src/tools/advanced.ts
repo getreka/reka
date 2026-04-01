@@ -17,22 +17,48 @@ export function createAdvancedTools(projectName: string): ToolSpec[] {
       name: "merge_memories",
       description: `Consolidate duplicate memories for ${projectName}. Finds similar memories and merges them using LLM to reduce clutter.`,
       schema: z.object({
-        type: z.string().optional().describe("Filter by memory type (decision, insight, context, todo, conversation, note, or all). Default: all"),
-        threshold: z.coerce.number().optional().describe("Similarity threshold for merging (0.5-1.0, default: 0.9). Lower = more aggressive merging."),
-        dryRun: z.boolean().optional().describe("If true, preview merge candidates without making changes (default: true)."),
-        limit: z.coerce.number().optional().describe("Max clusters to process (default: 50)."),
+        type: z
+          .string()
+          .optional()
+          .describe(
+            "Filter by memory type (decision, insight, context, todo, conversation, note, or all). Default: all",
+          ),
+        threshold: z.coerce
+          .number()
+          .optional()
+          .describe(
+            "Similarity threshold for merging (0.5-1.0, default: 0.9). Lower = more aggressive merging.",
+          ),
+        dryRun: z
+          .boolean()
+          .optional()
+          .describe(
+            "If true, preview merge candidates without making changes (default: true).",
+          ),
+        limit: z.coerce
+          .number()
+          .optional()
+          .describe("Max clusters to process (default: 50)."),
       }),
       annotations: TOOL_ANNOTATIONS["merge_memories"],
-      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
-        const { type = "all", threshold = 0.9, dryRun = true, limit = 50 } =
-          args as {
-            type?: string;
-            threshold?: number;
-            dryRun?: boolean;
-            limit?: number;
-          };
+      handler: async (
+        args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
+        const {
+          type = "all",
+          threshold = 0.9,
+          dryRun = true,
+          limit = 50,
+        } = args as {
+          type?: string;
+          threshold?: number;
+          dryRun?: boolean;
+          limit?: number;
+        };
 
         const response = await ctx.api.post("/api/memory/merge", {
+          projectName: ctx.projectName,
           type,
           threshold,
           dryRun,
@@ -79,13 +105,29 @@ export function createAdvancedTools(projectName: string): ToolSpec[] {
       description: `Get code completion context for ${projectName}. Finds similar patterns, imports, and symbols from the codebase to aid code completion.`,
       schema: z.object({
         currentFile: z.string().describe("Path of the file being edited"),
-        currentCode: z.string().describe("Current code snippet or file content"),
-        language: z.string().optional().describe("Programming language filter (optional)"),
-        limit: z.coerce.number().optional().describe("Max results (default: 5)"),
+        currentCode: z
+          .string()
+          .describe("Current code snippet or file content"),
+        language: z
+          .string()
+          .optional()
+          .describe("Programming language filter (optional)"),
+        limit: z.coerce
+          .number()
+          .optional()
+          .describe("Max results (default: 5)"),
       }),
       annotations: TOOL_ANNOTATIONS["get_completion_context"],
-      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
-        const { currentFile, currentCode, language, limit = 5 } = args as {
+      handler: async (
+        args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
+        const {
+          currentFile,
+          currentCode,
+          language,
+          limit = 5,
+        } = args as {
           currentFile: string;
           currentCode: string;
           language?: string;
@@ -134,12 +176,26 @@ export function createAdvancedTools(projectName: string): ToolSpec[] {
       schema: z.object({
         currentFile: z.string().describe("Path of the file being edited"),
         currentCode: z.string().describe("Current code content"),
-        language: z.string().optional().describe("Programming language filter (optional)"),
-        limit: z.coerce.number().optional().describe("Max suggestions (default: 10)"),
+        language: z
+          .string()
+          .optional()
+          .describe("Programming language filter (optional)"),
+        limit: z.coerce
+          .number()
+          .optional()
+          .describe("Max suggestions (default: 10)"),
       }),
       annotations: TOOL_ANNOTATIONS["get_import_suggestions"],
-      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
-        const { currentFile, currentCode, language, limit = 10 } = args as {
+      handler: async (
+        args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
+        const {
+          currentFile,
+          currentCode,
+          language,
+          limit = 10,
+        } = args as {
           currentFile: string;
           currentCode: string;
           language?: string;
@@ -181,14 +237,36 @@ export function createAdvancedTools(projectName: string): ToolSpec[] {
       name: "get_type_context",
       description: `Look up type/interface/class definitions and usage in ${projectName}. Finds where a type is defined and how it's used across the codebase.`,
       schema: z.object({
-        typeName: z.string().optional().describe("Name of the type/interface/class to look up"),
-        code: z.string().optional().describe("Code containing types to look up (alternative to typeName)"),
-        currentFile: z.string().optional().describe("Current file to exclude from results"),
-        limit: z.coerce.number().optional().describe("Max results per category (default: 5)"),
+        typeName: z
+          .string()
+          .optional()
+          .describe("Name of the type/interface/class to look up"),
+        code: z
+          .string()
+          .optional()
+          .describe(
+            "Code containing types to look up (alternative to typeName)",
+          ),
+        currentFile: z
+          .string()
+          .optional()
+          .describe("Current file to exclude from results"),
+        limit: z.coerce
+          .number()
+          .optional()
+          .describe("Max results per category (default: 5)"),
       }),
       annotations: TOOL_ANNOTATIONS["get_type_context"],
-      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
-        const { typeName, code, currentFile, limit = 5 } = args as {
+      handler: async (
+        args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
+        const {
+          typeName,
+          code,
+          currentFile,
+          limit = 5,
+        } = args as {
           typeName?: string;
           code?: string;
           currentFile?: string;
@@ -235,11 +313,20 @@ export function createAdvancedTools(projectName: string): ToolSpec[] {
       name: "get_behavior_patterns",
       description: `Analyze user workflow patterns for ${projectName}. Shows peak hours, tool preferences, common sequences, and session statistics.`,
       schema: z.object({
-        days: z.coerce.number().optional().describe("Number of days to analyze (default: 7)"),
-        sessionId: z.string().optional().describe("Filter to a specific session (optional)"),
+        days: z.coerce
+          .number()
+          .optional()
+          .describe("Number of days to analyze (default: 7)"),
+        sessionId: z
+          .string()
+          .optional()
+          .describe("Filter to a specific session (optional)"),
       }),
       annotations: TOOL_ANNOTATIONS["get_behavior_patterns"],
-      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
+      handler: async (
+        args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
         const { days = 7, sessionId } = args as {
           days?: number;
           sessionId?: string;
@@ -250,7 +337,7 @@ export function createAdvancedTools(projectName: string): ToolSpec[] {
         if (sessionId) params.set("sessionId", sessionId);
 
         const response = await ctx.api.get(
-          `/api/behavior-patterns?${params.toString()}`
+          `/api/behavior-patterns?${params.toString()}`,
         );
         const data = response.data;
 

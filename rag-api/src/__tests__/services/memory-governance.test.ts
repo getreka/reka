@@ -175,18 +175,20 @@ describe('MemoryGovernanceService', () => {
     it('moves memory from quarantine to durable', async () => {
       // Find in quarantine
       mockQdrantClient.scroll.mockResolvedValue({
-        points: [{
-          id: 'q-1',
-          payload: {
+        points: [
+          {
             id: 'q-1',
-            type: 'insight',
-            content: 'promoted content',
-            tags: ['test'],
-            source: 'auto_pattern',
-            confidence: 0.8,
-            metadata: {},
+            payload: {
+              id: 'q-1',
+              type: 'insight',
+              content: 'promoted content',
+              tags: ['test'],
+              source: 'auto_pattern',
+              confidence: 0.8,
+              metadata: {},
+            },
           },
-        }],
+        ],
       });
       mockedVS.delete.mockResolvedValue(undefined);
       mockedMemory.remember.mockResolvedValue({
@@ -225,9 +227,7 @@ describe('MemoryGovernanceService', () => {
     it('rejects promotion when quality gates fail', async () => {
       mockedGates.runGates.mockResolvedValue({
         passed: false,
-        gates: [
-          { gate: 'typecheck', passed: false, details: 'TS2322: Type error', duration: 100 },
-        ],
+        gates: [{ gate: 'typecheck', passed: false, details: 'TS2322: Type error', duration: 100 }],
       });
 
       await expect(
@@ -337,9 +337,7 @@ describe('MemoryGovernanceService', () => {
     it('returns empty when no expired memories', async () => {
       const fresh = new Date().toISOString();
       mockQdrantClient.scroll.mockResolvedValue({
-        points: [
-          { id: 'f-1', payload: { createdAt: fresh } },
-        ],
+        points: [{ id: 'f-1', payload: { createdAt: fresh } }],
         next_page_offset: undefined,
       });
 
@@ -359,7 +357,15 @@ describe('MemoryGovernanceService', () => {
               { id: 'a', type: 'note', content: 'foo', tags: [], createdAt: '', updatedAt: '' },
               { id: 'b', type: 'note', content: 'bar', tags: [], createdAt: '', updatedAt: '' },
             ],
-            merged: { id: 'merged-1', type: 'note', content: 'foo + bar', tags: [], createdAt: '', updatedAt: '', metadata: {} },
+            merged: {
+              id: 'merged-1',
+              type: 'note',
+              content: 'foo + bar',
+              tags: [],
+              createdAt: '',
+              updatedAt: '',
+              metadata: {},
+            },
           },
         ],
         totalFound: 10,
@@ -386,7 +392,15 @@ describe('MemoryGovernanceService', () => {
               { id: 'a', type: 'note', content: 'foo', tags: [], createdAt: '', updatedAt: '' },
               { id: 'b', type: 'note', content: 'bar', tags: [], createdAt: '', updatedAt: '' },
             ],
-            merged: { id: 'tmp', type: 'note', content: 'foo + bar', tags: ['test'], createdAt: '', updatedAt: '', metadata: {} },
+            merged: {
+              id: 'tmp',
+              type: 'note',
+              content: 'foo + bar',
+              tags: ['test'],
+              createdAt: '',
+              updatedAt: '',
+              metadata: {},
+            },
           },
         ],
         totalFound: 10,
@@ -427,12 +441,16 @@ describe('MemoryGovernanceService', () => {
     it('throws when compaction already running for same project', async () => {
       // Simulate a long-running compaction by making mergeMemories hang
       let resolveHang: () => void;
-      const hangPromise = new Promise<void>(resolve => { resolveHang = resolve; });
-      mockedMemory.mergeMemories.mockImplementation(() => hangPromise.then(() => ({
-        merged: [],
-        totalFound: 0,
-        totalMerged: 0,
-      })));
+      const hangPromise = new Promise<void>((resolve) => {
+        resolveHang = resolve;
+      });
+      mockedMemory.mergeMemories.mockImplementation(() =>
+        hangPromise.then(() => ({
+          merged: [],
+          totalFound: 0,
+          totalMerged: 0,
+        }))
+      );
 
       // Start first compaction (will hang)
       const first = memoryGovernance.runCompaction('test');

@@ -38,8 +38,10 @@ if (decisionsRes?.data?.memories) {  // Аналогічно
 API роути `/api/memory/recall` та `/api/memory/recall-durable` повертають `{ results: [...] }`, але `recallWithTimeout` зчитує `memoriesRes.data.memories`, яке завжди `undefined`. Це означає що **контекстне збагачення ніколи не працює** — всі enrichable tools (search_codebase, ask_codebase, тощо) не отримують автоматичний контекст з пам'яті.
 
 Примітка: `context_briefing` в `suggestions.ts` (рядок 89) правильно читає обидва варіанти:
+
 ```typescript
-const memories = memoriesRes?.data?.results || memoriesRes?.data?.memories || [];
+const memories =
+  memoriesRes?.data?.results || memoriesRes?.data?.memories || [];
 ```
 
 ### Проблема #3 (ЛАТЕНТНА): Ланцюгове supersede
@@ -47,10 +49,12 @@ const memories = memoriesRes?.data?.results || memoriesRes?.data?.memories || []
 **Файл**: `/home/ake/shared-ai-infra/rag-api/src/services/memory.ts`, рядки 748, 171
 
 При збереженні нової пам'яті, `detectRelationships()` позначає старі memories як superseded якщо:
+
 - Схожість > 0.85 (cosine similarity)
 - Той самий тип (decision, insight, тощо)
 
 На recall, рядок 171 фільтрує всі superseded memories:
+
 ```typescript
 .filter(r => !r.payload.supersededBy)
 ```
@@ -85,7 +89,9 @@ MCP tool reads response.data.results → []
 ```typescript
 // Рядок 522-525: додати логування
 if (error.status === 404) {
-  logger.warn(`Search: collection '${collection}' not found (404), returning empty results`);
+  logger.warn(
+    `Search: collection '${collection}' not found (404), returning empty results`,
+  );
   return [];
 }
 ```
@@ -94,11 +100,18 @@ if (error.status === 404) {
 
 ```typescript
 // Після рядка 165: додати логування
-const results = await vectorStore.search(collectionName, embedding, limit * 2, filter);
+const results = await vectorStore.search(
+  collectionName,
+  embedding,
+  limit * 2,
+  filter,
+);
 
 if (results.length === 0) {
-  logger.debug('Recall: no results from vector search', {
-    project: projectName, collection: collectionName, query: query.slice(0, 100)
+  logger.debug("Recall: no results from vector search", {
+    project: projectName,
+    collection: collectionName,
+    query: query.slice(0, 100),
   });
 }
 ```
@@ -133,14 +146,17 @@ if (r.score > 0.85 && existingType === type && !r.payload.supersededBy) {
 ## Blast Radius
 
 ### Fix #1 (logging):
+
 - `rag-api/src/services/vector-store.ts` — безпечна зміна, тільки додає логування
 - `rag-api/src/services/memory.ts` — безпечна зміна, тільки додає логування
 
 ### Fix #2 (field name):
+
 - `mcp-server/src/context-enrichment.ts` — впливає на всі enrichable tools (search_codebase, ask_codebase, explain_code, find_feature, review_code, generate_tests, suggest_implementation, suggest_related_code, check_architecture, context_briefing, run_agent)
 - Після виправлення ці tools почнуть отримувати автоматичний контекст з пам'яті
 
 ### Fix #3 (supersede chain):
+
 - `rag-api/src/services/memory.ts` — впливає на `remember()` і всі наступні виклики `recall()`
 - Існуючі superseded memories залишаться superseded (потрібна міграція для очищення)
 

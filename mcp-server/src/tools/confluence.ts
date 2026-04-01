@@ -18,12 +18,25 @@ export function createConfluenceTools(projectName: string): ToolSpec[] {
       description: `Search indexed Confluence documentation for ${projectName}. Returns relevant pages with content snippets.`,
       schema: z.object({
         query: z.string().describe("Search query for Confluence content"),
-        limit: z.coerce.number().optional().describe("Max results (default: 5)"),
-        spaceKey: z.string().optional().describe("Filter by Confluence space key"),
+        limit: z.coerce
+          .number()
+          .optional()
+          .describe("Max results (default: 5)"),
+        spaceKey: z
+          .string()
+          .optional()
+          .describe("Filter by Confluence space key"),
       }),
       annotations: TOOL_ANNOTATIONS["search_confluence"],
-      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
-        const { query, limit = 5, spaceKey } = args as {
+      handler: async (
+        args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
+        const {
+          query,
+          limit = 5,
+          spaceKey,
+        } = args as {
           query: string;
           limit?: number;
           spaceKey?: string;
@@ -47,7 +60,7 @@ export function createConfluenceTools(projectName: string): ToolSpec[] {
               `**Score:** ${pct(r.score)}` +
               (r.spaceKey ? ` | **Space:** ${r.spaceKey}` : "") +
               (r.url ? ` | [View](${r.url})` : "") +
-              `\n\n${truncate(r.content || "", 600)}`
+              `\n\n${truncate(r.content || "", 600)}`,
           )
           .join("\n\n---\n\n");
       },
@@ -56,14 +69,36 @@ export function createConfluenceTools(projectName: string): ToolSpec[] {
       name: "index_confluence",
       description: `Index Confluence spaces/pages for ${projectName}. Requires Confluence credentials in RAG API.`,
       schema: z.object({
-        spaceKeys: z.array(z.string()).optional().describe("Specific space keys to index (indexes all accessible if empty)"),
-        labels: z.array(z.string()).optional().describe("Filter pages by labels"),
-        maxPages: z.coerce.number().optional().describe("Maximum pages to index (default: 500)"),
-        force: z.boolean().optional().describe("Force re-index even if already indexed"),
+        spaceKeys: z
+          .array(z.string())
+          .optional()
+          .describe(
+            "Specific space keys to index (indexes all accessible if empty)",
+          ),
+        labels: z
+          .array(z.string())
+          .optional()
+          .describe("Filter pages by labels"),
+        maxPages: z.coerce
+          .number()
+          .optional()
+          .describe("Maximum pages to index (default: 500)"),
+        force: z
+          .boolean()
+          .optional()
+          .describe("Force re-index even if already indexed"),
       }),
       annotations: TOOL_ANNOTATIONS["index_confluence"],
-      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
-        const { spaceKeys, labels, maxPages = 500, force = false } = args as {
+      handler: async (
+        args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
+        const {
+          spaceKeys,
+          labels,
+          maxPages = 500,
+          force = false,
+        } = args as {
           spaceKeys?: string[];
           labels?: string[];
           maxPages?: number;
@@ -96,10 +131,14 @@ export function createConfluenceTools(projectName: string): ToolSpec[] {
     },
     {
       name: "get_confluence_status",
-      description: "Check if Confluence integration is configured and available.",
+      description:
+        "Check if Confluence integration is configured and available.",
       schema: z.object({}),
       annotations: TOOL_ANNOTATIONS["get_confluence_status"],
-      handler: async (_args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
+      handler: async (
+        _args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
         const response = await ctx.api.get("/api/confluence/status");
         const data = response.data;
 
@@ -115,7 +154,10 @@ export function createConfluenceTools(projectName: string): ToolSpec[] {
       description: "List available Confluence spaces that can be indexed.",
       schema: z.object({}),
       annotations: TOOL_ANNOTATIONS["list_confluence_spaces"],
-      handler: async (_args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
+      handler: async (
+        _args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
         const response = await ctx.api.get("/api/confluence/spaces");
         const spaces = response.data.spaces || response.data;
 

@@ -143,9 +143,7 @@ describe('CacheService', () => {
     it('setEmbedding stores with TTL', async () => {
       mockRedis.setex.mockResolvedValue('OK');
       await cacheService.setEmbedding('hello', [1, 2, 3]);
-      expect(mockRedis.setex).toHaveBeenCalledWith(
-        expect.stringMatching(/^emb:/), 3600, '[1,2,3]'
-      );
+      expect(mockRedis.setex).toHaveBeenCalledWith(expect.stringMatching(/^emb:/), 3600, '[1,2,3]');
     });
   });
 

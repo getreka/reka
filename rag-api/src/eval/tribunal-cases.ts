@@ -45,9 +45,11 @@ export const EVAL_CASES: TribunalEvalCase[] = [
   {
     id: 'arch-02',
     category: 'architecture',
-    topic: 'For a new analytics service processing 10M events/day, should we use SQL (PostgreSQL) or NoSQL (ClickHouse)?',
+    topic:
+      'For a new analytics service processing 10M events/day, should we use SQL (PostgreSQL) or NoSQL (ClickHouse)?',
     positions: ['PostgreSQL', 'ClickHouse'],
-    context: 'Team has strong PostgreSQL expertise. Events are append-only with timestamp-based queries. Budget is limited.',
+    context:
+      'Team has strong PostgreSQL expertise. Events are append-only with timestamp-based queries. Budget is limited.',
     expectedQualities: {
       verdictCoversAllPositions: true,
       evidenceCited: true,
@@ -61,7 +63,8 @@ export const EVAL_CASES: TribunalEvalCase[] = [
     category: 'architecture',
     topic: 'REST vs gRPC for internal service-to-service communication in a Kubernetes cluster',
     positions: ['REST/HTTP', 'gRPC'],
-    context: 'Services are TypeScript (Node.js) and Go. Need streaming for some endpoints. Team knows REST well but not gRPC.',
+    context:
+      'Services are TypeScript (Node.js) and Go. Need streaming for some endpoints. Team knows REST well but not gRPC.',
     expectedQualities: {
       verdictCoversAllPositions: true,
       evidenceCited: true,
@@ -73,7 +76,8 @@ export const EVAL_CASES: TribunalEvalCase[] = [
   {
     id: 'arch-04',
     category: 'architecture',
-    topic: 'Synchronous request-response vs async event-driven architecture for an order processing system',
+    topic:
+      'Synchronous request-response vs async event-driven architecture for an order processing system',
     positions: ['Synchronous', 'Event-driven', 'Hybrid (sync for reads, async for writes)'],
     expectedQualities: {
       verdictCoversAllPositions: true,
@@ -105,7 +109,8 @@ export const EVAL_CASES: TribunalEvalCase[] = [
     category: 'code-approach',
     topic: 'Inheritance vs composition for sharing behavior across entity handlers',
     positions: ['Inheritance (abstract base class)', 'Composition (mixins/strategies)'],
-    context: 'TypeScript codebase with 12 entity types sharing validation, serialization, and audit logging.',
+    context:
+      'TypeScript codebase with 12 entity types sharing validation, serialization, and audit logging.',
     expectedQualities: {
       verdictCoversAllPositions: true,
       evidenceCited: true,
@@ -120,7 +125,8 @@ export const EVAL_CASES: TribunalEvalCase[] = [
     category: 'code-approach',
     topic: 'ORM (Prisma) vs raw SQL queries for a data-heavy backend',
     positions: ['Prisma ORM', 'Raw SQL with query builder (Knex)'],
-    context: 'PostgreSQL with complex joins, CTEs, and window functions. Team is full-stack (frontend-heavy).',
+    context:
+      'PostgreSQL with complex joins, CTEs, and window functions. Team is full-stack (frontend-heavy).',
     expectedQualities: {
       verdictCoversAllPositions: true,
       evidenceCited: true,
@@ -134,7 +140,8 @@ export const EVAL_CASES: TribunalEvalCase[] = [
     category: 'code-approach',
     topic: 'Throwing exceptions vs returning Result<T, E> for error handling in business logic',
     positions: ['Exceptions (try/catch)', 'Result type (neverthrow/fp-ts)'],
-    context: 'TypeScript Node.js backend. Team is familiar with exceptions. Some new members know Rust.',
+    context:
+      'TypeScript Node.js backend. Team is familiar with exceptions. Some new members know Rust.',
     expectedQualities: {
       verdictCoversAllPositions: true,
       evidenceCited: true,
@@ -160,9 +167,11 @@ export const EVAL_CASES: TribunalEvalCase[] = [
   {
     id: 'code-05',
     category: 'code-approach',
-    topic: 'Mutable state with careful mutation vs immutable data structures throughout the codebase',
+    topic:
+      'Mutable state with careful mutation vs immutable data structures throughout the codebase',
     positions: ['Mutable (controlled mutation)', 'Immutable (Immer/structuredClone)'],
-    context: 'React + Redux frontend with complex nested state. Performance is critical for large lists.',
+    context:
+      'React + Redux frontend with complex nested state. Performance is critical for large lists.',
     expectedQualities: {
       verdictCoversAllPositions: true,
       evidenceCited: true,
@@ -179,7 +188,8 @@ export const EVAL_CASES: TribunalEvalCase[] = [
     category: 'tech-choice',
     topic: 'Redis vs Memcached for a session store and API response cache',
     positions: ['Redis', 'Memcached'],
-    context: 'Need TTL support, ~50K req/sec. Some data structures (sorted sets) would be nice but not required.',
+    context:
+      'Need TTL support, ~50K req/sec. Some data structures (sorted sets) would be nice but not required.',
     expectedQualities: {
       verdictCoversAllPositions: true,
       evidenceCited: true,
@@ -195,7 +205,8 @@ export const EVAL_CASES: TribunalEvalCase[] = [
     category: 'tech-choice',
     topic: 'Qdrant vs pgvector for a RAG application with 1M+ documents',
     positions: ['Qdrant (dedicated vector DB)', 'pgvector (PostgreSQL extension)'],
-    context: 'Already using PostgreSQL for main data. Need hybrid search (dense + sparse). Budget for infra is moderate.',
+    context:
+      'Already using PostgreSQL for main data. Need hybrid search (dense + sparse). Budget for infra is moderate.',
     expectedQualities: {
       verdictCoversAllPositions: true,
       evidenceCited: true,
@@ -223,7 +234,8 @@ export const EVAL_CASES: TribunalEvalCase[] = [
     category: 'tech-choice',
     topic: 'Jest vs Vitest for testing a TypeScript monorepo',
     positions: ['Jest', 'Vitest'],
-    context: 'Monorepo with Vite-based frontend and Node.js backend. Currently no tests. Starting from scratch.',
+    context:
+      'Monorepo with Vite-based frontend and Node.js backend. Currently no tests. Starting from scratch.',
     expectedQualities: {
       verdictCoversAllPositions: true,
       evidenceCited: true,
@@ -237,7 +249,8 @@ export const EVAL_CASES: TribunalEvalCase[] = [
     category: 'tech-choice',
     topic: 'Docker Compose vs Kubernetes for deploying 5 services in a startup environment',
     positions: ['Docker Compose', 'Kubernetes (k3s)'],
-    context: 'Team of 4, no dedicated DevOps. Running on 2 VPS servers. Need zero-downtime deploys.',
+    context:
+      'Team of 4, no dedicated DevOps. Running on 2 VPS servers. Need zero-downtime deploys.',
     expectedQualities: {
       verdictCoversAllPositions: true,
       evidenceCited: true,
@@ -252,9 +265,11 @@ export const EVAL_CASES: TribunalEvalCase[] = [
   {
     id: 'rag-01',
     category: 'rag-aware',
-    topic: 'Should the shared RAG infrastructure use BGE-M3 (dedicated embedding server) or Ollama nomic-embed-text for embeddings?',
+    topic:
+      'Should the shared RAG infrastructure use BGE-M3 (dedicated embedding server) or Ollama nomic-embed-text for embeddings?',
     positions: ['BGE-M3 (dedicated server, 1024d)', 'Ollama nomic-embed-text (768d)'],
-    context: 'Existing project uses BGE-M3 via TEI server on port 8080. Need multilingual support for Ukrainian+English codebases. Batch embedding for indexing 10K+ files.',
+    context:
+      'Existing project uses BGE-M3 via TEI server on port 8080. Need multilingual support for Ukrainian+English codebases. Batch embedding for indexing 10K+ files.',
     useCodeContext: true,
     projectName: 'shared-ai-infra',
     expectedQualities: {
@@ -269,9 +284,15 @@ export const EVAL_CASES: TribunalEvalCase[] = [
   {
     id: 'rag-02',
     category: 'rag-aware',
-    topic: 'Single LLM provider vs hybrid routing (Claude for complex tasks + Ollama for utility) in a RAG backend',
-    positions: ['Single provider (Claude only)', 'Hybrid routing (Claude complex + Ollama utility)', 'Single provider (Ollama only)'],
-    context: 'RAG API handles diverse tasks: semantic routing, memory merge, reranking (utility) and code review, agent reasoning, tribunal debates (complex). Cost and latency vary significantly between providers.',
+    topic:
+      'Single LLM provider vs hybrid routing (Claude for complex tasks + Ollama for utility) in a RAG backend',
+    positions: [
+      'Single provider (Claude only)',
+      'Hybrid routing (Claude complex + Ollama utility)',
+      'Single provider (Ollama only)',
+    ],
+    context:
+      'RAG API handles diverse tasks: semantic routing, memory merge, reranking (utility) and code review, agent reasoning, tribunal debates (complex). Cost and latency vary significantly between providers.',
     useCodeContext: true,
     projectName: 'shared-ai-infra',
     expectedQualities: {
@@ -286,9 +307,11 @@ export const EVAL_CASES: TribunalEvalCase[] = [
   {
     id: 'rag-03',
     category: 'rag-aware',
-    topic: 'Qdrant (dedicated vector DB) vs pgvector for a multi-project RAG system with 1M+ embeddings and hybrid search',
+    topic:
+      'Qdrant (dedicated vector DB) vs pgvector for a multi-project RAG system with 1M+ embeddings and hybrid search',
     positions: ['Qdrant (dedicated vector DB)', 'pgvector (PostgreSQL extension)'],
-    context: 'System serves multiple projects with namespaced collections. Needs: dense+sparse hybrid search, payload filtering, collection-level isolation, HNSW indexing. No existing PostgreSQL in the stack.',
+    context:
+      'System serves multiple projects with namespaced collections. Needs: dense+sparse hybrid search, payload filtering, collection-level isolation, HNSW indexing. No existing PostgreSQL in the stack.',
     useCodeContext: true,
     projectName: 'shared-ai-infra',
     expectedQualities: {
@@ -303,9 +326,14 @@ export const EVAL_CASES: TribunalEvalCase[] = [
   {
     id: 'rag-04',
     category: 'rag-aware',
-    topic: 'Memory governance: auto-quarantine new memories vs trust-all with manual cleanup for an AI agent memory system',
-    positions: ['Auto-quarantine (new memories need promotion)', 'Trust-all (save directly, clean up later)'],
-    context: 'Agent memory stores decisions, insights, patterns, and tech debt. Autonomous agents can create memories. Risk of hallucinated or redundant memories polluting the knowledge base. Need to balance knowledge capture speed vs quality.',
+    topic:
+      'Memory governance: auto-quarantine new memories vs trust-all with manual cleanup for an AI agent memory system',
+    positions: [
+      'Auto-quarantine (new memories need promotion)',
+      'Trust-all (save directly, clean up later)',
+    ],
+    context:
+      'Agent memory stores decisions, insights, patterns, and tech debt. Autonomous agents can create memories. Risk of hallucinated or redundant memories polluting the knowledge base. Need to balance knowledge capture speed vs quality.',
     useCodeContext: true,
     projectName: 'shared-ai-infra',
     expectedQualities: {
@@ -320,9 +348,11 @@ export const EVAL_CASES: TribunalEvalCase[] = [
   {
     id: 'rag-05',
     category: 'rag-aware',
-    topic: 'MCP server architecture: single shared instance vs per-project instances for multi-project RAG',
+    topic:
+      'MCP server architecture: single shared instance vs per-project instances for multi-project RAG',
     positions: ['Single shared MCP server', 'Per-project MCP instances (stdio)'],
-    context: 'RAG infrastructure serves 3+ projects. Each project needs isolated context (codebase, memory, docs). MCP tools must know which project they operate on. AI assistants (Claude Code) connect via MCP protocol.',
+    context:
+      'RAG infrastructure serves 3+ projects. Each project needs isolated context (codebase, memory, docs). MCP tools must know which project they operate on. AI assistants (Claude Code) connect via MCP protocol.',
     useCodeContext: true,
     projectName: 'shared-ai-infra',
     expectedQualities: {

@@ -86,7 +86,9 @@
   "user_notes_summary": {
     "uncertainties": [],
     "needs_review": [],
-    "workarounds": ["analyze_conversation and auto_remember timed out; fell back to remember tool for learning extraction"]
+    "workarounds": [
+      "analyze_conversation and auto_remember timed out; fell back to remember tool for learning extraction"
+    ]
   },
   "eval_feedback": {
     "suggestions": [

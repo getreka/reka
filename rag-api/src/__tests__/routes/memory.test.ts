@@ -84,8 +84,10 @@ describe('Memory Routes', () => {
       const fakeMemory = { id: 'mem-1', content: 'test decision', type: 'decision' };
       mocks.remember.mockResolvedValue(fakeMemory);
 
-      const res = await withProject(request(app).post('/api/memory'), 'testproject')
-        .send({ content: 'test decision', type: 'decision' });
+      const res = await withProject(request(app).post('/api/memory'), 'testproject').send({
+        content: 'test decision',
+        type: 'decision',
+      });
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
@@ -98,12 +100,11 @@ describe('Memory Routes', () => {
       const fakeMemory = { id: 'mem-2', content: 'auto insight', type: 'insight' };
       mocks.ingest.mockResolvedValue(fakeMemory);
 
-      const res = await withProject(request(app).post('/api/memory'), 'testproject')
-        .send({
-          content: 'auto insight',
-          type: 'insight',
-          metadata: { source: 'auto_conversation', confidence: 0.8 },
-        });
+      const res = await withProject(request(app).post('/api/memory'), 'testproject').send({
+        content: 'auto insight',
+        type: 'insight',
+        metadata: { source: 'auto_conversation', confidence: 0.8 },
+      });
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
@@ -113,17 +114,16 @@ describe('Memory Routes', () => {
     });
 
     it('missing projectName returns 400', async () => {
-      const res = await request(app)
-        .post('/api/memory')
-        .send({ content: 'something' });
+      const res = await request(app).post('/api/memory').send({ content: 'something' });
 
       expect(res.status).toBe(400);
       expect(res.body.error).toMatch(/projectName/i);
     });
 
     it('missing content returns 400 validation error', async () => {
-      const res = await withProject(request(app).post('/api/memory'), 'testproject')
-        .send({ type: 'note' });
+      const res = await withProject(request(app).post('/api/memory'), 'testproject').send({
+        type: 'note',
+      });
 
       expect(res.status).toBe(400);
       expect(res.body.error).toBeDefined();
@@ -132,13 +132,12 @@ describe('Memory Routes', () => {
 
   describe('POST /api/memory/recall', () => {
     it('returns recall results', async () => {
-      const fakeResults = [
-        { memory: { id: 'mem-1', content: 'a decision' }, score: 0.9 },
-      ];
+      const fakeResults = [{ memory: { id: 'mem-1', content: 'a decision' }, score: 0.9 }];
       mocks.recall.mockResolvedValue(fakeResults);
 
-      const res = await withProject(request(app).post('/api/memory/recall'), 'testproject')
-        .send({ query: 'some query' });
+      const res = await withProject(request(app).post('/api/memory/recall'), 'testproject').send({
+        query: 'some query',
+      });
 
       expect(res.status).toBe(200);
       expect(res.body.results).toEqual(fakeResults);
@@ -146,8 +145,9 @@ describe('Memory Routes', () => {
     });
 
     it('empty query returns 400', async () => {
-      const res = await withProject(request(app).post('/api/memory/recall'), 'testproject')
-        .send({ query: '' });
+      const res = await withProject(request(app).post('/api/memory/recall'), 'testproject').send({
+        query: '',
+      });
 
       expect(res.status).toBe(400);
     });
@@ -157,8 +157,9 @@ describe('Memory Routes', () => {
     it('returns success on delete', async () => {
       mocks.forget.mockResolvedValue(true);
 
-      const res = await withProject(request(app).delete('/api/memory/abc-123'), 'testproject')
-        .send({});
+      const res = await withProject(request(app).delete('/api/memory/abc-123'), 'testproject').send(
+        {}
+      );
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
@@ -171,8 +172,10 @@ describe('Memory Routes', () => {
       const fakeMemory = { id: 'mem-3', content: 'validated insight', type: 'insight' };
       mocks.promote.mockResolvedValue(fakeMemory);
 
-      const res = await withProject(request(app).post('/api/memory/promote'), 'testproject')
-        .send({ memoryId: 'mem-3', reason: 'human_validated' });
+      const res = await withProject(request(app).post('/api/memory/promote'), 'testproject').send({
+        memoryId: 'mem-3',
+        reason: 'human_validated',
+      });
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
@@ -205,8 +208,17 @@ describe('Memory Routes', () => {
       const fakeResult = { quarantineDeleted: 3, compactionRuns: 0 };
       mocks.runMaintenance.mockResolvedValue(fakeResult);
 
-      const res = await withProject(request(app).post('/api/memory/maintenance'), 'testproject')
-        .send({ operations: { quarantine_cleanup: true, feedback_maintenance: false, compaction: false, compaction_dry_run: true } });
+      const res = await withProject(
+        request(app).post('/api/memory/maintenance'),
+        'testproject'
+      ).send({
+        operations: {
+          quarantine_cleanup: true,
+          feedback_maintenance: false,
+          compaction: false,
+          compaction_dry_run: true,
+        },
+      });
 
       expect(res.status).toBe(200);
       expect(res.body).toEqual(fakeResult);
@@ -218,8 +230,10 @@ describe('Memory Routes', () => {
     it('happy path returns deletion counts', async () => {
       mocks.forgetOlderThan.mockResolvedValueOnce(5).mockResolvedValueOnce(2);
 
-      const res = await withProject(request(app).post('/api/memory/forget-older'), 'testproject')
-        .send({ olderThanDays: 30 });
+      const res = await withProject(
+        request(app).post('/api/memory/forget-older'),
+        'testproject'
+      ).send({ olderThanDays: 30 });
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
@@ -230,8 +244,10 @@ describe('Memory Routes', () => {
     });
 
     it('olderThanDays less than 1 returns 400', async () => {
-      const res = await withProject(request(app).post('/api/memory/forget-older'), 'testproject')
-        .send({ olderThanDays: 0 });
+      const res = await withProject(
+        request(app).post('/api/memory/forget-older'),
+        'testproject'
+      ).send({ olderThanDays: 0 });
 
       expect(res.status).toBe(400);
     });
@@ -242,8 +258,9 @@ describe('Memory Routes', () => {
       const fakeResult = { totalMerged: 3, clusters: [] };
       mocks.mergeMemories.mockResolvedValue(fakeResult);
 
-      const res = await withProject(request(app).post('/api/memory/merge'), 'testproject')
-        .send({ dryRun: true });
+      const res = await withProject(request(app).post('/api/memory/merge'), 'testproject').send({
+        dryRun: true,
+      });
 
       expect(res.status).toBe(200);
       expect(res.body.totalMerged).toBe(3);
@@ -261,8 +278,9 @@ describe('Memory Routes', () => {
       };
       mocks.analyze.mockResolvedValue(fakeAnalysis);
 
-      const res = await withProject(request(app).post('/api/memory/extract'), 'testproject')
-        .send({ conversation: 'User: Hello. Assistant: Hi there.' });
+      const res = await withProject(request(app).post('/api/memory/extract'), 'testproject').send({
+        conversation: 'User: Hello. Assistant: Hi there.',
+      });
 
       expect(res.status).toBe(200);
       expect(res.body.learnings).toEqual(fakeAnalysis.learnings);

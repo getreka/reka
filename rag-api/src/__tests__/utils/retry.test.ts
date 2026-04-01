@@ -21,7 +21,8 @@ describe('withRetry', () => {
 
   it('retries on retryable error and returns value on eventual success', async () => {
     const retryableErr = new ExternalServiceError('Qdrant', 'connection lost');
-    const operation = vi.fn()
+    const operation = vi
+      .fn()
       .mockRejectedValueOnce(retryableErr)
       .mockRejectedValueOnce(retryableErr)
       .mockResolvedValue('recovered');
@@ -50,20 +51,14 @@ describe('withRetry', () => {
 
   it('calls onRetry callback with error, attempt, and delay', async () => {
     const retryableErr = new ExternalServiceError('BGE', 'timeout');
-    const operation = vi.fn()
-      .mockRejectedValueOnce(retryableErr)
-      .mockResolvedValue('done');
+    const operation = vi.fn().mockRejectedValueOnce(retryableErr).mockResolvedValue('done');
 
     const onRetry = vi.fn();
 
     await withRetry(operation, { ...fastOpts, onRetry });
 
     expect(onRetry).toHaveBeenCalledTimes(1);
-    expect(onRetry).toHaveBeenCalledWith(
-      retryableErr,
-      1,
-      expect.any(Number)
-    );
+    expect(onRetry).toHaveBeenCalledWith(retryableErr, 1, expect.any(Number));
   });
 
   it('calls onRetry on each failed attempt except the last', async () => {
@@ -71,16 +66,15 @@ describe('withRetry', () => {
     const operation = vi.fn().mockRejectedValue(retryableErr);
     const onRetry = vi.fn();
 
-    await expect(
-      withRetry(operation, { ...fastOpts, maxAttempts: 4, onRetry })
-    ).rejects.toThrow();
+    await expect(withRetry(operation, { ...fastOpts, maxAttempts: 4, onRetry })).rejects.toThrow();
 
     // onRetry is called for attempts 1, 2, 3 (not on the last attempt 4)
     expect(onRetry).toHaveBeenCalledTimes(3);
   });
 
   it('throws TimeoutError when timeoutMs elapses before operation completes', async () => {
-    const operation = () => new Promise<string>((resolve) => setTimeout(() => resolve('late'), 500));
+    const operation = () =>
+      new Promise<string>((resolve) => setTimeout(() => resolve('late'), 500));
 
     await expect(
       withRetry(operation, { maxAttempts: 1, baseDelayMs: 1, maxDelayMs: 10, timeoutMs: 50 })
@@ -99,9 +93,7 @@ describe('withRetry', () => {
     const networkErr = new Error('connect ECONNREFUSED');
     (networkErr as any).code = 'ECONNREFUSED';
 
-    const operation = vi.fn()
-      .mockRejectedValueOnce(networkErr)
-      .mockResolvedValue('reconnected');
+    const operation = vi.fn().mockRejectedValueOnce(networkErr).mockResolvedValue('reconnected');
 
     const result = await withRetry(operation, fastOpts);
 

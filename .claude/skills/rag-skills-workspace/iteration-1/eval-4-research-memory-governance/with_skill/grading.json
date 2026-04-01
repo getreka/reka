@@ -97,7 +97,9 @@
   "user_notes_summary": {
     "uncertainties": [],
     "needs_review": [],
-    "workarounds": ["find_feature timed out at 120s; hybrid_search was used as primary discovery instead"]
+    "workarounds": [
+      "find_feature timed out at 120s; hybrid_search was used as primary discovery instead"
+    ]
   },
   "eval_feedback": {
     "suggestions": [

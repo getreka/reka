@@ -63,9 +63,7 @@ describe('FeedbackService', () => {
       expect(result.feedbackType).toBe('helpful');
       expect(result.timestamp).toBeDefined();
 
-      expect(mockedEmbed.embed).toHaveBeenCalledWith(
-        expect.stringContaining('how does auth work')
-      );
+      expect(mockedEmbed.embed).toHaveBeenCalledWith(expect.stringContaining('how does auth work'));
       expect(mockedVS.upsert).toHaveBeenCalledWith(
         'myproject_search_feedback',
         expect.arrayContaining([
@@ -93,9 +91,7 @@ describe('FeedbackService', () => {
         betterQuery: 'improved query',
       });
 
-      expect(mockedEmbed.embed).toHaveBeenCalledWith(
-        expect.stringContaining('improved query')
-      );
+      expect(mockedEmbed.embed).toHaveBeenCalledWith(expect.stringContaining('improved query'));
     });
 
     it('throws when vectorStore.upsert fails', async () => {
@@ -156,9 +152,7 @@ describe('FeedbackService', () => {
         correction: 'updated info here',
       });
 
-      expect(mockedEmbed.embed).toHaveBeenCalledWith(
-        expect.stringContaining('updated info here')
-      );
+      expect(mockedEmbed.embed).toHaveBeenCalledWith(expect.stringContaining('updated info here'));
     });
 
     it('throws when vectorStore.upsert fails', async () => {
@@ -247,7 +241,7 @@ describe('FeedbackService', () => {
           payload: {
             feedbackType: 'not_helpful',
             query: 'auth',
-            betterQuery: null,  // no betterQuery — should be skipped
+            betterQuery: null, // no betterQuery — should be skipped
           },
         },
       ]);

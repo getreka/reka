@@ -15,6 +15,7 @@ Memory A (stored) → Memory B (stored, A marked superseded) → Memory C (store
 ```
 
 В `recall()` рядок 171 фільтрує ВСІ superseded memories:
+
 ```typescript
 .filter(r => !r.payload.supersededBy) // Exclude superseded memories
 ```
@@ -41,7 +42,7 @@ API endpoint `/api/memory/recall-durable` повертає `res.json({ results }
 
 ```typescript
 if (error.status === 404) {
-    return [];  // Silent empty return, no logging
+  return []; // Silent empty return, no logging
 }
 ```
 
@@ -101,16 +102,20 @@ if (decisionsRes?.data?.results) {
 ```typescript
 // Після рядка 165:
 if (results.length === 0) {
-  logger.debug('Recall returned 0 results from vector store', {
-    project: projectName, collection: collectionName, query: query.slice(0, 100)
+  logger.debug("Recall returned 0 results from vector store", {
+    project: projectName,
+    collection: collectionName,
+    query: query.slice(0, 100),
   });
   return [];
 }
 
-const supersededCount = results.filter(r => r.payload.supersededBy).length;
+const supersededCount = results.filter((r) => r.payload.supersededBy).length;
 if (supersededCount === results.length) {
-  logger.warn('All recall results filtered as superseded', {
-    project: projectName, total: results.length, superseded: supersededCount
+  logger.warn("All recall results filtered as superseded", {
+    project: projectName,
+    total: results.length,
+    superseded: supersededCount,
   });
 }
 ```
@@ -120,7 +125,7 @@ if (supersededCount === results.length) {
 ```typescript
 // Рядок 523:
 if (error.status === 404) {
-  logger.debug('Search on non-existent collection', { collection });
+  logger.debug("Search on non-existent collection", { collection });
   return [];
 }
 ```

@@ -6,9 +6,15 @@ import axios from 'axios';
 import { logger } from '../utils/logger';
 
 export interface EvalAssertion {
-  type: 'json_parseable' | 'contains_key' | 'matches_regex' |
-        'thinking_present' | 'min_length' | 'max_latency_ms' |
-        'score_gte' | 'no_hallucination';
+  type:
+    | 'json_parseable'
+    | 'contains_key'
+    | 'matches_regex'
+    | 'thinking_present'
+    | 'min_length'
+    | 'max_latency_ms'
+    | 'score_gte'
+    | 'no_hallucination';
   params: Record<string, unknown>;
 }
 
@@ -63,18 +69,16 @@ export class EvalRunner {
       results.push(result);
     }
 
-    const jsonCases = results.filter(r =>
-      r.assertions.some(a => a.type === 'json_parseable')
-    );
-    const jsonParsed = jsonCases.filter(r =>
-      r.assertions.find(a => a.type === 'json_parseable')?.passed
+    const jsonCases = results.filter((r) => r.assertions.some((a) => a.type === 'json_parseable'));
+    const jsonParsed = jsonCases.filter(
+      (r) => r.assertions.find((a) => a.type === 'json_parseable')?.passed
     );
 
-    const thinkingCases = results.filter(r =>
-      r.assertions.some(a => a.type === 'thinking_present')
+    const thinkingCases = results.filter((r) =>
+      r.assertions.some((a) => a.type === 'thinking_present')
     );
-    const thinkingPresent = thinkingCases.filter(r =>
-      r.assertions.find(a => a.type === 'thinking_present')?.passed
+    const thinkingPresent = thinkingCases.filter(
+      (r) => r.assertions.find((a) => a.type === 'thinking_present')?.passed
     );
 
     return {
@@ -83,11 +87,12 @@ export class EvalRunner {
       results,
       summary: {
         total: results.length,
-        passed: results.filter(r => r.passed).length,
-        failed: results.filter(r => !r.passed).length,
-        avgLatencyMs: results.length > 0
-          ? Math.round(results.reduce((s, r) => s + r.latencyMs, 0) / results.length)
-          : 0,
+        passed: results.filter((r) => r.passed).length,
+        failed: results.filter((r) => !r.passed).length,
+        avgLatencyMs:
+          results.length > 0
+            ? Math.round(results.reduce((s, r) => s + r.latencyMs, 0) / results.length)
+            : 0,
         jsonParseRate: jsonCases.length > 0 ? jsonParsed.length / jsonCases.length : 1,
         thinkingRate: thinkingCases.length > 0 ? thinkingPresent.length / thinkingCases.length : 0,
       },
@@ -116,14 +121,14 @@ export class EvalRunner {
       const data = response.data;
 
       // Run assertions
-      const assertionResults = testCase.assertions.map(assertion =>
+      const assertionResults = testCase.assertions.map((assertion) =>
         this.checkAssertion(assertion, data, latencyMs)
       );
 
       return {
         caseId: testCase.id,
         endpoint: testCase.endpoint,
-        passed: assertionResults.every(a => a.passed),
+        passed: assertionResults.every((a) => a.passed),
         assertions: assertionResults,
         latencyMs,
         response: data,
@@ -134,7 +139,7 @@ export class EvalRunner {
         caseId: testCase.id,
         endpoint: testCase.endpoint,
         passed: false,
-        assertions: testCase.assertions.map(a => ({
+        assertions: testCase.assertions.map((a) => ({
           type: a.type,
           passed: false,
           detail: `Request failed: ${error.message}`,
@@ -168,7 +173,8 @@ export class EvalRunner {
 
       case 'contains_key': {
         const key = params.key as string;
-        const has = typeof data === 'object' && data !== null && key in (data as Record<string, unknown>);
+        const has =
+          typeof data === 'object' && data !== null && key in (data as Record<string, unknown>);
         return { type, passed: has, detail: has ? undefined : `Missing key: ${key}` };
       }
 
@@ -176,7 +182,11 @@ export class EvalRunner {
         const pattern = params.pattern as string;
         const text = JSON.stringify(data);
         const matched = new RegExp(pattern, 'i').test(text);
-        return { type, passed: matched, detail: matched ? undefined : `Pattern not found: ${pattern}` };
+        return {
+          type,
+          passed: matched,
+          detail: matched ? undefined : `Pattern not found: ${pattern}`,
+        };
       }
 
       case 'thinking_present': {

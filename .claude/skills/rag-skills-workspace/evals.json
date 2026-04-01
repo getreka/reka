@@ -8,12 +8,30 @@
       "expected_output": "Session started with context briefing, developer profile, and cache warming. Shows relevant memories, patterns, and dependencies for vector-store.ts",
       "files": [],
       "assertions": [
-        {"type": "tool", "text": "Calls start_session with a descriptive sessionId"},
-        {"type": "tool", "text": "Calls context_briefing with task mentioning vector-store.ts"},
-        {"type": "tool", "text": "Runs at least 2 tool calls in parallel (any combination)"},
-        {"type": "outcome", "text": "Briefing mentions specific file paths relevant to vector-store.ts (e.g., vector-store.ts, qdrant, search)"},
-        {"type": "outcome", "text": "Output contains at least 3 distinct sections (e.g., context, patterns, dependencies, profile)"},
-        {"type": "outcome", "text": "Briefing references project-specific concepts (Qdrant, embeddings, collections) not generic boilerplate"}
+        {
+          "type": "tool",
+          "text": "Calls start_session with a descriptive sessionId"
+        },
+        {
+          "type": "tool",
+          "text": "Calls context_briefing with task mentioning vector-store.ts"
+        },
+        {
+          "type": "tool",
+          "text": "Runs at least 2 tool calls in parallel (any combination)"
+        },
+        {
+          "type": "outcome",
+          "text": "Briefing mentions specific file paths relevant to vector-store.ts (e.g., vector-store.ts, qdrant, search)"
+        },
+        {
+          "type": "outcome",
+          "text": "Output contains at least 3 distinct sections (e.g., context, patterns, dependencies, profile)"
+        },
+        {
+          "type": "outcome",
+          "text": "Briefing references project-specific concepts (Qdrant, embeddings, collections) not generic boilerplate"
+        }
       ]
     },
     {
@@ -23,12 +41,30 @@
       "expected_output": "Implementation plan based on RAG context, followed by code, review, and knowledge capture",
       "files": [],
       "assertions": [
-        {"type": "tool", "text": "Calls context_briefing before any code changes"},
-        {"type": "tool", "text": "Calls review_code or check_architecture after writing code"},
-        {"type": "tool", "text": "Calls remember or record_adr to capture the decision"},
-        {"type": "outcome", "text": "Implementation plan lists specific files to modify with rationale"},
-        {"type": "outcome", "text": "Plan includes blast radius section identifying dependent files"},
-        {"type": "outcome", "text": "Written code implements rate limiting logic (contains IP tracking and request counting)"}
+        {
+          "type": "tool",
+          "text": "Calls context_briefing before any code changes"
+        },
+        {
+          "type": "tool",
+          "text": "Calls review_code or check_architecture after writing code"
+        },
+        {
+          "type": "tool",
+          "text": "Calls remember or record_adr to capture the decision"
+        },
+        {
+          "type": "outcome",
+          "text": "Implementation plan lists specific files to modify with rationale"
+        },
+        {
+          "type": "outcome",
+          "text": "Plan includes blast radius section identifying dependent files"
+        },
+        {
+          "type": "outcome",
+          "text": "Written code implements rate limiting logic (contains IP tracking and request counting)"
+        }
       ]
     },
     {
@@ -38,11 +74,23 @@
       "expected_output": "Session summarized, learnings extracted and saved, session ended with positive feedback",
       "files": [],
       "assertions": [
-        {"type": "tool", "text": "Calls summarize_changes to capture what was done"},
-        {"type": "tool", "text": "Calls end_session with a summary"},
-        {"type": "outcome", "text": "Presents a summary that mentions specific files or changes (not just generic 'session ended')"},
-        {"type": "outcome", "text": "Saves at least one memory with meaningful content (not empty or trivial)"},
-        {"type": "outcome", "text": "Summary is structured with clear sections (what was done, what was saved, next steps)"}
+        {
+          "type": "tool",
+          "text": "Calls summarize_changes to capture what was done"
+        },
+        { "type": "tool", "text": "Calls end_session with a summary" },
+        {
+          "type": "outcome",
+          "text": "Presents a summary that mentions specific files or changes (not just generic 'session ended')"
+        },
+        {
+          "type": "outcome",
+          "text": "Saves at least one memory with meaningful content (not empty or trivial)"
+        },
+        {
+          "type": "outcome",
+          "text": "Summary is structured with clear sections (what was done, what was saved, next steps)"
+        }
       ]
     },
     {
@@ -52,11 +100,26 @@
       "expected_output": "Multi-strategy research showing memory governance flow across files with code explanations",
       "files": [],
       "assertions": [
-        {"type": "tool", "text": "Uses at least 3 different RAG search tools (any combination of hybrid_search, find_feature, find_symbol, search_graph, ask_codebase)"},
-        {"type": "tool", "text": "Reads at least 2 source files to verify findings"},
-        {"type": "outcome", "text": "Explains the quarantine-to-promotion flow with specific file:line references"},
-        {"type": "outcome", "text": "Identifies at least 2 files involved in memory governance"},
-        {"type": "outcome", "text": "Answer distinguishes between auto-memories (quarantine) and manual memories (durable)"}
+        {
+          "type": "tool",
+          "text": "Uses at least 3 different RAG search tools (any combination of hybrid_search, find_feature, find_symbol, search_graph, ask_codebase)"
+        },
+        {
+          "type": "tool",
+          "text": "Reads at least 2 source files to verify findings"
+        },
+        {
+          "type": "outcome",
+          "text": "Explains the quarantine-to-promotion flow with specific file:line references"
+        },
+        {
+          "type": "outcome",
+          "text": "Identifies at least 2 files involved in memory governance"
+        },
+        {
+          "type": "outcome",
+          "text": "Answer distinguishes between auto-memories (quarantine) and manual memories (durable)"
+        }
       ]
     },
     {
@@ -66,12 +129,27 @@
       "expected_output": "Code review against project patterns and ADRs with specific findings",
       "files": [],
       "assertions": [
-        {"type": "tool", "text": "Reads embedding.ts before running review tools"},
-        {"type": "tool", "text": "Calls review_code or check_architecture"},
-        {"type": "outcome", "text": "Identifies at least 2 specific code issues or improvement suggestions with line references"},
-        {"type": "outcome", "text": "References at least one project pattern or ADR by name in the review"},
-        {"type": "outcome", "text": "Review uses severity levels to categorize findings"},
-        {"type": "outcome", "text": "Mentions test coverage status or suggests specific tests"}
+        {
+          "type": "tool",
+          "text": "Reads embedding.ts before running review tools"
+        },
+        { "type": "tool", "text": "Calls review_code or check_architecture" },
+        {
+          "type": "outcome",
+          "text": "Identifies at least 2 specific code issues or improvement suggestions with line references"
+        },
+        {
+          "type": "outcome",
+          "text": "References at least one project pattern or ADR by name in the review"
+        },
+        {
+          "type": "outcome",
+          "text": "Review uses severity levels to categorize findings"
+        },
+        {
+          "type": "outcome",
+          "text": "Mentions test coverage status or suggests specific tests"
+        }
       ]
     },
     {
@@ -81,11 +159,26 @@
       "expected_output": "Analysis of current caching architecture, existing ADRs, options comparison, and ADR recording",
       "files": [],
       "assertions": [
-        {"type": "tool", "text": "Calls get_adrs to find existing caching decisions"},
-        {"type": "tool", "text": "Calls get_patterns or get_tech_debt for additional context"},
-        {"type": "outcome", "text": "Presents at least 2 options with explicit pros and cons for each"},
-        {"type": "outcome", "text": "Options reference the actual project stack (Qdrant, BGE-M3, existing Redis on :6380)"},
-        {"type": "outcome", "text": "Does not auto-record ADR — waits for user to choose an option"}
+        {
+          "type": "tool",
+          "text": "Calls get_adrs to find existing caching decisions"
+        },
+        {
+          "type": "tool",
+          "text": "Calls get_patterns or get_tech_debt for additional context"
+        },
+        {
+          "type": "outcome",
+          "text": "Presents at least 2 options with explicit pros and cons for each"
+        },
+        {
+          "type": "outcome",
+          "text": "Options reference the actual project stack (Qdrant, BGE-M3, existing Redis on :6380)"
+        },
+        {
+          "type": "outcome",
+          "text": "Does not auto-record ADR — waits for user to choose an option"
+        }
       ]
     },
     {
@@ -95,11 +188,26 @@
       "expected_output": "Debug investigation tracing recall flow through dependencies with root cause hypothesis",
       "files": [],
       "assertions": [
-        {"type": "tool", "text": "Calls context_briefing with debug task description"},
-        {"type": "tool", "text": "Uses search_graph or find_symbol to trace the recall implementation"},
-        {"type": "outcome", "text": "Identifies the specific files in the recall chain (e.g., memory.ts, vector-store.ts, routes)"},
-        {"type": "outcome", "text": "Proposes at least one plausible root cause with evidence from code"},
-        {"type": "outcome", "text": "Suggests a specific code fix (not just 'add logging')"}
+        {
+          "type": "tool",
+          "text": "Calls context_briefing with debug task description"
+        },
+        {
+          "type": "tool",
+          "text": "Uses search_graph or find_symbol to trace the recall implementation"
+        },
+        {
+          "type": "outcome",
+          "text": "Identifies the specific files in the recall chain (e.g., memory.ts, vector-store.ts, routes)"
+        },
+        {
+          "type": "outcome",
+          "text": "Proposes at least one plausible root cause with evidence from code"
+        },
+        {
+          "type": "outcome",
+          "text": "Suggests a specific code fix (not just 'add logging')"
+        }
       ]
     },
     {
@@ -109,11 +217,23 @@
       "expected_output": "Full onboarding: setup_project, infrastructure check, indexing, verification",
       "files": [],
       "assertions": [
-        {"type": "tool", "text": "Calls setup_project with projectPath /home/ake/myapp"},
-        {"type": "tool", "text": "Calls index_codebase for the project"},
-        {"type": "outcome", "text": "Verifies infrastructure is accessible (checks RAG API, Qdrant, or embedding service)"},
-        {"type": "outcome", "text": "Presents a report with actual collection stats (not placeholder text)"},
-        {"type": "outcome", "text": "Includes actionable next steps for the user (e.g., add to .mcp.json, configure env)"}
+        {
+          "type": "tool",
+          "text": "Calls setup_project with projectPath /home/ake/myapp"
+        },
+        { "type": "tool", "text": "Calls index_codebase for the project" },
+        {
+          "type": "outcome",
+          "text": "Verifies infrastructure is accessible (checks RAG API, Qdrant, or embedding service)"
+        },
+        {
+          "type": "outcome",
+          "text": "Presents a report with actual collection stats (not placeholder text)"
+        },
+        {
+          "type": "outcome",
+          "text": "Includes actionable next steps for the user (e.g., add to .mcp.json, configure env)"
+        }
       ]
     }
   ]

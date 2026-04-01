@@ -15,7 +15,10 @@ export function createQualityTools(projectName: string): ToolSpec[] {
       name: "get_quality_report",
       description: `Get LLM quality metrics for ${projectName}. Shows JSON parse rates, latency percentiles, thinking trace rates, and alerts.`,
       schema: z.object({
-        endpoint: z.string().optional().describe("Filter by specific endpoint (e.g., '/api/ask')"),
+        endpoint: z
+          .string()
+          .optional()
+          .describe("Filter by specific endpoint (e.g., '/api/ask')"),
       }),
       annotations: TOOL_ANNOTATIONS["get_quality_report"] || {
         title: "Get Quality Report",
@@ -24,9 +27,11 @@ export function createQualityTools(projectName: string): ToolSpec[] {
       },
       handler: async (
         args: Record<string, unknown>,
-        ctx: ToolContext
+        ctx: ToolContext,
       ): Promise<string> => {
-        const params = args.endpoint ? `?endpoint=${encodeURIComponent(args.endpoint as string)}` : '';
+        const params = args.endpoint
+          ? `?endpoint=${encodeURIComponent(args.endpoint as string)}`
+          : "";
         const response = await ctx.api.get(`/api/quality/report${params}`);
         const data = response.data;
 
@@ -58,7 +63,9 @@ export function createQualityTools(projectName: string): ToolSpec[] {
 
         if (Object.keys(data.byEndpoint).length > 0) {
           result += `### By Endpoint\n`;
-          for (const [ep, stats] of Object.entries(data.byEndpoint) as Array<[string, any]>) {
+          for (const [ep, stats] of Object.entries(data.byEndpoint) as Array<
+            [string, any]
+          >) {
             result += `- **${ep}**: ${stats.count} calls, ${stats.avgLatencyMs}ms avg, `;
             result += `JSON: ${(stats.jsonParseRate * 100).toFixed(0)}%, `;
             result += `Thinking: ${(stats.thinkingRate * 100).toFixed(0)}%\n`;

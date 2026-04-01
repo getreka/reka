@@ -10,200 +10,746 @@
   },
   "runs": [
     {
-      "eval_id": 1, "eval_name": "session-start", "configuration": "with_skill", "run_number": 1,
-      "result": { "pass_rate": 1.0, "passed": 7, "failed": 0, "total": 7, "time_seconds": 164.4, "tokens": 47819, "tool_calls": 11, "errors": 0 },
+      "eval_id": 1,
+      "eval_name": "session-start",
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 7,
+        "failed": 0,
+        "total": 7,
+        "time_seconds": 164.4,
+        "tokens": 47819,
+        "tool_calls": 11,
+        "errors": 0
+      },
       "expectations": [
-        {"text": "Calls start_session with a descriptive sessionId", "passed": true, "evidence": "sessionId = 2026-02-26-optimize-vector-store-search"},
-        {"text": "Calls get_developer_profile", "passed": true, "evidence": "Tool Call 2 confirmed"},
-        {"text": "Calls context_briefing with task mentioning vector-store.ts", "passed": true, "evidence": "task and files correct"},
-        {"text": "Calls warm_cache with the sessionId", "passed": true, "evidence": "Tool Call 4"},
-        {"text": "Presents structured briefing", "passed": true, "evidence": "All sections present"},
-        {"text": "Runs start_session and get_developer_profile in parallel", "passed": true, "evidence": "parallelBatches[0] confirms"},
-        {"text": "Runs context_briefing and warm_cache in parallel", "passed": true, "evidence": "parallelBatches[1] confirms"}
+        {
+          "text": "Calls start_session with a descriptive sessionId",
+          "passed": true,
+          "evidence": "sessionId = 2026-02-26-optimize-vector-store-search"
+        },
+        {
+          "text": "Calls get_developer_profile",
+          "passed": true,
+          "evidence": "Tool Call 2 confirmed"
+        },
+        {
+          "text": "Calls context_briefing with task mentioning vector-store.ts",
+          "passed": true,
+          "evidence": "task and files correct"
+        },
+        {
+          "text": "Calls warm_cache with the sessionId",
+          "passed": true,
+          "evidence": "Tool Call 4"
+        },
+        {
+          "text": "Presents structured briefing",
+          "passed": true,
+          "evidence": "All sections present"
+        },
+        {
+          "text": "Runs start_session and get_developer_profile in parallel",
+          "passed": true,
+          "evidence": "parallelBatches[0] confirms"
+        },
+        {
+          "text": "Runs context_briefing and warm_cache in parallel",
+          "passed": true,
+          "evidence": "parallelBatches[1] confirms"
+        }
       ]
     },
     {
-      "eval_id": 1, "eval_name": "session-start", "configuration": "without_skill", "run_number": 1,
-      "result": { "pass_rate": 0.286, "passed": 2, "failed": 5, "total": 7, "time_seconds": 231.2, "tokens": 54682, "tool_calls": 15, "errors": 0 },
+      "eval_id": 1,
+      "eval_name": "session-start",
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.286,
+        "passed": 2,
+        "failed": 5,
+        "total": 7,
+        "time_seconds": 231.2,
+        "tokens": 54682,
+        "tool_calls": 15,
+        "errors": 0
+      },
       "expectations": [
-        {"text": "Calls start_session with a descriptive sessionId", "passed": true, "evidence": "sessionId = vector-store-optimization-2026-02-26"},
-        {"text": "Calls get_developer_profile", "passed": false, "evidence": "Never called"},
-        {"text": "Calls context_briefing with task mentioning vector-store.ts", "passed": true, "evidence": "Called per CLAUDE.md requirement"},
-        {"text": "Calls warm_cache with the sessionId", "passed": false, "evidence": "Never called"},
-        {"text": "Presents structured briefing", "passed": false, "evidence": "Missing developer profile and patterns sections"},
-        {"text": "Runs start_session and get_developer_profile in parallel", "passed": false, "evidence": "get_developer_profile never called"},
-        {"text": "Runs context_briefing and warm_cache in parallel", "passed": false, "evidence": "warm_cache never called"}
+        {
+          "text": "Calls start_session with a descriptive sessionId",
+          "passed": true,
+          "evidence": "sessionId = vector-store-optimization-2026-02-26"
+        },
+        {
+          "text": "Calls get_developer_profile",
+          "passed": false,
+          "evidence": "Never called"
+        },
+        {
+          "text": "Calls context_briefing with task mentioning vector-store.ts",
+          "passed": true,
+          "evidence": "Called per CLAUDE.md requirement"
+        },
+        {
+          "text": "Calls warm_cache with the sessionId",
+          "passed": false,
+          "evidence": "Never called"
+        },
+        {
+          "text": "Presents structured briefing",
+          "passed": false,
+          "evidence": "Missing developer profile and patterns sections"
+        },
+        {
+          "text": "Runs start_session and get_developer_profile in parallel",
+          "passed": false,
+          "evidence": "get_developer_profile never called"
+        },
+        {
+          "text": "Runs context_briefing and warm_cache in parallel",
+          "passed": false,
+          "evidence": "warm_cache never called"
+        }
       ]
     },
     {
-      "eval_id": 2, "eval_name": "implement-rate-limit", "configuration": "with_skill", "run_number": 1,
-      "result": { "pass_rate": 0.67, "passed": 4, "failed": 2, "total": 6, "time_seconds": 563.1, "tokens": 59824, "tool_calls": 30, "errors": 0 },
+      "eval_id": 2,
+      "eval_name": "implement-rate-limit",
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.67,
+        "passed": 4,
+        "failed": 2,
+        "total": 6,
+        "time_seconds": 563.1,
+        "tokens": 59824,
+        "tool_calls": 30,
+        "errors": 0
+      },
       "expectations": [
-        {"text": "Calls context_briefing before any code changes", "passed": true, "evidence": "Tool Call 2 before any Write"},
-        {"text": "Calls suggest_implementation or get_patterns", "passed": true, "evidence": "Both called in Phase 2"},
-        {"text": "Presents plan and waits for confirmation", "passed": false, "evidence": "No pause, continuous 5-phase flow"},
-        {"text": "Calls review_code or check_architecture after implementation", "passed": true, "evidence": "Both called; check_architecture PASS"},
-        {"text": "Calls remember to save decision", "passed": true, "evidence": "Tool Call 23 stores insight"},
-        {"text": "Plan includes blast radius analysis", "passed": false, "evidence": "search_graph used for patterns, not dependents"}
+        {
+          "text": "Calls context_briefing before any code changes",
+          "passed": true,
+          "evidence": "Tool Call 2 before any Write"
+        },
+        {
+          "text": "Calls suggest_implementation or get_patterns",
+          "passed": true,
+          "evidence": "Both called in Phase 2"
+        },
+        {
+          "text": "Presents plan and waits for confirmation",
+          "passed": false,
+          "evidence": "No pause, continuous 5-phase flow"
+        },
+        {
+          "text": "Calls review_code or check_architecture after implementation",
+          "passed": true,
+          "evidence": "Both called; check_architecture PASS"
+        },
+        {
+          "text": "Calls remember to save decision",
+          "passed": true,
+          "evidence": "Tool Call 23 stores insight"
+        },
+        {
+          "text": "Plan includes blast radius analysis",
+          "passed": false,
+          "evidence": "search_graph used for patterns, not dependents"
+        }
       ]
     },
     {
-      "eval_id": 2, "eval_name": "implement-rate-limit", "configuration": "without_skill", "run_number": 1,
-      "result": { "pass_rate": 0.17, "passed": 1, "failed": 5, "total": 6, "time_seconds": 257.1, "tokens": 46450, "tool_calls": 19, "errors": 0 },
+      "eval_id": 2,
+      "eval_name": "implement-rate-limit",
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.17,
+        "passed": 1,
+        "failed": 5,
+        "total": 6,
+        "time_seconds": 257.1,
+        "tokens": 46450,
+        "tool_calls": 19,
+        "errors": 0
+      },
       "expectations": [
-        {"text": "Calls context_briefing before any code changes", "passed": true, "evidence": "Called in Step 1"},
-        {"text": "Calls suggest_implementation or get_patterns", "passed": false, "evidence": "Only context_briefing used"},
-        {"text": "Presents plan and waits for confirmation", "passed": false, "evidence": "Straight to writing"},
-        {"text": "Calls review_code or check_architecture after implementation", "passed": false, "evidence": "Neither called"},
-        {"text": "Calls remember to save decision", "passed": false, "evidence": "Never called"},
-        {"text": "Plan includes blast radius analysis", "passed": false, "evidence": "No blast radius analysis"}
+        {
+          "text": "Calls context_briefing before any code changes",
+          "passed": true,
+          "evidence": "Called in Step 1"
+        },
+        {
+          "text": "Calls suggest_implementation or get_patterns",
+          "passed": false,
+          "evidence": "Only context_briefing used"
+        },
+        {
+          "text": "Presents plan and waits for confirmation",
+          "passed": false,
+          "evidence": "Straight to writing"
+        },
+        {
+          "text": "Calls review_code or check_architecture after implementation",
+          "passed": false,
+          "evidence": "Neither called"
+        },
+        {
+          "text": "Calls remember to save decision",
+          "passed": false,
+          "evidence": "Never called"
+        },
+        {
+          "text": "Plan includes blast radius analysis",
+          "passed": false,
+          "evidence": "No blast radius analysis"
+        }
       ]
     },
     {
-      "eval_id": 3, "eval_name": "session-end", "configuration": "with_skill", "run_number": 1,
-      "result": { "pass_rate": 1.0, "passed": 5, "failed": 0, "total": 5, "time_seconds": 581.5, "tokens": 35757, "tool_calls": 18, "errors": 0 },
+      "eval_id": 3,
+      "eval_name": "session-end",
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 5,
+        "failed": 0,
+        "total": 5,
+        "time_seconds": 581.5,
+        "tokens": 35757,
+        "tool_calls": 18,
+        "errors": 0
+      },
       "expectations": [
-        {"text": "Calls summarize_changes", "passed": true, "evidence": "Tool 3 called with session ID"},
-        {"text": "Calls analyze_conversation or auto_remember", "passed": true, "evidence": "Both attempted, fell back to remember()"},
-        {"text": "Calls end_session with autoSaveLearnings: true", "passed": true, "evidence": "Tool 12 confirmed"},
-        {"text": "Presents summary of saved items", "passed": true, "evidence": "Ukrainian summary with all sections"},
-        {"text": "Does not force-save trivial memories", "passed": true, "evidence": "2 substantive memories saved"}
+        {
+          "text": "Calls summarize_changes",
+          "passed": true,
+          "evidence": "Tool 3 called with session ID"
+        },
+        {
+          "text": "Calls analyze_conversation or auto_remember",
+          "passed": true,
+          "evidence": "Both attempted, fell back to remember()"
+        },
+        {
+          "text": "Calls end_session with autoSaveLearnings: true",
+          "passed": true,
+          "evidence": "Tool 12 confirmed"
+        },
+        {
+          "text": "Presents summary of saved items",
+          "passed": true,
+          "evidence": "Ukrainian summary with all sections"
+        },
+        {
+          "text": "Does not force-save trivial memories",
+          "passed": true,
+          "evidence": "2 substantive memories saved"
+        }
       ]
     },
     {
-      "eval_id": 3, "eval_name": "session-end", "configuration": "without_skill", "run_number": 1,
-      "result": { "pass_rate": 0.4, "passed": 2, "failed": 3, "total": 5, "time_seconds": 218.4, "tokens": 54268, "tool_calls": 25, "errors": 0 },
+      "eval_id": 3,
+      "eval_name": "session-end",
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.4,
+        "passed": 2,
+        "failed": 3,
+        "total": 5,
+        "time_seconds": 218.4,
+        "tokens": 54268,
+        "tool_calls": 25,
+        "errors": 0
+      },
       "expectations": [
-        {"text": "Calls summarize_changes", "passed": false, "evidence": "Not called, used manual grep"},
-        {"text": "Calls analyze_conversation or auto_remember", "passed": false, "evidence": "Neither called, used direct remember()"},
-        {"text": "Calls end_session with autoSaveLearnings: true", "passed": false, "evidence": "end_session never called"},
-        {"text": "Presents summary of saved items", "passed": true, "evidence": "Summary with 3 memory IDs"},
-        {"text": "Does not force-save trivial memories", "passed": true, "evidence": "3 substantive memories"}
+        {
+          "text": "Calls summarize_changes",
+          "passed": false,
+          "evidence": "Not called, used manual grep"
+        },
+        {
+          "text": "Calls analyze_conversation or auto_remember",
+          "passed": false,
+          "evidence": "Neither called, used direct remember()"
+        },
+        {
+          "text": "Calls end_session with autoSaveLearnings: true",
+          "passed": false,
+          "evidence": "end_session never called"
+        },
+        {
+          "text": "Presents summary of saved items",
+          "passed": true,
+          "evidence": "Summary with 3 memory IDs"
+        },
+        {
+          "text": "Does not force-save trivial memories",
+          "passed": true,
+          "evidence": "3 substantive memories"
+        }
       ]
     },
     {
-      "eval_id": 4, "eval_name": "research-memory-governance", "configuration": "with_skill", "run_number": 1,
-      "result": { "pass_rate": 1.0, "passed": 5, "failed": 0, "total": 5, "time_seconds": 290.1, "tokens": 72664, "tool_calls": 23, "errors": 0 },
+      "eval_id": 4,
+      "eval_name": "research-memory-governance",
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 5,
+        "failed": 0,
+        "total": 5,
+        "time_seconds": 290.1,
+        "tokens": 72664,
+        "tool_calls": 23,
+        "errors": 0
+      },
       "expectations": [
-        {"text": "Uses hybrid_search or find_feature", "passed": true, "evidence": "hybrid_search called + find_feature attempted"},
-        {"text": "Uses find_symbol", "passed": true, "evidence": "Two calls for promote and quarantine"},
-        {"text": "Uses search_graph", "passed": true, "evidence": "Called with expandHops:1"},
-        {"text": "Presents findings with file:line references", "passed": true, "evidence": "Precise line ranges in answer.md"},
-        {"text": "Explains quarantine to promotion flow", "passed": true, "evidence": "ASCII diagram + code snippets"}
+        {
+          "text": "Uses hybrid_search or find_feature",
+          "passed": true,
+          "evidence": "hybrid_search called + find_feature attempted"
+        },
+        {
+          "text": "Uses find_symbol",
+          "passed": true,
+          "evidence": "Two calls for promote and quarantine"
+        },
+        {
+          "text": "Uses search_graph",
+          "passed": true,
+          "evidence": "Called with expandHops:1"
+        },
+        {
+          "text": "Presents findings with file:line references",
+          "passed": true,
+          "evidence": "Precise line ranges in answer.md"
+        },
+        {
+          "text": "Explains quarantine to promotion flow",
+          "passed": true,
+          "evidence": "ASCII diagram + code snippets"
+        }
       ]
     },
     {
-      "eval_id": 4, "eval_name": "research-memory-governance", "configuration": "without_skill", "run_number": 1,
-      "result": { "pass_rate": 0.6, "passed": 3, "failed": 2, "total": 5, "time_seconds": 198.1, "tokens": 76986, "tool_calls": 24, "errors": 0 },
+      "eval_id": 4,
+      "eval_name": "research-memory-governance",
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.6,
+        "passed": 3,
+        "failed": 2,
+        "total": 5,
+        "time_seconds": 198.1,
+        "tokens": 76986,
+        "tool_calls": 24,
+        "errors": 0
+      },
       "expectations": [
-        {"text": "Uses hybrid_search or find_feature", "passed": true, "evidence": "hybrid_search called first"},
-        {"text": "Uses find_symbol", "passed": false, "evidence": "Used Grep instead"},
-        {"text": "Uses search_graph", "passed": false, "evidence": "Traced via sequential file reads"},
-        {"text": "Presents findings with file:line references", "passed": true, "evidence": "Accurate line ranges in output"},
-        {"text": "Explains quarantine to promotion flow", "passed": true, "evidence": "Detailed diagram + snippets"}
+        {
+          "text": "Uses hybrid_search or find_feature",
+          "passed": true,
+          "evidence": "hybrid_search called first"
+        },
+        {
+          "text": "Uses find_symbol",
+          "passed": false,
+          "evidence": "Used Grep instead"
+        },
+        {
+          "text": "Uses search_graph",
+          "passed": false,
+          "evidence": "Traced via sequential file reads"
+        },
+        {
+          "text": "Presents findings with file:line references",
+          "passed": true,
+          "evidence": "Accurate line ranges in output"
+        },
+        {
+          "text": "Explains quarantine to promotion flow",
+          "passed": true,
+          "evidence": "Detailed diagram + snippets"
+        }
       ]
     },
     {
-      "eval_id": 5, "eval_name": "review-embedding", "configuration": "with_skill", "run_number": 1,
-      "result": { "pass_rate": 1.0, "passed": 6, "failed": 0, "total": 6, "time_seconds": 433.7, "tokens": 59290, "tool_calls": 20, "errors": 0 },
+      "eval_id": 5,
+      "eval_name": "review-embedding",
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 6,
+        "failed": 0,
+        "total": 6,
+        "time_seconds": 433.7,
+        "tokens": 59290,
+        "tool_calls": 20,
+        "errors": 0
+      },
       "expectations": [
-        {"text": "Reads the file before reviewing", "passed": true, "evidence": "Read 352 lines in Step 1"},
-        {"text": "Calls get_patterns and get_adrs", "passed": true, "evidence": "Both in parallel, Step 2"},
-        {"text": "Calls review_code", "passed": true, "evidence": "Called, timed out at 120s"},
-        {"text": "Calls check_architecture", "passed": true, "evidence": "Returned 5 patterns, 5 ADRs"},
-        {"text": "Presents findings with severity levels", "passed": true, "evidence": "Warning/Info in review.md"},
-        {"text": "Suggests tests via suggest_tests", "passed": true, "evidence": "Called in Step 5a"}
+        {
+          "text": "Reads the file before reviewing",
+          "passed": true,
+          "evidence": "Read 352 lines in Step 1"
+        },
+        {
+          "text": "Calls get_patterns and get_adrs",
+          "passed": true,
+          "evidence": "Both in parallel, Step 2"
+        },
+        {
+          "text": "Calls review_code",
+          "passed": true,
+          "evidence": "Called, timed out at 120s"
+        },
+        {
+          "text": "Calls check_architecture",
+          "passed": true,
+          "evidence": "Returned 5 patterns, 5 ADRs"
+        },
+        {
+          "text": "Presents findings with severity levels",
+          "passed": true,
+          "evidence": "Warning/Info in review.md"
+        },
+        {
+          "text": "Suggests tests via suggest_tests",
+          "passed": true,
+          "evidence": "Called in Step 5a"
+        }
       ]
     },
     {
-      "eval_id": 5, "eval_name": "review-embedding", "configuration": "without_skill", "run_number": 1,
-      "result": { "pass_rate": 0.5, "passed": 3, "failed": 3, "total": 6, "time_seconds": 314.6, "tokens": 52594, "tool_calls": 20, "errors": 0 },
+      "eval_id": 5,
+      "eval_name": "review-embedding",
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.5,
+        "passed": 3,
+        "failed": 3,
+        "total": 6,
+        "time_seconds": 314.6,
+        "tokens": 52594,
+        "tool_calls": 20,
+        "errors": 0
+      },
       "expectations": [
-        {"text": "Reads the file before reviewing", "passed": true, "evidence": "Read embedding.ts"},
-        {"text": "Calls get_patterns and get_adrs", "passed": false, "evidence": "Used context_briefing instead"},
-        {"text": "Calls review_code", "passed": true, "evidence": "Called via context_briefing"},
-        {"text": "Calls check_architecture", "passed": false, "evidence": "Never called"},
-        {"text": "Presents findings with severity levels", "passed": true, "evidence": "Critical/High/Medium/Low levels"},
-        {"text": "Suggests tests via suggest_tests", "passed": false, "evidence": "Read tests manually instead"}
+        {
+          "text": "Reads the file before reviewing",
+          "passed": true,
+          "evidence": "Read embedding.ts"
+        },
+        {
+          "text": "Calls get_patterns and get_adrs",
+          "passed": false,
+          "evidence": "Used context_briefing instead"
+        },
+        {
+          "text": "Calls review_code",
+          "passed": true,
+          "evidence": "Called via context_briefing"
+        },
+        {
+          "text": "Calls check_architecture",
+          "passed": false,
+          "evidence": "Never called"
+        },
+        {
+          "text": "Presents findings with severity levels",
+          "passed": true,
+          "evidence": "Critical/High/Medium/Low levels"
+        },
+        {
+          "text": "Suggests tests via suggest_tests",
+          "passed": false,
+          "evidence": "Read tests manually instead"
+        }
       ]
     },
     {
-      "eval_id": 6, "eval_name": "arch-caching", "configuration": "with_skill", "run_number": 1,
-      "result": { "pass_rate": 1.0, "passed": 5, "failed": 0, "total": 5, "time_seconds": 195.4, "tokens": 64879, "tool_calls": 22, "errors": 0 },
+      "eval_id": 6,
+      "eval_name": "arch-caching",
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 5,
+        "failed": 0,
+        "total": 5,
+        "time_seconds": 195.4,
+        "tokens": 64879,
+        "tool_calls": 22,
+        "errors": 0
+      },
       "expectations": [
-        {"text": "Calls get_adrs", "passed": true, "evidence": "Tool Call 1"},
-        {"text": "Calls get_patterns", "passed": true, "evidence": "Tool Call 2"},
-        {"text": "Calls get_tech_debt", "passed": true, "evidence": "Tool Call 3 with impact: high"},
-        {"text": "Presents options with pros/cons", "passed": true, "evidence": "3 options in analysis.md"},
-        {"text": "Waits for user decision before recording ADR", "passed": true, "evidence": "step_4_record_decision: false"}
+        { "text": "Calls get_adrs", "passed": true, "evidence": "Tool Call 1" },
+        {
+          "text": "Calls get_patterns",
+          "passed": true,
+          "evidence": "Tool Call 2"
+        },
+        {
+          "text": "Calls get_tech_debt",
+          "passed": true,
+          "evidence": "Tool Call 3 with impact: high"
+        },
+        {
+          "text": "Presents options with pros/cons",
+          "passed": true,
+          "evidence": "3 options in analysis.md"
+        },
+        {
+          "text": "Waits for user decision before recording ADR",
+          "passed": true,
+          "evidence": "step_4_record_decision: false"
+        }
       ]
     },
     {
-      "eval_id": 6, "eval_name": "arch-caching", "configuration": "without_skill", "run_number": 1,
-      "result": { "pass_rate": 0.4, "passed": 2, "failed": 3, "total": 5, "time_seconds": 146.9, "tokens": 59220, "tool_calls": 19, "errors": 0 },
+      "eval_id": 6,
+      "eval_name": "arch-caching",
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.4,
+        "passed": 2,
+        "failed": 3,
+        "total": 5,
+        "time_seconds": 146.9,
+        "tokens": 59220,
+        "tool_calls": 19,
+        "errors": 0
+      },
       "expectations": [
-        {"text": "Calls get_adrs", "passed": true, "evidence": "Tool Call 1"},
-        {"text": "Calls get_patterns", "passed": false, "evidence": "Not called, only 3 RAG tools"},
-        {"text": "Calls get_tech_debt", "passed": false, "evidence": "Not called"},
-        {"text": "Presents options with pros/cons", "passed": true, "evidence": "Options A/B/C in analysis.md"},
-        {"text": "Waits for user decision before recording ADR", "passed": false, "evidence": "No explicit deferral"}
+        { "text": "Calls get_adrs", "passed": true, "evidence": "Tool Call 1" },
+        {
+          "text": "Calls get_patterns",
+          "passed": false,
+          "evidence": "Not called, only 3 RAG tools"
+        },
+        {
+          "text": "Calls get_tech_debt",
+          "passed": false,
+          "evidence": "Not called"
+        },
+        {
+          "text": "Presents options with pros/cons",
+          "passed": true,
+          "evidence": "Options A/B/C in analysis.md"
+        },
+        {
+          "text": "Waits for user decision before recording ADR",
+          "passed": false,
+          "evidence": "No explicit deferral"
+        }
       ]
     },
     {
-      "eval_id": 7, "eval_name": "debug-recall-empty", "configuration": "with_skill", "run_number": 1,
-      "result": { "pass_rate": 1.0, "passed": 5, "failed": 0, "total": 5, "time_seconds": 433.4, "tokens": 100000, "tool_calls": 50, "errors": 0 },
+      "eval_id": 7,
+      "eval_name": "debug-recall-empty",
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 5,
+        "failed": 0,
+        "total": 5,
+        "time_seconds": 433.4,
+        "tokens": 100000,
+        "tool_calls": 50,
+        "errors": 0
+      },
       "expectations": [
-        {"text": "Calls context_briefing with debug task", "passed": true, "evidence": "Step 2 with 3 file paths"},
-        {"text": "Uses search_graph or find_symbol", "passed": true, "evidence": "Both called in Step 3"},
-        {"text": "Reads relevant source files", "passed": true, "evidence": "14 files read"},
-        {"text": "Checks known issues via recall", "passed": true, "evidence": "recall('bug recall empty array') returned 5 memories"},
-        {"text": "Presents structured debug report", "passed": true, "evidence": "analysis.md with 3 ranked issues, trace, fixes"}
+        {
+          "text": "Calls context_briefing with debug task",
+          "passed": true,
+          "evidence": "Step 2 with 3 file paths"
+        },
+        {
+          "text": "Uses search_graph or find_symbol",
+          "passed": true,
+          "evidence": "Both called in Step 3"
+        },
+        {
+          "text": "Reads relevant source files",
+          "passed": true,
+          "evidence": "14 files read"
+        },
+        {
+          "text": "Checks known issues via recall",
+          "passed": true,
+          "evidence": "recall('bug recall empty array') returned 5 memories"
+        },
+        {
+          "text": "Presents structured debug report",
+          "passed": true,
+          "evidence": "analysis.md with 3 ranked issues, trace, fixes"
+        }
       ]
     },
     {
-      "eval_id": 7, "eval_name": "debug-recall-empty", "configuration": "without_skill", "run_number": 1,
-      "result": { "pass_rate": 0.4, "passed": 2, "failed": 3, "total": 5, "time_seconds": 634.9, "tokens": 143087, "tool_calls": 53, "errors": 0 },
+      "eval_id": 7,
+      "eval_name": "debug-recall-empty",
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.4,
+        "passed": 2,
+        "failed": 3,
+        "total": 5,
+        "time_seconds": 634.9,
+        "tokens": 143087,
+        "tool_calls": 53,
+        "errors": 0
+      },
       "expectations": [
-        {"text": "Calls context_briefing with debug task", "passed": false, "evidence": "Never called"},
-        {"text": "Uses search_graph or find_symbol", "passed": false, "evidence": "Used Glob/Grep only"},
-        {"text": "Reads relevant source files", "passed": true, "evidence": "18 Read calls, 24 files"},
-        {"text": "Checks known issues via recall", "passed": false, "evidence": "No RAG memory tools used"},
-        {"text": "Presents structured debug report", "passed": true, "evidence": "4 findings with fixes"}
+        {
+          "text": "Calls context_briefing with debug task",
+          "passed": false,
+          "evidence": "Never called"
+        },
+        {
+          "text": "Uses search_graph or find_symbol",
+          "passed": false,
+          "evidence": "Used Glob/Grep only"
+        },
+        {
+          "text": "Reads relevant source files",
+          "passed": true,
+          "evidence": "18 Read calls, 24 files"
+        },
+        {
+          "text": "Checks known issues via recall",
+          "passed": false,
+          "evidence": "No RAG memory tools used"
+        },
+        {
+          "text": "Presents structured debug report",
+          "passed": true,
+          "evidence": "4 findings with fixes"
+        }
       ]
     },
     {
-      "eval_id": 8, "eval_name": "onboard-new-project", "configuration": "with_skill", "run_number": 1,
-      "result": { "pass_rate": 1.0, "passed": 5, "failed": 0, "total": 5, "time_seconds": 144.8, "tokens": 37807, "tool_calls": 24, "errors": 0 },
+      "eval_id": 8,
+      "eval_name": "onboard-new-project",
+      "configuration": "with_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 1.0,
+        "passed": 5,
+        "failed": 0,
+        "total": 5,
+        "time_seconds": 144.8,
+        "tokens": 37807,
+        "tool_calls": 24,
+        "errors": 0
+      },
       "expectations": [
-        {"text": "Calls setup_project with projectPath /home/ake/myapp", "passed": true, "evidence": "Step 1"},
-        {"text": "Checks infrastructure health", "passed": true, "evidence": "3 curl health checks, all OK"},
-        {"text": "Calls index_codebase", "passed": true, "evidence": "Step 3, returned 0 files"},
-        {"text": "Calls get_index_status", "passed": true, "evidence": "Step 4a, idle/0 files"},
-        {"text": "Presents report with stats and next steps", "passed": true, "evidence": "Full report with tables"}
+        {
+          "text": "Calls setup_project with projectPath /home/ake/myapp",
+          "passed": true,
+          "evidence": "Step 1"
+        },
+        {
+          "text": "Checks infrastructure health",
+          "passed": true,
+          "evidence": "3 curl health checks, all OK"
+        },
+        {
+          "text": "Calls index_codebase",
+          "passed": true,
+          "evidence": "Step 3, returned 0 files"
+        },
+        {
+          "text": "Calls get_index_status",
+          "passed": true,
+          "evidence": "Step 4a, idle/0 files"
+        },
+        {
+          "text": "Presents report with stats and next steps",
+          "passed": true,
+          "evidence": "Full report with tables"
+        }
       ]
     },
     {
-      "eval_id": 8, "eval_name": "onboard-new-project", "configuration": "without_skill", "run_number": 1,
-      "result": { "pass_rate": 0.4, "passed": 2, "failed": 3, "total": 5, "time_seconds": 170.1, "tokens": 41967, "tool_calls": 25, "errors": 0 },
+      "eval_id": 8,
+      "eval_name": "onboard-new-project",
+      "configuration": "without_skill",
+      "run_number": 1,
+      "result": {
+        "pass_rate": 0.4,
+        "passed": 2,
+        "failed": 3,
+        "total": 5,
+        "time_seconds": 170.1,
+        "tokens": 41967,
+        "tool_calls": 25,
+        "errors": 0
+      },
       "expectations": [
-        {"text": "Calls setup_project with projectPath /home/ake/myapp", "passed": true, "evidence": "Tool call 8"},
-        {"text": "Checks infrastructure health", "passed": false, "evidence": "No health checks performed"},
-        {"text": "Calls index_codebase", "passed": false, "evidence": "Never called, only planned"},
-        {"text": "Calls get_index_status", "passed": true, "evidence": "Called but for wrong project"},
-        {"text": "Presents report with stats and next steps", "passed": false, "evidence": "Plan only, no actual stats"}
+        {
+          "text": "Calls setup_project with projectPath /home/ake/myapp",
+          "passed": true,
+          "evidence": "Tool call 8"
+        },
+        {
+          "text": "Checks infrastructure health",
+          "passed": false,
+          "evidence": "No health checks performed"
+        },
+        {
+          "text": "Calls index_codebase",
+          "passed": false,
+          "evidence": "Never called, only planned"
+        },
+        {
+          "text": "Calls get_index_status",
+          "passed": true,
+          "evidence": "Called but for wrong project"
+        },
+        {
+          "text": "Presents report with stats and next steps",
+          "passed": false,
+          "evidence": "Plan only, no actual stats"
+        }
       ]
     }
   ],
   "run_summary": {
     "with_skill": {
-      "pass_rate": {"mean": 0.96, "stddev": 0.11, "min": 0.67, "max": 1.0},
-      "time_seconds": {"mean": 350.8, "stddev": 170.5, "min": 144.8, "max": 581.5},
-      "tokens": {"mean": 59755, "stddev": 19870, "min": 35757, "max": 100000}
+      "pass_rate": { "mean": 0.96, "stddev": 0.11, "min": 0.67, "max": 1.0 },
+      "time_seconds": {
+        "mean": 350.8,
+        "stddev": 170.5,
+        "min": 144.8,
+        "max": 581.5
+      },
+      "tokens": { "mean": 59755, "stddev": 19870, "min": 35757, "max": 100000 }
     },
     "without_skill": {
-      "pass_rate": {"mean": 0.40, "stddev": 0.12, "min": 0.17, "max": 0.60},
-      "time_seconds": {"mean": 271.4, "stddev": 155.8, "min": 146.9, "max": 634.9},
-      "tokens": {"mean": 66157, "stddev": 31540, "min": 41967, "max": 143087}
+      "pass_rate": { "mean": 0.4, "stddev": 0.12, "min": 0.17, "max": 0.6 },
+      "time_seconds": {
+        "mean": 271.4,
+        "stddev": 155.8,
+        "min": 146.9,
+        "max": 634.9
+      },
+      "tokens": { "mean": 66157, "stddev": 31540, "min": 41967, "max": 143087 }
     },
     "delta": {
       "pass_rate": "+0.56",

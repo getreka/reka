@@ -56,12 +56,10 @@ class RerankerService {
       return topK ? results.slice(0, topK) : results;
     }
 
-    const documents = results.map(r =>
-      String(r.payload?.content || '').slice(0, 512)
-    );
+    const documents = results.map((r) => String(r.payload?.content || '').slice(0, 512));
 
     // Skip if documents are empty (no content to rerank)
-    if (documents.every(d => d.length === 0)) {
+    if (documents.every((d) => d.length === 0)) {
       return topK ? results.slice(0, topK) : results;
     }
 

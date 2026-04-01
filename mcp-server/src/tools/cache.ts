@@ -12,10 +12,16 @@ export function createCacheTools(projectName: string): ToolSpec[] {
       name: "get_cache_stats",
       description: `Get cache statistics for ${projectName}. Shows hit rates, cache levels, and memory usage.`,
       schema: z.object({
-        sessionId: z.string().optional().describe("Optional session ID for session-specific stats"),
+        sessionId: z
+          .string()
+          .optional()
+          .describe("Optional session ID for session-specific stats"),
       }),
       annotations: TOOL_ANNOTATIONS["get_cache_stats"],
-      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
+      handler: async (
+        args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
         const { sessionId } = args as { sessionId?: string };
 
         if (sessionId) {
@@ -59,11 +65,22 @@ export function createCacheTools(projectName: string): ToolSpec[] {
       description: `Warm the embedding cache for ${projectName}. Pre-loads frequently used embeddings for faster responses.`,
       schema: z.object({
         sessionId: z.string().describe("Session ID to warm cache for"),
-        previousSessionId: z.string().optional().describe("Previous session to copy cache from (for session resumption)"),
-        recentQueries: z.array(z.string()).optional().describe("Recent queries to pre-warm in cache"),
+        previousSessionId: z
+          .string()
+          .optional()
+          .describe(
+            "Previous session to copy cache from (for session resumption)",
+          ),
+        recentQueries: z
+          .array(z.string())
+          .optional()
+          .describe("Recent queries to pre-warm in cache"),
       }),
       annotations: TOOL_ANNOTATIONS["warm_cache"],
-      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
+      handler: async (
+        args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
         const { sessionId, previousSessionId, recentQueries } = args as {
           sessionId: string;
           previousSessionId?: string;

@@ -107,11 +107,14 @@ class ConversationAnalyzerService {
         summary: result.text.slice(0, 200),
       };
       const { data: analysis } = parseLLMOutput(
-        result.text, conversationAnalysisSchema, defaultAnalysis, 'conversation-analysis'
+        result.text,
+        conversationAnalysisSchema,
+        defaultAnalysis,
+        'conversation-analysis'
       ) as { data: ConversationAnalysis; ok: boolean };
 
       // Filter by confidence
-      analysis.learnings = analysis.learnings.filter(l => l.confidence >= minConfidence);
+      analysis.learnings = analysis.learnings.filter((l) => l.confidence >= minConfidence);
 
       // Auto-save if requested
       if (autoSave && analysis.learnings.length > 0) {
@@ -191,17 +194,21 @@ class ConversationAnalyzerService {
     const concepts = new Set<string>();
 
     // --- Regex extraction from prose ---
-    for (const m of text.matchAll(/(?:[\w/@.-]+\/)?[\w.-]+\.(ts|js|tsx|jsx|py|go|rs|vue|json|yaml|yml|md)/g)) {
+    for (const m of text.matchAll(
+      /(?:[\w/@.-]+\/)?[\w.-]+\.(ts|js|tsx|jsx|py|go|rs|vue|json|yaml|yml|md)/g
+    )) {
       files.add(m[0]);
     }
 
-    for (const m of text.matchAll(/(?:function|const|let|var|class|interface|type|enum|def|func)\s+(\w+)/g)) {
+    for (const m of text.matchAll(
+      /(?:function|const|let|var|class|interface|type|enum|def|func)\s+(\w+)/g
+    )) {
       if (m[1].length > 1) functions.add(m[1]);
     }
 
     // Import specifiers: import { X, Y } from '...'
     for (const m of text.matchAll(/import\s+\{([^}]+)\}/g)) {
-      for (const name of m[1].split(',').map(s => s.trim().split(/\s+as\s+/)[0])) {
+      for (const name of m[1].split(',').map((s) => s.trim().split(/\s+as\s+/)[0])) {
         if (name && name.length > 1) functions.add(name);
       }
     }
@@ -220,18 +227,42 @@ class ConversationAnalyzerService {
     const codeBlocks = [...text.matchAll(/```(?:ts|typescript|js|javascript)?\n([\s\S]*?)```/g)];
     if (codeBlocks.length > 0) {
       try {
-        const project = new Project({ useInMemoryFileSystem: true, compilerOptions: { allowJs: true } });
+        const project = new Project({
+          useInMemoryFileSystem: true,
+          compilerOptions: { allowJs: true },
+        });
         for (const block of codeBlocks.slice(0, 5)) {
           const code = block[1];
           if (code.length < 10 || code.length > 10000) continue;
           try {
             const sf = project.createSourceFile(`__extract_${Math.random()}.ts`, code);
-            for (const fn of sf.getFunctions()) { const n = fn.getName(); if (n) functions.add(n); }
-            for (const cls of sf.getClasses()) { const n = cls.getName(); if (n) functions.add(n); }
-            for (const ifc of sf.getInterfaces()) { const n = ifc.getName(); if (n) { functions.add(n); concepts.add(n); } }
-            for (const tp of sf.getTypeAliases()) { const n = tp.getName(); if (n) concepts.add(n); }
-            for (const en of sf.getEnums()) { const n = en.getName(); if (n) concepts.add(n); }
-            for (const vd of sf.getVariableDeclarations()) { const n = vd.getName(); if (n && n.length > 1) functions.add(n); }
+            for (const fn of sf.getFunctions()) {
+              const n = fn.getName();
+              if (n) functions.add(n);
+            }
+            for (const cls of sf.getClasses()) {
+              const n = cls.getName();
+              if (n) functions.add(n);
+            }
+            for (const ifc of sf.getInterfaces()) {
+              const n = ifc.getName();
+              if (n) {
+                functions.add(n);
+                concepts.add(n);
+              }
+            }
+            for (const tp of sf.getTypeAliases()) {
+              const n = tp.getName();
+              if (n) concepts.add(n);
+            }
+            for (const en of sf.getEnums()) {
+              const n = en.getName();
+              if (n) concepts.add(n);
+            }
+            for (const vd of sf.getVariableDeclarations()) {
+              const n = vd.getName();
+              if (n && n.length > 1) functions.add(n);
+            }
             sf.delete();
           } catch {
             // AST parse failed for this block, skip

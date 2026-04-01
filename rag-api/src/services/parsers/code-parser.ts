@@ -7,9 +7,25 @@ import { Project } from 'ts-morph';
 import type { FileParser, ParsedChunk } from './base-parser';
 
 const CODE_EXTENSIONS = new Set([
-  '.ts', '.tsx', '.js', '.jsx', '.vue', '.py', '.go', '.rs',
-  '.java', '.c', '.cpp', '.cs', '.php', '.rb', '.swift', '.kt',
-  '.scala', '.sh', '.bash',
+  '.ts',
+  '.tsx',
+  '.js',
+  '.jsx',
+  '.vue',
+  '.py',
+  '.go',
+  '.rs',
+  '.java',
+  '.c',
+  '.cpp',
+  '.cs',
+  '.php',
+  '.rb',
+  '.swift',
+  '.kt',
+  '.scala',
+  '.sh',
+  '.bash',
 ]);
 
 const TS_JS_EXTENSIONS = new Set(['.ts', '.tsx', '.js', '.jsx']);
@@ -65,10 +81,25 @@ const IMPORT_PATTERNS = [
 function getLanguage(filePath: string): string {
   const ext = path.extname(filePath).toLowerCase();
   const langMap: Record<string, string> = {
-    '.ts': 'typescript', '.tsx': 'typescript', '.js': 'javascript', '.jsx': 'javascript',
-    '.vue': 'vue', '.py': 'python', '.go': 'go', '.rs': 'rust', '.java': 'java',
-    '.c': 'c', '.cpp': 'cpp', '.cs': 'csharp', '.php': 'php', '.rb': 'ruby',
-    '.swift': 'swift', '.kt': 'kotlin', '.scala': 'scala', '.sh': 'shell', '.bash': 'shell',
+    '.ts': 'typescript',
+    '.tsx': 'typescript',
+    '.js': 'javascript',
+    '.jsx': 'javascript',
+    '.vue': 'vue',
+    '.py': 'python',
+    '.go': 'go',
+    '.rs': 'rust',
+    '.java': 'java',
+    '.c': 'c',
+    '.cpp': 'cpp',
+    '.cs': 'csharp',
+    '.php': 'php',
+    '.rb': 'ruby',
+    '.swift': 'swift',
+    '.kt': 'kotlin',
+    '.scala': 'scala',
+    '.sh': 'shell',
+    '.bash': 'shell',
   };
   return langMap[ext] || 'unknown';
 }
@@ -102,7 +133,10 @@ export class CodeParser implements FileParser {
    */
   private parseTypeScript(content: string, filePath: string): ParsedChunk[] {
     const language = getLanguage(filePath);
-    const project = new Project({ useInMemoryFileSystem: true, compilerOptions: { allowJs: true } });
+    const project = new Project({
+      useInMemoryFileSystem: true,
+      compilerOptions: { allowJs: true },
+    });
     const ext = path.extname(filePath).toLowerCase();
     const tempName = ext === '.jsx' ? 'temp.tsx' : `temp${ext}`;
     const sourceFile = project.createSourceFile(tempName, content);
@@ -110,15 +144,19 @@ export class CodeParser implements FileParser {
     const chunks: ParsedChunk[] = [];
 
     // Extract file-level imports
-    const imports = sourceFile.getImportDeclarations().map(i => i.getModuleSpecifierValue());
+    const imports = sourceFile.getImportDeclarations().map((i) => i.getModuleSpecifierValue());
 
     // Extract classes — split large classes into per-method chunks
     for (const cls of sourceFile.getClasses()) {
       const name = cls.getName() || 'anonymous';
       const classText = cls.getFullText();
       const methods = cls.getMethods();
-      const methodNames = methods.map(m => m.getName());
-      const jsdoc = cls.getJsDocs().map(d => d.getDescription()).filter(Boolean).join('\n');
+      const methodNames = methods.map((m) => m.getName());
+      const jsdoc = cls
+        .getJsDocs()
+        .map((d) => d.getDescription())
+        .filter(Boolean)
+        .join('\n');
 
       if (classText.length > 3000 && methods.length > 1) {
         // Large class: emit summary chunk + per-method chunks
@@ -134,7 +172,7 @@ export class CodeParser implements FileParser {
           metadata: {
             kind: 'class-summary',
             extends: cls.getExtends()?.getText(),
-            implements: cls.getImplements().map(i => i.getText()),
+            implements: cls.getImplements().map((i) => i.getText()),
             exported: cls.isExported(),
             ...(jsdoc ? { jsdoc } : {}),
           },
@@ -142,7 +180,11 @@ export class CodeParser implements FileParser {
 
         // Per-method chunks
         for (const method of methods) {
-          const methodJsdoc = method.getJsDocs().map(d => d.getDescription()).filter(Boolean).join('\n');
+          const methodJsdoc = method
+            .getJsDocs()
+            .map((d) => d.getDescription())
+            .filter(Boolean)
+            .join('\n');
           chunks.push({
             content: method.getFullText(),
             startLine: method.getStartLineNumber(),
@@ -172,7 +214,7 @@ export class CodeParser implements FileParser {
           metadata: {
             kind: 'class',
             extends: cls.getExtends()?.getText(),
-            implements: cls.getImplements().map(i => i.getText()),
+            implements: cls.getImplements().map((i) => i.getText()),
             exported: cls.isExported(),
             ...(jsdoc ? { jsdoc } : {}),
           },
@@ -183,7 +225,11 @@ export class CodeParser implements FileParser {
     // Extract standalone functions
     for (const fn of sourceFile.getFunctions()) {
       const name = fn.getName() || 'anonymous';
-      const jsdoc = fn.getJsDocs().map(d => d.getDescription()).filter(Boolean).join('\n');
+      const jsdoc = fn
+        .getJsDocs()
+        .map((d) => d.getDescription())
+        .filter(Boolean)
+        .join('\n');
 
       chunks.push({
         content: fn.getFullText(),
@@ -253,7 +299,7 @@ export class CodeParser implements FileParser {
         if (text.includes('=>') || text.includes('function') || text.length > 100) {
           const name = decl.getName();
           // Skip if already captured by a class/function chunk
-          if (chunks.some(c => c.symbols?.includes(name))) continue;
+          if (chunks.some((c) => c.symbols?.includes(name))) continue;
 
           chunks.push({
             content: vs.getFullText(),
@@ -301,7 +347,7 @@ export class CodeParser implements FileParser {
 
     for (let i = 0; i < lines.length; i++) {
       const trimmed = lines[i].trimStart();
-      if (BOUNDARY_PATTERNS.some(p => p.test(trimmed))) {
+      if (BOUNDARY_PATTERNS.some((p) => p.test(trimmed))) {
         const last = boundaries[boundaries.length - 1];
         if (i - last >= 5) {
           boundaries.push(i);
@@ -424,7 +470,7 @@ export class CodeParser implements FileParser {
     // Class declaration line
     const name = cls.getName() || 'anonymous';
     const extendsClause = cls.getExtends()?.getText();
-    const implementsClauses = cls.getImplements().map(i => i.getText());
+    const implementsClauses = cls.getImplements().map((i) => i.getText());
     let decl = cls.isExported() ? 'export ' : '';
     decl += `class ${name}`;
     if (extendsClause) decl += ` extends ${extendsClause}`;
@@ -441,8 +487,14 @@ export class CodeParser implements FileParser {
 
     // Method signatures (no bodies)
     for (const method of cls.getMethods()) {
-      const modifiers = method.getModifiers().map(m => m.getText()).join(' ');
-      const params = method.getParameters().map(p => p.getText()).join(', ');
+      const modifiers = method
+        .getModifiers()
+        .map((m) => m.getText())
+        .join(' ');
+      const params = method
+        .getParameters()
+        .map((p) => p.getText())
+        .join(', ');
       const returnType = method.getReturnTypeNode()?.getText();
       const async = method.isAsync() ? 'async ' : '';
       let sig = '  ';

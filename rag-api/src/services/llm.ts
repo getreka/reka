@@ -17,20 +17,20 @@ export interface CompletionOptions {
   maxTokens?: number;
   temperature?: number;
   systemPrompt?: string;
-  think?: boolean;          // Ollama: think param, Claude: adaptive thinking
-  format?: 'json' | null;  // Ollama: native JSON mode, Claude: system prompt instruction
-  stream?: boolean;         // Enable streaming (default false)
+  think?: boolean; // Ollama: think param, Claude: adaptive thinking
+  format?: 'json' | null; // Ollama: native JSON mode, Claude: system prompt instruction
+  stream?: boolean; // Enable streaming (default false)
 }
 
 export interface CompletionResult {
   text: string;
-  thinking?: string;        // Reasoning trace from thinking mode
+  thinking?: string; // Reasoning trace from thinking mode
   usage?: {
     promptTokens: number;
     completionTokens: number;
     totalTokens: number;
   };
-  provider?: string;        // Which provider handled the request
+  provider?: string; // Which provider handled the request
 }
 
 export type ComplexityLevel = 'utility' | 'standard' | 'complex';
@@ -97,7 +97,9 @@ class LLMService {
           });
         }
         // Fallback to configured provider if no Claude key
-        logger.warn('Claude requested for complex task but no API key configured, using default provider');
+        logger.warn(
+          'Claude requested for complex task but no API key configured, using default provider'
+        );
         return this.complete(prompt, completionOptions);
 
       case 'standard':
@@ -163,7 +165,7 @@ class LLMService {
     usage: { promptTokens: number; completionTokens: number } | undefined,
     durationMs: number,
     caller: string,
-    opts: { thinking?: boolean; success?: boolean; error?: string; projectName?: string } = {},
+    opts: { thinking?: boolean; success?: boolean; error?: string; projectName?: string } = {}
   ): void {
     llmUsageLogger.record({
       provider,
@@ -183,7 +185,10 @@ class LLMService {
   // Ollama Provider
   // ============================================
 
-  private async completeWithOllama(prompt: string, options: CompletionOptions): Promise<CompletionResult> {
+  private async completeWithOllama(
+    prompt: string,
+    options: CompletionOptions
+  ): Promise<CompletionResult> {
     const startTime = Date.now();
     const enableThink = options.think ?? config.OLLAMA_THINK;
     const timeout = enableThink ? 180000 : 120000;
@@ -241,33 +246,53 @@ class LLMService {
           : undefined,
         provider: 'ollama',
       };
-      this.recordUsage('ollama', config.OLLAMA_MODEL, result.usage, Date.now() - startTime, 'complete', { thinking: enableThink });
+      this.recordUsage(
+        'ollama',
+        config.OLLAMA_MODEL,
+        result.usage,
+        Date.now() - startTime,
+        'complete',
+        { thinking: enableThink }
+      );
       return result;
     } catch (error: any) {
       // Fallback: if 400/500 error with think, retry without it (500 = OOM crash with thinking)
       if (enableThink && [400, 500].includes(error.response?.status)) {
         logger.warn('Ollama think mode failed, retrying without thinking');
         delete body.think;
-        const response = await axios.post(
-          `${config.OLLAMA_URL}/api/chat`,
-          body,
-          { timeout: 120000 }
-        );
+        const response = await axios.post(`${config.OLLAMA_URL}/api/chat`, body, {
+          timeout: 120000,
+        });
         const result: CompletionResult = {
           text: response.data.message?.content || '',
           usage: response.data.eval_count
             ? {
                 promptTokens: response.data.prompt_eval_count || 0,
                 completionTokens: response.data.eval_count || 0,
-                totalTokens: (response.data.prompt_eval_count || 0) + (response.data.eval_count || 0),
+                totalTokens:
+                  (response.data.prompt_eval_count || 0) + (response.data.eval_count || 0),
               }
             : undefined,
           provider: 'ollama',
         };
-        this.recordUsage('ollama', config.OLLAMA_MODEL, result.usage, Date.now() - startTime, 'complete', { thinking: false });
+        this.recordUsage(
+          'ollama',
+          config.OLLAMA_MODEL,
+          result.usage,
+          Date.now() - startTime,
+          'complete',
+          { thinking: false }
+        );
         return result;
       }
-      this.recordUsage('ollama', config.OLLAMA_MODEL, undefined, Date.now() - startTime, 'complete', { success: false, error: error.message });
+      this.recordUsage(
+        'ollama',
+        config.OLLAMA_MODEL,
+        undefined,
+        Date.now() - startTime,
+        'complete',
+        { success: false, error: error.message }
+      );
       logger.error('Ollama completion failed', { error: error.message });
       throw error;
     }
@@ -277,7 +302,10 @@ class LLMService {
   // OpenAI Provider
   // ============================================
 
-  private async completeWithOpenAI(prompt: string, options: CompletionOptions): Promise<CompletionResult> {
+  private async completeWithOpenAI(
+    prompt: string,
+    options: CompletionOptions
+  ): Promise<CompletionResult> {
     const startTime = Date.now();
     try {
       const messages: Array<{ role: string; content: string }> = [];
@@ -289,22 +317,23 @@ class LLMService {
 
       const response = await openaiCircuit.execute(() =>
         withRetry(
-          () => axios.post(
-            'https://api.openai.com/v1/chat/completions',
-            {
-              model: config.OPENAI_MODEL,
-              messages,
-              max_tokens: options.maxTokens ?? 2048,
-              temperature: options.temperature ?? 0.7,
-            },
-            {
-              headers: {
-                Authorization: `Bearer ${config.OPENAI_API_KEY}`,
-                'Content-Type': 'application/json',
+          () =>
+            axios.post(
+              'https://api.openai.com/v1/chat/completions',
+              {
+                model: config.OPENAI_MODEL,
+                messages,
+                max_tokens: options.maxTokens ?? 2048,
+                temperature: options.temperature ?? 0.7,
               },
-              timeout: 120000,
-            }
-          ),
+              {
+                headers: {
+                  Authorization: `Bearer ${config.OPENAI_API_KEY}`,
+                  'Content-Type': 'application/json',
+                },
+                timeout: 120000,
+              }
+            ),
           { maxAttempts: 2, baseDelayMs: 1000, maxDelayMs: 15000 },
           'llm.openai'
         )
@@ -321,10 +350,23 @@ class LLMService {
           : undefined,
         provider: 'openai',
       };
-      this.recordUsage('openai', config.OPENAI_MODEL, result.usage, Date.now() - startTime, 'complete');
+      this.recordUsage(
+        'openai',
+        config.OPENAI_MODEL,
+        result.usage,
+        Date.now() - startTime,
+        'complete'
+      );
       return result;
     } catch (error: any) {
-      this.recordUsage('openai', config.OPENAI_MODEL, undefined, Date.now() - startTime, 'complete', { success: false, error: error.message });
+      this.recordUsage(
+        'openai',
+        config.OPENAI_MODEL,
+        undefined,
+        Date.now() - startTime,
+        'complete',
+        { success: false, error: error.message }
+      );
       logger.error('OpenAI completion failed', { error: error.message });
       throw error;
     }
@@ -334,7 +376,10 @@ class LLMService {
   // Anthropic Provider (Official SDK)
   // ============================================
 
-  private async completeWithAnthropic(prompt: string, options: CompletionOptions): Promise<CompletionResult> {
+  private async completeWithAnthropic(
+    prompt: string,
+    options: CompletionOptions
+  ): Promise<CompletionResult> {
     const startTime = Date.now();
     const client = this.anthropicClient;
     if (!client) {
@@ -347,14 +392,22 @@ class LLMService {
     // Build system prompt — append JSON instruction if format: 'json'
     let systemPrompt = options.systemPrompt;
     if (options.format === 'json' && systemPrompt) {
-      systemPrompt += '\n\nIMPORTANT: Respond with valid JSON only. No markdown, no explanation outside JSON.';
+      systemPrompt +=
+        '\n\nIMPORTANT: Respond with valid JSON only. No markdown, no explanation outside JSON.';
     } else if (options.format === 'json') {
       systemPrompt = 'Respond with valid JSON only. No markdown, no explanation outside JSON.';
     }
 
     try {
       if (options.stream) {
-        return await this.completeWithAnthropicStream(client, prompt, systemPrompt, enableThinking, maxTokens, options.temperature);
+        return await this.completeWithAnthropicStream(
+          client,
+          prompt,
+          systemPrompt,
+          enableThinking,
+          maxTokens,
+          options.temperature
+        );
       }
 
       // Build request params
@@ -384,18 +437,32 @@ class LLMService {
       const response = await anthropicCircuit.execute(() =>
         withRetry(
           () => client.messages.create(params),
-          { maxAttempts: 2, baseDelayMs: 1000, maxDelayMs: 15000, timeoutMs: enableThinking ? 120000 : 60000 },
+          {
+            maxAttempts: 2,
+            baseDelayMs: 1000,
+            maxDelayMs: 15000,
+            timeoutMs: enableThinking ? 120000 : 60000,
+          },
           'llm.anthropic'
         )
       );
 
       const result = this.parseAnthropicResponse(response);
-      this.recordUsage('anthropic', config.ANTHROPIC_MODEL, result.usage, Date.now() - startTime, 'complete', { thinking: enableThinking });
+      this.recordUsage(
+        'anthropic',
+        config.ANTHROPIC_MODEL,
+        result.usage,
+        Date.now() - startTime,
+        'complete',
+        { thinking: enableThinking }
+      );
       return result;
     } catch (error: any) {
       // Fallback: if thinking fails, retry without it
       if (enableThinking && error.status === 400) {
-        logger.warn('Claude thinking mode failed, retrying without thinking', { error: error.message });
+        logger.warn('Claude thinking mode failed, retrying without thinking', {
+          error: error.message,
+        });
         const params: Anthropic.MessageCreateParams = {
           model: config.ANTHROPIC_MODEL,
           max_tokens: maxTokens,
@@ -409,11 +476,25 @@ class LLMService {
         }
         const response = await client.messages.create(params);
         const result = this.parseAnthropicResponse(response);
-        this.recordUsage('anthropic', config.ANTHROPIC_MODEL, result.usage, Date.now() - startTime, 'complete', { thinking: false });
+        this.recordUsage(
+          'anthropic',
+          config.ANTHROPIC_MODEL,
+          result.usage,
+          Date.now() - startTime,
+          'complete',
+          { thinking: false }
+        );
         return result;
       }
 
-      this.recordUsage('anthropic', config.ANTHROPIC_MODEL, undefined, Date.now() - startTime, 'complete', { success: false, error: error.message, thinking: enableThinking });
+      this.recordUsage(
+        'anthropic',
+        config.ANTHROPIC_MODEL,
+        undefined,
+        Date.now() - startTime,
+        'complete',
+        { success: false, error: error.message, thinking: enableThinking }
+      );
       logger.error('Anthropic completion failed', {
         error: error.message,
         status: error.status,
@@ -432,7 +513,7 @@ class LLMService {
     systemPrompt: string | undefined,
     enableThinking: boolean,
     maxTokens: number,
-    temperature?: number,
+    temperature?: number
   ): Promise<CompletionResult> {
     const params: Anthropic.MessageCreateParams = {
       model: config.ANTHROPIC_MODEL,
@@ -608,8 +689,13 @@ class LLMService {
       }
     }
 
-    const usage = { promptTokens: response.usage.input_tokens, completionTokens: response.usage.output_tokens };
-    this.recordUsage('anthropic', config.ANTHROPIC_MODEL, usage, Date.now() - startTime, 'chat', { thinking: enableThinking });
+    const usage = {
+      promptTokens: response.usage.input_tokens,
+      completionTokens: response.usage.output_tokens,
+    };
+    this.recordUsage('anthropic', config.ANTHROPIC_MODEL, usage, Date.now() - startTime, 'chat', {
+      thinking: enableThinking,
+    });
 
     return {
       text,
@@ -637,7 +723,7 @@ class LLMService {
     const timeout = enableThink ? 90000 : 60000;
 
     // Convert messages to Ollama format (string content only)
-    const ollamaMessages = messages.map(m => ({
+    const ollamaMessages = messages.map((m) => ({
       role: m.role,
       content: typeof m.content === 'string' ? m.content : JSON.stringify(m.content),
     }));
@@ -681,28 +767,47 @@ class LLMService {
         promptTokens: response.data.prompt_eval_count || 0,
         completionTokens: response.data.eval_count || 0,
       };
-      this.recordUsage('ollama', config.AGENT_OLLAMA_MODEL, { promptTokens: result.promptTokens, completionTokens: result.completionTokens }, Date.now() - startTime, 'chat', { thinking: enableThink });
+      this.recordUsage(
+        'ollama',
+        config.AGENT_OLLAMA_MODEL,
+        { promptTokens: result.promptTokens, completionTokens: result.completionTokens },
+        Date.now() - startTime,
+        'chat',
+        { thinking: enableThink }
+      );
       return result;
     } catch (error: any) {
       // Fallback: retry without thinking on 400 error
       if (enableThink && error.response?.status === 400) {
         logger.warn('Agent think mode failed, retrying without thinking');
         delete body.think;
-        const response = await axios.post(
-          `${config.OLLAMA_URL}/api/chat`,
-          body,
-          { timeout: 60000 }
-        );
+        const response = await axios.post(`${config.OLLAMA_URL}/api/chat`, body, {
+          timeout: 60000,
+        });
         const result = {
           text: response.data.message?.content || '',
           toolUse: undefined as undefined,
           promptTokens: response.data.prompt_eval_count || 0,
           completionTokens: response.data.eval_count || 0,
         };
-        this.recordUsage('ollama', config.AGENT_OLLAMA_MODEL, { promptTokens: result.promptTokens, completionTokens: result.completionTokens }, Date.now() - startTime, 'chat', { thinking: false });
+        this.recordUsage(
+          'ollama',
+          config.AGENT_OLLAMA_MODEL,
+          { promptTokens: result.promptTokens, completionTokens: result.completionTokens },
+          Date.now() - startTime,
+          'chat',
+          { thinking: false }
+        );
         return result;
       }
-      this.recordUsage('ollama', config.AGENT_OLLAMA_MODEL, undefined, Date.now() - startTime, 'chat', { success: false, error: error.message });
+      this.recordUsage(
+        'ollama',
+        config.AGENT_OLLAMA_MODEL,
+        undefined,
+        Date.now() - startTime,
+        'chat',
+        { success: false, error: error.message }
+      );
       logger.error('Ollama chat failed', { error: error.message });
       throw new Error(`LLM call failed: ${error.message}`);
     }

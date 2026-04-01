@@ -32,10 +32,7 @@
     },
     "successful": 11
   },
-  "outputs_generated": [
-    "transcript.md",
-    "metrics.json"
-  ],
+  "outputs_generated": ["transcript.md", "metrics.json"],
   "onboarding_steps_identified": [
     "Create project directory",
     "Run setup_project MCP tool",

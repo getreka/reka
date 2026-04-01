@@ -9,7 +9,7 @@ import { EvalReporter } from './reporter';
 
 async function loadFixtures(): Promise<EvalCase[]> {
   const fixturesDir = path.join(__dirname, 'fixtures');
-  const files = fs.readdirSync(fixturesDir).filter(f => f.endsWith('.json'));
+  const files = fs.readdirSync(fixturesDir).filter((f) => f.endsWith('.json'));
   const cases: EvalCase[] = [];
 
   for (const file of files) {
@@ -68,7 +68,7 @@ async function main() {
   reporter.compareRuns(runA, runB);
 }
 
-main().catch(err => {
+main().catch((err) => {
   console.error('Benchmark failed:', err);
   process.exit(1);
 });

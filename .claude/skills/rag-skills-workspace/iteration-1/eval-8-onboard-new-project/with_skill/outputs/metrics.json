@@ -41,7 +41,11 @@
         "result": "0 files indexed (empty directory)"
       },
       "step_4_verify_index": {
-        "tools": ["get_index_status", "analyze_project_structure", "hybrid_search"],
+        "tools": [
+          "get_index_status",
+          "analyze_project_structure",
+          "hybrid_search"
+        ],
         "count": 3,
         "result": "index empty for myapp, search returns rag project results"
       },

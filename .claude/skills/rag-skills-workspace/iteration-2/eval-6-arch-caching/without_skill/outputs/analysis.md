@@ -6,14 +6,14 @@ There are **6 ADRs** recorded in the project. **None of them directly address ca
 
 The existing ADRs cover:
 
-| # | ADR Title | Relevance to Caching |
-|---|-----------|---------------------|
-| 1 | Use BGE-M3 as primary embedding model | Defines embedding dimensions (1024d) which affects cache entry size |
-| 2 | Zero-downtime reindexing via Qdrant aliases | Tangential -- reindex triggers `invalidateCollection()` on the cache |
-| 3 | Context enrichment via before/after hooks | Consumer of cached embeddings via tool dispatch pipeline |
-| 4 | AST-based code parsing with ts-morph | No direct relation |
-| 5 | Qdrant as sole vector database with typed collections | No direct relation |
-| 6 | MCP over stdio with per-project instances | No direct relation |
+| #   | ADR Title                                             | Relevance to Caching                                                 |
+| --- | ----------------------------------------------------- | -------------------------------------------------------------------- |
+| 1   | Use BGE-M3 as primary embedding model                 | Defines embedding dimensions (1024d) which affects cache entry size  |
+| 2   | Zero-downtime reindexing via Qdrant aliases           | Tangential -- reindex triggers `invalidateCollection()` on the cache |
+| 3   | Context enrichment via before/after hooks             | Consumer of cached embeddings via tool dispatch pipeline             |
+| 4   | AST-based code parsing with ts-morph                  | No direct relation                                                   |
+| 5   | Qdrant as sole vector database with typed collections | No direct relation                                                   |
+| 6   | MCP over stdio with per-project instances             | No direct relation                                                   |
 
 **Key finding: There is no ADR documenting the current caching architecture or the decision to use Redis as the sole cache backend.** This is a gap -- the multi-level Redis caching system is a significant architectural choice that should be formally documented.
 
@@ -42,16 +42,17 @@ The system uses a **Redis-only, 3-level, session-aware cache** built on `ioredis
 
 **TTL Configuration (constants, not configurable via env):**
 
-| Level | Scope | Key Pattern | TTL |
-|-------|-------|-------------|-----|
-| L1 | Session | `sess:{sessionId}:emb:{md5}` | 30 minutes |
-| L2 | Project | `proj:{project}:emb:{md5}` | 1 hour |
-| L3 | Global  | `glob:emb:{md5}` | 24 hours |
-| Basic | Flat  | `emb:{md5}` | 1 hour |
+| Level | Scope   | Key Pattern                  | TTL        |
+| ----- | ------- | ---------------------------- | ---------- |
+| L1    | Session | `sess:{sessionId}:emb:{md5}` | 30 minutes |
+| L2    | Project | `proj:{project}:emb:{md5}`   | 1 hour     |
+| L3    | Global  | `glob:emb:{md5}`             | 24 hours   |
+| Basic | Flat    | `emb:{md5}`                  | 1 hour     |
 
 **Promotion strategy:** On L2/L3 hit, values are promoted upward (e.g., L3 hit copies to L1 + L2).
 
 **Additional cached data types:**
+
 - Search results: session-aware L1 (30 min) + L2 (30 min)
 - Collection info: 30 seconds
 - Graph expansions: 5 minutes (`graph-store.ts`)
@@ -60,14 +61,14 @@ The system uses a **Redis-only, 3-level, session-aware cache** built on `ioredis
 
 ### Consumers of Embedding Cache
 
-| Service | Usage |
-|---------|-------|
-| `embedding.ts` | Core embed(), embedWithSession(), embedBatch() |
-| `graph-store.ts` | Edge embedding + graph expansion results |
-| `predictive-loader.ts` | Prefetch embeddings and search results |
-| `indexer.ts` | Collection invalidation after reindex |
-| `session-context.ts` | Session metadata caching |
-| `project-profile.ts` | Developer profile caching |
+| Service                | Usage                                          |
+| ---------------------- | ---------------------------------------------- |
+| `embedding.ts`         | Core embed(), embedWithSession(), embedBatch() |
+| `graph-store.ts`       | Edge embedding + graph expansion results       |
+| `predictive-loader.ts` | Prefetch embeddings and search results         |
+| `indexer.ts`           | Collection invalidation after reindex          |
+| `session-context.ts`   | Session metadata caching                       |
+| `project-profile.ts`   | Developer profile caching                      |
 
 ### Infrastructure
 
@@ -95,7 +96,7 @@ Every embedding cache lookup -- even L1 "session" cache -- requires a **Redis ne
 4. On total miss -> HTTP call to BGE-M3 + 3 Redis SETs (write all levels)
 
 Best case (L1 hit): ~0.5-1ms Redis round-trip
-Worst case (miss): ~0.5ms * 3 GETs + ~50-200ms BGE-M3 HTTP + 3 SETs
+Worst case (miss): ~0.5ms \* 3 GETs + ~50-200ms BGE-M3 HTTP + 3 SETs
 
 For batch operations (embedBatch), each text gets its own sequential cache check, amplifying latency.
 
@@ -117,7 +118,7 @@ L3: Redis global cache             →  ~0.5ms
 ### Implementation Sketch
 
 ```typescript
-import { LRUCache } from 'lru-cache';
+import { LRUCache } from "lru-cache";
 
 // Each 1024-dim float64 vector = ~8KB raw, ~16KB JSON-serialized
 // 500 entries = ~4-8MB RAM
@@ -147,11 +148,11 @@ const l0Cache = new LRUCache<string, number[]>({
 ### Memory Estimation
 
 | L0 Size | Entries | RAM Usage (approx.) |
-|---------|---------|---------------------|
-| Small | 200 | ~1.6 MB |
-| Medium | 500 | ~4 MB |
-| Large | 2000 | ~16 MB |
-| XL | 5000 | ~40 MB |
+| ------- | ------- | ------------------- |
+| Small   | 200     | ~1.6 MB             |
+| Medium  | 500     | ~4 MB               |
+| Large   | 2000    | ~16 MB              |
+| XL      | 5000    | ~40 MB              |
 
 For a typical session with ~50-200 unique queries, a 500-entry L0 would cover the hot working set comfortably.
 
@@ -208,25 +209,25 @@ The best approach combines both options:
 
 ### Expected Impact
 
-| Metric | Current | After L0 | After Both |
-|--------|---------|----------|------------|
-| Hot query latency | ~0.5ms (Redis L1) | ~0.001ms (L0 hit) | ~0.001ms |
-| Batch 10 texts (all cached) | ~5ms (10 Redis GETs) | ~0.01ms | ~0.01ms |
-| Memory overhead | 0 (process) | ~4-8 MB | ~4-8 MB |
-| Redis memory safety | Unbounded | Unbounded | Capped at 256MB |
-| Multi-instance sharing | Full | L0 per-process | L0 per-process, L1-L3 shared |
+| Metric                      | Current              | After L0          | After Both                   |
+| --------------------------- | -------------------- | ----------------- | ---------------------------- |
+| Hot query latency           | ~0.5ms (Redis L1)    | ~0.001ms (L0 hit) | ~0.001ms                     |
+| Batch 10 texts (all cached) | ~5ms (10 Redis GETs) | ~0.01ms           | ~0.01ms                      |
+| Memory overhead             | 0 (process)          | ~4-8 MB           | ~4-8 MB                      |
+| Redis memory safety         | Unbounded            | Unbounded         | Capped at 256MB              |
+| Multi-instance sharing      | Full                 | L0 per-process    | L0 per-process, L1-L3 shared |
 
 ---
 
 ## 7. Risks and Mitigations
 
-| Risk | Mitigation |
-|------|------------|
-| L0 stale entries | Embeddings are deterministic (same text = same vector), so staleness is not a concern for embeddings. For search results, use shorter L0 TTL (60s). |
-| Memory leak in L0 | `lru-cache` enforces `max` entries and `maxSize` bytes. Node.js GC handles evicted entries. |
-| Redis unbounded growth | Add `maxmemory` + `allkeys-lru` eviction policy in docker-compose.yml |
-| KEYS command blocking | Replace with SCAN iterator in Phase 2 |
-| Horizontal scaling | L0 is per-process but acceptable -- embeddings are deterministic, so duplicate computation across instances is rare and harmless |
+| Risk                   | Mitigation                                                                                                                                          |
+| ---------------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| L0 stale entries       | Embeddings are deterministic (same text = same vector), so staleness is not a concern for embeddings. For search results, use shorter L0 TTL (60s). |
+| Memory leak in L0      | `lru-cache` enforces `max` entries and `maxSize` bytes. Node.js GC handles evicted entries.                                                         |
+| Redis unbounded growth | Add `maxmemory` + `allkeys-lru` eviction policy in docker-compose.yml                                                                               |
+| KEYS command blocking  | Replace with SCAN iterator in Phase 2                                                                                                               |
+| Horizontal scaling     | L0 is per-process but acceptable -- embeddings are deterministic, so duplicate computation across instances is rare and harmless                    |
 
 ---
 
@@ -244,13 +245,13 @@ This analysis provides the context needed for that ADR decision.
 
 ## Appendix: Key Files
 
-| File | Role |
-|------|------|
-| `/home/ake/shared-ai-infra/rag-api/src/services/cache.ts` | CacheService -- Redis multi-level cache (684 lines) |
-| `/home/ake/shared-ai-infra/rag-api/src/services/embedding.ts` | EmbeddingService -- cache consumer, multi-provider (351 lines) |
-| `/home/ake/shared-ai-infra/rag-api/src/config.ts` | Config with REDIS_URL (104 lines) |
-| `/home/ake/shared-ai-infra/rag-api/src/utils/metrics.ts` | Prometheus counters for cache hits/misses |
-| `/home/ake/shared-ai-infra/rag-api/src/services/graph-store.ts` | Graph expansion caching (5 min TTL) |
-| `/home/ake/shared-ai-infra/rag-api/src/services/predictive-loader.ts` | Predictive prefetch into session cache |
-| `/home/ake/shared-ai-infra/docker/docker-compose.yml` | Redis 7 Alpine config (no maxmemory set) |
-| `/home/ake/shared-ai-infra/rag-api/src/__tests__/services/embedding.test.ts` | Tests for embedding cache behavior |
+| File                                                                         | Role                                                           |
+| ---------------------------------------------------------------------------- | -------------------------------------------------------------- |
+| `/home/ake/shared-ai-infra/rag-api/src/services/cache.ts`                    | CacheService -- Redis multi-level cache (684 lines)            |
+| `/home/ake/shared-ai-infra/rag-api/src/services/embedding.ts`                | EmbeddingService -- cache consumer, multi-provider (351 lines) |
+| `/home/ake/shared-ai-infra/rag-api/src/config.ts`                            | Config with REDIS_URL (104 lines)                              |
+| `/home/ake/shared-ai-infra/rag-api/src/utils/metrics.ts`                     | Prometheus counters for cache hits/misses                      |
+| `/home/ake/shared-ai-infra/rag-api/src/services/graph-store.ts`              | Graph expansion caching (5 min TTL)                            |
+| `/home/ake/shared-ai-infra/rag-api/src/services/predictive-loader.ts`        | Predictive prefetch into session cache                         |
+| `/home/ake/shared-ai-infra/docker/docker-compose.yml`                        | Redis 7 Alpine config (no maxmemory set)                       |
+| `/home/ake/shared-ai-infra/rag-api/src/__tests__/services/embedding.test.ts` | Tests for embedding cache behavior                             |

@@ -52,10 +52,9 @@ describe('EmbeddingService', () => {
       const result = await embeddingService.embed('hello');
 
       expect(result).toBe(fakeVector);
-      expect(mockedAxios.post).toHaveBeenCalledWith(
-        expect.stringContaining('/embed'),
-        { text: 'hello' }
-      );
+      expect(mockedAxios.post).toHaveBeenCalledWith(expect.stringContaining('/embed'), {
+        text: 'hello',
+      });
       expect(mockedCache.setEmbedding).toHaveBeenCalledWith('hello', fakeVector);
     });
   });
@@ -96,11 +95,10 @@ describe('EmbeddingService', () => {
 
       expect(result).toEqual(fakeVector);
       expect(mockedAxios.post).toHaveBeenCalled();
-      expect(mockedCache.setSessionEmbedding).toHaveBeenCalledWith(
-        'query',
-        fakeVector,
-        { sessionId: 'sess-1', projectName: 'proj' }
-      );
+      expect(mockedCache.setSessionEmbedding).toHaveBeenCalledWith('query', fakeVector, {
+        sessionId: 'sess-1',
+        projectName: 'proj',
+      });
     });
   });
 
@@ -110,9 +108,7 @@ describe('EmbeddingService', () => {
       const vec2 = mockEmbedding(1024);
 
       // First text cached, second not
-      mockedCache.getEmbedding
-        .mockResolvedValueOnce(vec1)
-        .mockResolvedValueOnce(null);
+      mockedCache.getEmbedding.mockResolvedValueOnce(vec1).mockResolvedValueOnce(null);
 
       mockedAxios.post.mockResolvedValue({
         data: { embeddings: [vec2] },
@@ -123,19 +119,16 @@ describe('EmbeddingService', () => {
       expect(result).toHaveLength(2);
       expect(result[0]).toBe(vec1);
       expect(result[1]).toBe(vec2);
-      expect(mockedAxios.post).toHaveBeenCalledWith(
-        expect.stringContaining('/embed/batch'),
-        { texts: ['uncached'] }
-      );
+      expect(mockedAxios.post).toHaveBeenCalledWith(expect.stringContaining('/embed/batch'), {
+        texts: ['uncached'],
+      });
     });
 
     it('skips HTTP call when all texts are cached', async () => {
       const vec1 = mockEmbedding(1024);
       const vec2 = mockEmbedding(1024);
 
-      mockedCache.getEmbedding
-        .mockResolvedValueOnce(vec1)
-        .mockResolvedValueOnce(vec2);
+      mockedCache.getEmbedding.mockResolvedValueOnce(vec1).mockResolvedValueOnce(vec2);
 
       const result = await embeddingService.embedBatch(['a', 'b']);
 
@@ -157,10 +150,9 @@ describe('EmbeddingService', () => {
 
       expect(result.dense).toBe(dense);
       expect(result.sparse).toEqual(sparse);
-      expect(mockedAxios.post).toHaveBeenCalledWith(
-        expect.stringContaining('/embed/full'),
-        { text: 'test text' }
-      );
+      expect(mockedAxios.post).toHaveBeenCalledWith(expect.stringContaining('/embed/full'), {
+        text: 'test text',
+      });
     });
   });
 

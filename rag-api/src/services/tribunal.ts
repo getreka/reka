@@ -28,14 +28,14 @@ import { withSpan } from '../utils/tracing';
 
 export interface TribunalConfig {
   topic: string;
-  positions: string[];           // 2-3 positions to debate
-  context?: string;              // Additional context provided by user
+  positions: string[]; // 2-3 positions to debate
+  context?: string; // Additional context provided by user
   projectName: string;
-  maxRounds?: number;            // Rebuttal rounds (default: 1)
-  useCodeContext?: boolean;      // Fetch RAG context before debate
-  autoRecord?: boolean;          // Save verdict as decision in memory
-  maxBudget?: number;            // Cost guard in USD (default: 0.50)
-  deepResearch?: boolean;        // Run research agents per position before arguments
+  maxRounds?: number; // Rebuttal rounds (default: 1)
+  useCodeContext?: boolean; // Fetch RAG context before debate
+  autoRecord?: boolean; // Save verdict as decision in memory
+  maxBudget?: number; // Cost guard in USD (default: 0.50)
+  deepResearch?: boolean; // Run research agents per position before arguments
 }
 
 export interface TribunalArgument {
@@ -46,7 +46,7 @@ export interface TribunalArgument {
 }
 
 export interface TribunalVerdict {
-  recommendation: string;        // Which position wins
+  recommendation: string; // Which position wins
   confidence: 'high' | 'medium' | 'low';
   reasoning: string;
   scores: Array<{ position: string; score: number; justification: string }>;
@@ -187,7 +187,9 @@ function parseVerdict(text: string, positions: string[]): TribunalVerdict {
 
   const recommendation = get('RECOMMENDATION');
   const confidenceRaw = get('CONFIDENCE').toLowerCase();
-  const confidence = (['high', 'medium', 'low'].includes(confidenceRaw) ? confidenceRaw : 'medium') as 'high' | 'medium' | 'low';
+  const confidence = (
+    ['high', 'medium', 'low'].includes(confidenceRaw) ? confidenceRaw : 'medium'
+  ) as 'high' | 'medium' | 'low';
   const reasoning = get('REASONING');
   const tradeoffs = get('TRADE-OFFS') || get('TRADEOFFS') || get('TRADE_OFFS');
   const dissent = get('DISSENT');
@@ -195,8 +197,10 @@ function parseVerdict(text: string, positions: string[]): TribunalVerdict {
 
   // Parse scores
   const scoringText = get('SCORING');
-  const scores = positions.map(position => {
-    const scoreMatch = scoringText.match(new RegExp(`${position.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[^0-9]*?(\\d+)`, 'i'));
+  const scores = positions.map((position) => {
+    const scoreMatch = scoringText.match(
+      new RegExp(`${position.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[^0-9]*?(\\d+)`, 'i')
+    );
     return {
       position,
       score: scoreMatch ? parseInt(scoreMatch[1], 10) : 5,
@@ -239,12 +243,15 @@ function getDebate(id: string): TribunalResult | undefined {
 }
 
 // Cleanup expired entries every 10 minutes
-setInterval(() => {
-  const now = Date.now();
-  for (const [id, entry] of debateStore) {
-    if (now > entry.expiresAt) debateStore.delete(id);
-  }
-}, 10 * 60 * 1000).unref();
+setInterval(
+  () => {
+    const now = Date.now();
+    for (const [id, entry] of debateStore) {
+      if (now > entry.expiresAt) debateStore.delete(id);
+    }
+  },
+  10 * 60 * 1000
+).unref();
 
 // ── Framing Cache Threshold ──────────────────────────────────
 
@@ -253,7 +260,6 @@ const FRAMING_CACHE_THRESHOLD = 0.9; // cosine similarity to reuse framing
 // ── Orchestrator ────────────────────────────────────────────
 
 class TribunalService {
-
   getDebate(id: string): TribunalResult | undefined {
     return getDebate(id);
   }
@@ -261,17 +267,23 @@ class TribunalService {
   /**
    * Search debate history for a project. Optionally filter by topic similarity.
    */
-  async getHistory(projectName: string, limit: number = 10, topic?: string): Promise<Array<{
-    id: string;
-    topic: string;
-    recommendation: string;
-    confidence: string;
-    positions: string[];
-    cost: number;
-    durationMs: number;
-    createdAt: string;
-    score?: number;
-  }>> {
+  async getHistory(
+    projectName: string,
+    limit: number = 10,
+    topic?: string
+  ): Promise<
+    Array<{
+      id: string;
+      topic: string;
+      recommendation: string;
+      confidence: string;
+      positions: string[];
+      cost: number;
+      durationMs: number;
+      createdAt: string;
+      score?: number;
+    }>
+  > {
     const collection = `${projectName}_tribunals`;
 
     try {
@@ -279,7 +291,7 @@ class TribunalService {
         // Semantic search by topic
         const embedding = await embeddingService.embed(topic);
         const results = await vectorStore.search(collection, embedding, limit);
-        return results.map(r => ({
+        return results.map((r) => ({
           id: r.id,
           topic: String(r.payload.topic || ''),
           recommendation: String(r.payload.recommendation || ''),
@@ -296,9 +308,9 @@ class TribunalService {
       const results = await vectorStore.search(
         collection,
         await embeddingService.embed('tribunal debate'),
-        limit,
+        limit
       );
-      return results.map(r => ({
+      return results.map((r) => ({
         id: r.id,
         topic: String(r.payload.topic || ''),
         recommendation: String(r.payload.recommendation || ''),
@@ -328,27 +340,29 @@ class TribunalService {
       await vectorStore.ensureCollection(collection);
 
       const embedding = await embeddingService.embed(result.topic);
-      await vectorStore.upsert(collection, [{
-        id: result.id,
-        vector: embedding,
-        payload: {
-          topic: result.topic,
-          positions: result.positions,
-          recommendation: result.verdict.recommendation,
-          confidence: result.verdict.confidence,
-          reasoning: result.verdict.reasoning,
-          tradeoffs: result.verdict.tradeoffs,
-          dissent: result.verdict.dissent,
-          conditions: result.verdict.conditions,
-          scores: result.verdict.scores,
-          framing: result.phases.find(p => p.name === 'framing')?.content || '',
-          cost: result.cost.estimatedUsd,
-          totalTokens: result.cost.totalTokens,
-          durationMs: result.durationMs,
-          status: result.status,
-          createdAt: new Date().toISOString(),
+      await vectorStore.upsert(collection, [
+        {
+          id: result.id,
+          vector: embedding,
+          payload: {
+            topic: result.topic,
+            positions: result.positions,
+            recommendation: result.verdict.recommendation,
+            confidence: result.verdict.confidence,
+            reasoning: result.verdict.reasoning,
+            tradeoffs: result.verdict.tradeoffs,
+            dissent: result.verdict.dissent,
+            conditions: result.verdict.conditions,
+            scores: result.verdict.scores,
+            framing: result.phases.find((p) => p.name === 'framing')?.content || '',
+            cost: result.cost.estimatedUsd,
+            totalTokens: result.cost.totalTokens,
+            durationMs: result.durationMs,
+            status: result.status,
+            createdAt: new Date().toISOString(),
+          },
         },
-      }]);
+      ]);
 
       logger.debug('Persisted debate to history', { id: result.id, collection });
     } catch (err: any) {
@@ -364,7 +378,13 @@ class TribunalService {
 
     try {
       const embedding = await embeddingService.embed(topic);
-      const results = await vectorStore.search(collection, embedding, 1, undefined, FRAMING_CACHE_THRESHOLD);
+      const results = await vectorStore.search(
+        collection,
+        embedding,
+        1,
+        undefined,
+        FRAMING_CACHE_THRESHOLD
+      );
 
       if (results.length > 0 && results[0].payload.framing) {
         logger.info('Tribunal framing cache hit', {
@@ -383,18 +403,25 @@ class TribunalService {
   }
 
   async debate(cfg: TribunalConfig & { debateId?: string }): Promise<TribunalResult> {
-    return withSpan('tribunal.debate', {
-      topic: cfg.topic.slice(0, 100),
-      positions: cfg.positions.join(','),
-      project: cfg.projectName,
-      deep_research: cfg.deepResearch || false,
-    }, async (span) => this._debate(cfg, span));
+    return withSpan(
+      'tribunal.debate',
+      {
+        topic: cfg.topic.slice(0, 100),
+        positions: cfg.positions.join(','),
+        project: cfg.projectName,
+        deep_research: cfg.deepResearch || false,
+      },
+      async (span) => this._debate(cfg, span)
+    );
   }
 
-  private async _debate(cfg: TribunalConfig & { debateId?: string }, span?: any): Promise<TribunalResult> {
+  private async _debate(
+    cfg: TribunalConfig & { debateId?: string },
+    span?: any
+  ): Promise<TribunalResult> {
     const id = cfg.debateId || uuidv4();
     const maxRounds = cfg.maxRounds ?? 1;
-    const maxBudget = cfg.maxBudget ?? 0.50;
+    const maxBudget = cfg.maxBudget ?? 0.5;
     const startTime = Date.now();
 
     const result: TribunalResult = {
@@ -463,7 +490,11 @@ class TribunalService {
       });
 
       workHandle.update({ progress: { current: 1, total: 4, percentage: 25 } });
-      eventBus.publish('tribunal:framing', { debateId: id, topic: cfg.topic, content: framingText });
+      eventBus.publish('tribunal:framing', {
+        debateId: id,
+        topic: cfg.topic,
+        content: framingText,
+      });
       storeDebate(result);
 
       // ── Deep Research (optional, before arguments) ──────
@@ -473,7 +504,7 @@ class TribunalService {
         positionResearch = new Map();
 
         // Run parallel research agents — one per position
-        const researchPromises = cfg.positions.map(async position => {
+        const researchPromises = cfg.positions.map(async (position) => {
           try {
             const result = await agentRuntime.run({
               projectName: cfg.projectName,
@@ -484,7 +515,10 @@ class TribunalService {
             });
             return { position, evidence: result.result || '' };
           } catch (err: any) {
-            logger.warn('Tribunal deep research failed for position', { position, error: err.message });
+            logger.warn('Tribunal deep research failed for position', {
+              position,
+              error: err.message,
+            });
             return { position, evidence: '' };
           }
         });
@@ -500,7 +534,9 @@ class TribunalService {
         // Budget check after research
         const researchDurationMs = Date.now() - researchStart;
         logger.info('Tribunal deep research completed', {
-          id, positions: cfg.positions, durationMs: researchDurationMs,
+          id,
+          positions: cfg.positions,
+          durationMs: researchDurationMs,
         });
 
         if (estimateCost(result.cost.totalTokens) > maxBudget) {
@@ -510,7 +546,7 @@ class TribunalService {
 
       // ── Phase 2: Initial Arguments (parallel) ───────────
       const argsStart = Date.now();
-      const argPromises = cfg.positions.map(position => {
+      const argPromises = cfg.positions.map((position) => {
         // Inject research evidence if available
         const researchEvidence = positionResearch?.get(position);
         const enrichedRagContext = researchEvidence
@@ -522,8 +558,8 @@ class TribunalService {
           cfg.topic,
           framingText,
           enrichedRagContext,
-          undefined,  // no opponent args yet
-          0,
+          undefined, // no opponent args yet
+          0
         );
       });
 
@@ -538,20 +574,28 @@ class TribunalService {
         name: 'arguments',
         durationMs: Date.now() - argsStart,
         tokens: argsTokens,
-        content: initialArgs.map(a => `**${a.position}:** ${a.content.slice(0, 200)}...`).join('\n\n'),
+        content: initialArgs
+          .map((a) => `**${a.position}:** ${a.content.slice(0, 200)}...`)
+          .join('\n\n'),
       });
 
       workHandle.update({ progress: { current: 2, total: 4, percentage: 50 } });
       eventBus.publish('tribunal:argument', {
-        debateId: id, topic: cfg.topic,
-        arguments: initialArgs.map(a => ({ position: a.position, preview: a.content.slice(0, 200) })),
+        debateId: id,
+        topic: cfg.topic,
+        arguments: initialArgs.map((a) => ({
+          position: a.position,
+          preview: a.content.slice(0, 200),
+        })),
       });
       storeDebate(result);
 
       // Budget check
       if (estimateCost(result.cost.totalTokens) > maxBudget) {
         logger.warn('Tribunal budget exceeded after arguments, skipping rebuttals', {
-          id, estimatedUsd: estimateCost(result.cost.totalTokens), maxBudget,
+          id,
+          estimatedUsd: estimateCost(result.cost.totalTokens),
+          maxBudget,
         });
       } else {
         // ── Phase 3: Rebuttals (parallel per round) ─────────
@@ -560,9 +604,9 @@ class TribunalService {
 
         for (let round = 1; round <= maxRounds; round++) {
           // Each advocate sees all other advocates' latest arguments
-          const rebuttalPromises = cfg.positions.map(position => {
+          const rebuttalPromises = cfg.positions.map((position) => {
             const opponentArgs = result.arguments.filter(
-              a => a.position !== position && a.round === round - 1
+              (a) => a.position !== position && a.round === round - 1
             );
             return this.runAdvocate(
               position,
@@ -570,7 +614,7 @@ class TribunalService {
               framingText,
               ragContext,
               opponentArgs,
-              round,
+              round
             );
           });
 
@@ -592,20 +636,26 @@ class TribunalService {
           name: 'rebuttal',
           durationMs: Date.now() - rebuttalStart,
           tokens: rebuttalTokens,
-          content: `${maxRounds} round(s), ${result.arguments.filter(a => a.round > 0).length} rebuttals`,
+          content: `${maxRounds} round(s), ${result.arguments.filter((a) => a.round > 0).length} rebuttals`,
         });
       }
 
       workHandle.update({ progress: { current: 3, total: 4, percentage: 75 } });
       eventBus.publish('tribunal:rebuttal', {
-        debateId: id, topic: cfg.topic,
-        rebuttalCount: result.arguments.filter(a => a.round > 0).length,
+        debateId: id,
+        topic: cfg.topic,
+        rebuttalCount: result.arguments.filter((a) => a.round > 0).length,
       });
       storeDebate(result);
 
       // ── Phase 4: Verdict ────────────────────────────────
       const verdictStart = Date.now();
-      const verdictPrompt = judgeVerdictPrompt(cfg.topic, framingText, result.arguments, ragContext);
+      const verdictPrompt = judgeVerdictPrompt(
+        cfg.topic,
+        framingText,
+        result.arguments,
+        ragContext
+      );
       const verdictResult = await llm.completeWithBestProvider(verdictPrompt, {
         complexity: config.TRIBUNAL_JUDGE_COMPLEXITY,
         maxTokens: 4096,
@@ -625,7 +675,8 @@ class TribunalService {
 
       workHandle.update({ progress: { current: 4, total: 4, percentage: 100 } });
       eventBus.publish('tribunal:verdict', {
-        debateId: id, topic: cfg.topic,
+        debateId: id,
+        topic: cfg.topic,
         recommendation: result.verdict.recommendation,
         confidence: result.verdict.confidence,
       });
@@ -635,7 +686,8 @@ class TribunalService {
         try {
           await memoryService.remember({
             projectName: cfg.projectName,
-            content: `# Tribunal Decision: ${cfg.topic}\n\n` +
+            content:
+              `# Tribunal Decision: ${cfg.topic}\n\n` +
               `**Recommendation:** ${result.verdict.recommendation}\n` +
               `**Confidence:** ${result.verdict.confidence}\n\n` +
               `**Reasoning:**\n${result.verdict.reasoning}\n\n` +
@@ -643,7 +695,11 @@ class TribunalService {
               `**Dissent:**\n${result.verdict.dissent}\n\n` +
               `**Conditions:**\n${result.verdict.conditions}`,
             type: 'decision',
-            tags: ['tribunal', 'debate', ...cfg.positions.map(p => p.toLowerCase().replace(/\s+/g, '-'))],
+            tags: [
+              'tribunal',
+              'debate',
+              ...cfg.positions.map((p) => p.toLowerCase().replace(/\s+/g, '-')),
+            ],
             relatedTo: cfg.topic,
           });
         } catch (err: any) {
@@ -654,7 +710,10 @@ class TribunalService {
       result.cost.estimatedUsd = estimateCost(result.cost.totalTokens);
       result.durationMs = Date.now() - startTime;
       result.status = 'completed';
-      workHandle.complete({ verdict: result.verdict.recommendation, cost: result.cost.estimatedUsd });
+      workHandle.complete({
+        verdict: result.verdict.recommendation,
+        cost: result.cost.estimatedUsd,
+      });
 
       storeDebate(result);
 
@@ -662,7 +721,8 @@ class TribunalService {
       await this.persistDebate(cfg.projectName, result);
 
       eventBus.publish('tribunal:completed', {
-        debateId: id, topic: cfg.topic,
+        debateId: id,
+        topic: cfg.topic,
         recommendation: result.verdict.recommendation,
         confidence: result.verdict.confidence,
         cost: result.cost.estimatedUsd,
@@ -686,7 +746,6 @@ class TribunalService {
         estimatedUsd: result.cost.estimatedUsd,
         durationMs: result.durationMs,
       });
-
     } catch (error: any) {
       result.status = 'failed';
       result.error = error.message;
@@ -708,7 +767,7 @@ class TribunalService {
     framing: string,
     ragContext: string | undefined,
     opponentArgs: TribunalArgument[] | undefined,
-    round: number,
+    round: number
   ): Promise<TribunalArgument> {
     let prompt = `## Debate Topic\n${topic}\n\n## Framing\n${framing}\n\n`;
 
@@ -746,7 +805,7 @@ class TribunalService {
   private async fetchRagContext(
     projectName: string,
     topic: string,
-    positions: string[],
+    positions: string[]
   ): Promise<string> {
     const parts: string[] = [];
 

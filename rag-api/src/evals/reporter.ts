@@ -44,7 +44,7 @@ export class EvalReporter {
     console.log(`Thinking Rate: ${(summary.thinkingRate * 100).toFixed(1)}%`);
 
     // Show failed cases
-    const failed = results.filter(r => !r.passed);
+    const failed = results.filter((r) => !r.passed);
     if (failed.length > 0) {
       console.log('\n--- FAILURES ---');
       for (const f of failed) {
@@ -52,7 +52,7 @@ export class EvalReporter {
         if (f.error) {
           console.log(`    Error: ${f.error}`);
         }
-        for (const a of f.assertions.filter(a => !a.passed)) {
+        for (const a of f.assertions.filter((a) => !a.passed)) {
           console.log(`    FAIL: ${a.type} — ${a.detail}`);
         }
       }
@@ -76,7 +76,11 @@ export class EvalReporter {
     console.log('  ' + '-'.repeat(66));
 
     const metrics: Array<[string, number, number]> = [
-      ['Pass Rate (%)', (runA.summary.passed / runA.summary.total) * 100, (runB.summary.passed / runB.summary.total) * 100],
+      [
+        'Pass Rate (%)',
+        (runA.summary.passed / runA.summary.total) * 100,
+        (runB.summary.passed / runB.summary.total) * 100,
+      ],
       ['Avg Latency (ms)', runA.summary.avgLatencyMs, runB.summary.avgLatencyMs],
       ['JSON Parse Rate (%)', runA.summary.jsonParseRate * 100, runB.summary.jsonParseRate * 100],
       ['Thinking Rate (%)', runA.summary.thinkingRate * 100, runB.summary.thinkingRate * 100],
@@ -85,13 +89,15 @@ export class EvalReporter {
     for (const [name, a, b] of metrics) {
       const delta = b - a;
       const sign = delta > 0 ? '+' : '';
-      console.log(`  ${name.padEnd(24)}${a.toFixed(1).padStart(10)}  ${b.toFixed(1).padStart(12)}  ${(sign + delta.toFixed(1)).padStart(10)}`);
+      console.log(
+        `  ${name.padEnd(24)}${a.toFixed(1).padStart(10)}  ${b.toFixed(1).padStart(12)}  ${(sign + delta.toFixed(1)).padStart(10)}`
+      );
     }
 
     // Per-case comparison
     console.log('\n  Per-case results:');
-    const casesA = new Map(runA.results.map(r => [r.caseId, r]));
-    const casesB = new Map(runB.results.map(r => [r.caseId, r]));
+    const casesA = new Map(runA.results.map((r) => [r.caseId, r]));
+    const casesB = new Map(runB.results.map((r) => [r.caseId, r]));
 
     const allCases = new Set([...casesA.keys(), ...casesB.keys()]);
     for (const caseId of allCases) {
@@ -103,7 +109,9 @@ export class EvalReporter {
       const latB = b ? `${b.latencyMs}ms` : '-';
 
       const changed = statusA !== statusB ? ' <<<' : '';
-      console.log(`    ${caseId.padEnd(20)} ${statusA.padEnd(6)} ${latA.padStart(8)}  |  ${statusB.padEnd(6)} ${latB.padStart(8)}${changed}`);
+      console.log(
+        `    ${caseId.padEnd(20)} ${statusA.padEnd(6)} ${latA.padStart(8)}  |  ${statusB.padEnd(6)} ${latB.padStart(8)}${changed}`
+      );
     }
 
     console.log('\n' + '='.repeat(70) + '\n');

@@ -20,14 +20,14 @@ import { sensoryBuffer, computeSalience, type SensoryEvent } from './sensory-buf
 
 export interface WorkingMemorySlot {
   id: string;
-  content: string;         // inputSummary + key output
+  content: string; // inputSummary + key output
   toolName: string;
   files: string[];
-  salience: number;        // 0-1, from sensory event
-  recency: number;         // 0-1, decays over session time
-  frequency: number;       // how many times same file/query appeared
+  salience: number; // 0-1, from sensory event
+  recency: number; // 0-1, decays over session time
+  frequency: number; // how many times same file/query appeared
   emotionalWeight: number; // 0-1, errors=1.0, slow ops=0.7, normal=0.3
-  insertedAt: string;      // ISO timestamp
+  insertedAt: string; // ISO timestamp
   accessCount: number;
 }
 
@@ -54,9 +54,7 @@ export function computeSlotScore(slot: WorkingMemorySlot, sessionStartTime: numb
   // Recency: 1.0 for just inserted, decays toward 0 over session duration
   const ageMs = Date.now() - new Date(slot.insertedAt).getTime();
   const sessionDurationMs = Date.now() - sessionStartTime;
-  const recency = sessionDurationMs > 0
-    ? Math.max(0, 1 - (ageMs / sessionDurationMs))
-    : 1.0;
+  const recency = sessionDurationMs > 0 ? Math.max(0, 1 - ageMs / sessionDurationMs) : 1.0;
 
   // Frequency: normalize to 0-1 (cap at 10 occurrences)
   const frequency = Math.min(1.0, slot.frequency / 10);
@@ -75,7 +73,7 @@ export function computeSlotScore(slot: WorkingMemorySlot, sessionStartTime: numb
  */
 function computeEmotionalWeight(event: SensoryEvent): number {
   if (!event.success) return 1.0;
-  if (event.durationMs > 10000) return 0.7;  // slow operation
+  if (event.durationMs > 10000) return 0.7; // slow operation
   if (event.durationMs > 5000) return 0.5;
   return 0.3;
 }
@@ -124,7 +122,11 @@ class WorkingMemoryService {
    * If salience >= threshold, promote to working memory.
    * Returns true if the event was promoted.
    */
-  async processEvent(projectName: string, sessionId: string, event: SensoryEvent): Promise<boolean> {
+  async processEvent(
+    projectName: string,
+    sessionId: string,
+    event: SensoryEvent
+  ): Promise<boolean> {
     if (event.salience < config.SENSORY_SALIENCE_THRESHOLD) {
       return false;
     }
@@ -200,7 +202,8 @@ class WorkingMemoryService {
       const key = this.hashKey(projectName, sessionId);
       const data = await redis.hgetall(key);
 
-      const sessionStart = this.sessionStartTimes.get(this.sessionKey(projectName, sessionId)) ?? Date.now();
+      const sessionStart =
+        this.sessionStartTimes.get(this.sessionKey(projectName, sessionId)) ?? Date.now();
       const slots: Array<WorkingMemorySlot & { _score: number }> = [];
 
       for (const [_id, json] of Object.entries(data)) {
@@ -208,12 +211,12 @@ class WorkingMemoryService {
           const slot = JSON.parse(json) as WorkingMemorySlot;
           const score = computeSlotScore(slot, sessionStart);
           slots.push({ ...slot, _score: score });
-        } catch { /* skip corrupt entries */ }
+        } catch {
+          /* skip corrupt entries */
+        }
       }
 
-      return slots
-        .sort((a, b) => b._score - a._score)
-        .map(({ _score, ...slot }) => slot);
+      return slots.sort((a, b) => b._score - a._score).map(({ _score, ...slot }) => slot);
     } catch (error) {
       logger.debug('Working memory getAll failed', { error });
       return [];
@@ -256,7 +259,8 @@ class WorkingMemoryService {
       const key = this.hashKey(projectName, sessionId);
       const data = await redis.hgetall(key);
 
-      const sessionStart = this.sessionStartTimes.get(this.sessionKey(projectName, sessionId)) ?? Date.now();
+      const sessionStart =
+        this.sessionStartTimes.get(this.sessionKey(projectName, sessionId)) ?? Date.now();
       let lowestId: string | null = null;
       let lowestScore = Infinity;
 
@@ -268,7 +272,9 @@ class WorkingMemoryService {
             lowestScore = score;
             lowestId = id;
           }
-        } catch { /* skip corrupt */ }
+        } catch {
+          /* skip corrupt */
+        }
       }
 
       if (lowestId) {

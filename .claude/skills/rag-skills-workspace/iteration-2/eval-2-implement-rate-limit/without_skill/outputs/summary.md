@@ -6,26 +6,29 @@ IP-based rate limiting middleware for the RAG API with a default limit of 100 re
 
 ## Files produced
 
-| File | Purpose |
-|------|---------|
-| `rate-limiter.ts` | Main middleware implementation (`rag-api/src/middleware/rate-limiter.ts`) |
-| `rate-limiter.test.ts` | Unit tests (`rag-api/src/__tests__/middleware/rate-limiter.test.ts`) |
-| `config.ts.patch` | Config additions for `rag-api/src/config.ts` |
-| `metrics.ts.patch` | Prometheus metric additions for `rag-api/src/utils/metrics.ts` |
-| `server.ts.patch` | Integration instructions for `rag-api/src/server.ts` |
-| `plan.md` | Detailed implementation plan |
+| File                   | Purpose                                                                   |
+| ---------------------- | ------------------------------------------------------------------------- |
+| `rate-limiter.ts`      | Main middleware implementation (`rag-api/src/middleware/rate-limiter.ts`) |
+| `rate-limiter.test.ts` | Unit tests (`rag-api/src/__tests__/middleware/rate-limiter.test.ts`)      |
+| `config.ts.patch`      | Config additions for `rag-api/src/config.ts`                              |
+| `metrics.ts.patch`     | Prometheus metric additions for `rag-api/src/utils/metrics.ts`            |
+| `server.ts.patch`      | Integration instructions for `rag-api/src/server.ts`                      |
+| `plan.md`              | Detailed implementation plan                                              |
 
 ## Integration steps
 
 To apply this to the actual codebase:
 
 ### 1. Copy middleware file
+
 ```bash
 cp rate-limiter.ts /path/to/rag-api/src/middleware/rate-limiter.ts
 ```
 
 ### 2. Update config.ts
+
 Add to the `Config` interface:
+
 ```typescript
 RATE_LIMIT_ENABLED: boolean;
 RATE_LIMIT_MAX: number;
@@ -34,6 +37,7 @@ RATE_LIMIT_SKIP_PATHS: string[];
 ```
 
 Add to the config object:
+
 ```typescript
 RATE_LIMIT_ENABLED: process.env.RATE_LIMIT_ENABLED !== 'false',
 RATE_LIMIT_MAX: parseInt(process.env.RATE_LIMIT_MAX || '100', 10),
@@ -42,17 +46,21 @@ RATE_LIMIT_SKIP_PATHS: (process.env.RATE_LIMIT_SKIP_PATHS || '/health,/metrics')
 ```
 
 ### 3. Update metrics.ts
+
 Add the `rateLimitHitsTotal` Counter and `rateLimitActiveIPs` Gauge (see `metrics.ts.patch`).
 
 ### 4. Update server.ts
+
 Add import and middleware registration:
+
 ```typescript
-import { rateLimitMiddleware } from './middleware/rate-limiter';
+import { rateLimitMiddleware } from "./middleware/rate-limiter";
 // ... after request ID middleware, before auth:
 app.use(rateLimitMiddleware);
 ```
 
 ### 5. Copy test file
+
 ```bash
 cp rate-limiter.test.ts /path/to/rag-api/src/__tests__/middleware/rate-limiter.test.ts
 ```
@@ -86,6 +94,7 @@ cp rate-limiter.test.ts /path/to/rag-api/src/__tests__/middleware/rate-limiter.t
 ```
 
 Standard HTTP headers are set on every response:
+
 - `X-RateLimit-Limit: 100`
 - `X-RateLimit-Remaining: 73`
 - `X-RateLimit-Reset: 1708950000` (Unix epoch seconds)
@@ -94,6 +103,7 @@ Standard HTTP headers are set on every response:
 ## Test coverage
 
 The test suite covers:
+
 - SlidingWindowStore: counting, isolation, expiration, peek, reset time
 - IP extraction: X-Forwarded-For, X-Real-IP, req.ip fallback
 - IP normalization: IPv6-mapped IPv4 stripping
@@ -102,9 +112,9 @@ The test suite covers:
 
 ## Environment variables
 
-| Variable | Default | Description |
-|----------|---------|-------------|
-| `RATE_LIMIT_ENABLED` | `true` | Enable/disable rate limiting |
-| `RATE_LIMIT_MAX` | `100` | Max requests per window |
-| `RATE_LIMIT_WINDOW_MS` | `60000` | Window size in milliseconds |
+| Variable                | Default            | Description                   |
+| ----------------------- | ------------------ | ----------------------------- |
+| `RATE_LIMIT_ENABLED`    | `true`             | Enable/disable rate limiting  |
+| `RATE_LIMIT_MAX`        | `100`              | Max requests per window       |
+| `RATE_LIMIT_WINDOW_MS`  | `60000`            | Window size in milliseconds   |
 | `RATE_LIMIT_SKIP_PATHS` | `/health,/metrics` | Comma-separated paths to skip |

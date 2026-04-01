@@ -36,7 +36,11 @@ vi.mock('../../utils/logger', () => ({
   logger: { debug: vi.fn(), info: vi.fn(), warn: vi.fn(), error: vi.fn() },
 }));
 
-import { workingMemory, computeSlotScore, type WorkingMemorySlot } from '../../services/working-memory';
+import {
+  workingMemory,
+  computeSlotScore,
+  type WorkingMemorySlot,
+} from '../../services/working-memory';
 import type { SensoryEvent } from '../../services/sensory-buffer';
 
 describe('computeSlotScore', () => {
@@ -68,8 +72,9 @@ describe('computeSlotScore', () => {
     const highSalience = { ...baseSlot, salience: 1.0 };
     const lowSalience = { ...baseSlot, salience: 0.2 };
 
-    expect(computeSlotScore(highSalience, sessionStart))
-      .toBeGreaterThan(computeSlotScore(lowSalience, sessionStart));
+    expect(computeSlotScore(highSalience, sessionStart)).toBeGreaterThan(
+      computeSlotScore(lowSalience, sessionStart)
+    );
   });
 
   it('gives higher score to frequent events', () => {
@@ -77,8 +82,9 @@ describe('computeSlotScore', () => {
     const highFreq = { ...baseSlot, frequency: 10 };
     const lowFreq = { ...baseSlot, frequency: 1 };
 
-    expect(computeSlotScore(highFreq, sessionStart))
-      .toBeGreaterThan(computeSlotScore(lowFreq, sessionStart));
+    expect(computeSlotScore(highFreq, sessionStart)).toBeGreaterThan(
+      computeSlotScore(lowFreq, sessionStart)
+    );
   });
 });
 
@@ -157,14 +163,28 @@ describe('WorkingMemoryService', () => {
       const now = new Date().toISOString();
       mockRedis.hgetall.mockResolvedValue({
         low: JSON.stringify({
-          id: 'low', content: 'low', toolName: 'list', files: [],
-          salience: 0.1, recency: 0, frequency: 1, emotionalWeight: 0.1,
-          insertedAt: now, accessCount: 0,
+          id: 'low',
+          content: 'low',
+          toolName: 'list',
+          files: [],
+          salience: 0.1,
+          recency: 0,
+          frequency: 1,
+          emotionalWeight: 0.1,
+          insertedAt: now,
+          accessCount: 0,
         }),
         high: JSON.stringify({
-          id: 'high', content: 'high', toolName: 'search', files: [],
-          salience: 0.9, recency: 1.0, frequency: 5, emotionalWeight: 1.0,
-          insertedAt: now, accessCount: 3,
+          id: 'high',
+          content: 'high',
+          toolName: 'search',
+          files: [],
+          salience: 0.9,
+          recency: 1.0,
+          frequency: 5,
+          emotionalWeight: 1.0,
+          insertedAt: now,
+          accessCount: 3,
         }),
       });
 
@@ -181,9 +201,16 @@ describe('WorkingMemoryService', () => {
   describe('touch', () => {
     it('increments accessCount and frequency', async () => {
       const slot = JSON.stringify({
-        id: 'slot-1', content: 'test', toolName: 'search', files: [],
-        salience: 0.5, recency: 1, frequency: 2, emotionalWeight: 0.3,
-        insertedAt: new Date().toISOString(), accessCount: 1,
+        id: 'slot-1',
+        content: 'test',
+        toolName: 'search',
+        files: [],
+        salience: 0.5,
+        recency: 1,
+        frequency: 2,
+        emotionalWeight: 0.3,
+        insertedAt: new Date().toISOString(),
+        accessCount: 1,
       });
       mockRedis.hget.mockResolvedValue(slot);
 

@@ -56,14 +56,7 @@ class CodeSuggestionService {
     limit?: number;
     minScore?: number;
   }): Promise<RelatedCodeResult> {
-    const {
-      projectName,
-      code,
-      description,
-      currentFile,
-      limit = 10,
-      minScore = 0.5,
-    } = options;
+    const { projectName, code, description, currentFile, limit = 10, minScore = 0.5 } = options;
 
     const collection = this.getCodebaseCollection(projectName);
 
@@ -90,7 +83,7 @@ class CodeSuggestionService {
       const fileMap = new Map<string, SearchResult>();
       for (const r of results) {
         const file = r.payload.file as string;
-        if (!fileMap.has(file) || (fileMap.get(file)!.score < r.score)) {
+        if (!fileMap.has(file) || fileMap.get(file)!.score < r.score) {
           fileMap.set(file, r);
         }
       }
@@ -98,7 +91,7 @@ class CodeSuggestionService {
       const suggestions: CodeSuggestion[] = Array.from(fileMap.values())
         .sort((a, b) => b.score - a.score)
         .slice(0, limit)
-        .map(r => ({
+        .map((r) => ({
           file: r.payload.file as string,
           content: r.payload.content as string,
           score: r.score,
@@ -129,13 +122,7 @@ class CodeSuggestionService {
     currentFile?: string;
     limit?: number;
   }): Promise<ImplementationSuggestion[]> {
-    const {
-      projectName,
-      targetCode,
-      targetDescription,
-      currentFile,
-      limit = 5,
-    } = options;
+    const { projectName, targetCode, targetDescription, currentFile, limit = 5 } = options;
 
     const collection = this.getCodebaseCollection(projectName);
 
@@ -198,13 +185,7 @@ class CodeSuggestionService {
     testType?: 'unit' | 'integration' | 'e2e';
     limit?: number;
   }): Promise<TestSuggestion[]> {
-    const {
-      projectName,
-      code,
-      filePath,
-      testType,
-      limit = 5,
-    } = options;
+    const { projectName, code, filePath, testType, limit = 5 } = options;
 
     const collection = this.getCodebaseCollection(projectName);
 
@@ -516,7 +497,9 @@ class CodeSuggestionService {
       const results = await vectorStore.search(collection, embedding, limit * 4, filter, 0.4);
 
       const typePattern = typeName
-        ? new RegExp(`(?:interface|type|class|enum)\\s+${typeName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`)
+        ? new RegExp(
+            `(?:interface|type|class|enum)\\s+${typeName.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}\\b`
+          )
         : null;
 
       const seenDefs = new Set<string>();
@@ -592,15 +575,18 @@ class CodeSuggestionService {
     // Check for import similarity
     const targetImports = this.extractImports(targetCode);
     const foundImports = this.extractImports(foundContent);
-    const commonImports = targetImports.filter(i => foundImports.some(f => f.includes(i) || i.includes(f)));
+    const commonImports = targetImports.filter((i) =>
+      foundImports.some((f) => f.includes(i) || i.includes(f))
+    );
     if (commonImports.length > 2) {
       return 'related_import';
     }
 
     // Check for structural similarity (function/class patterns)
     const hasClassPattern = /class\s+\w+/.test(targetCode) && /class\s+\w+/.test(foundContent);
-    const hasFunctionPattern = /function\s+\w+|const\s+\w+\s*=\s*(?:async\s*)?\(/.test(targetCode) &&
-                               /function\s+\w+|const\s+\w+\s*=\s*(?:async\s*)?\(/.test(foundContent);
+    const hasFunctionPattern =
+      /function\s+\w+|const\s+\w+\s*=\s*(?:async\s*)?\(/.test(targetCode) &&
+      /function\s+\w+|const\s+\w+\s*=\s*(?:async\s*)?\(/.test(foundContent);
     if (hasClassPattern || hasFunctionPattern) {
       return 'similar_structure';
     }
@@ -617,7 +603,11 @@ class CodeSuggestionService {
     }
 
     // Check for error handling
-    if (foundContent.includes('try') && foundContent.includes('catch') && !targetCode.includes('try')) {
+    if (
+      foundContent.includes('try') &&
+      foundContent.includes('catch') &&
+      !targetCode.includes('try')
+    ) {
       hints.push('Add error handling with try/catch');
     }
 
@@ -633,7 +623,11 @@ class CodeSuggestionService {
     if (file.includes('e2e') || file.includes('cypress') || file.includes('playwright')) {
       return 'e2e';
     }
-    if (content.includes('supertest') || content.includes('request(app)') || file.includes('integration')) {
+    if (
+      content.includes('supertest') ||
+      content.includes('request(app)') ||
+      file.includes('integration')
+    ) {
       return 'integration';
     }
     return 'unit';
@@ -674,7 +668,8 @@ class CodeSuggestionService {
     const symbols: string[] = [];
 
     // Exported functions/constants
-    const exportMatches = code.match(/export\s+(?:const|function|class|interface|type|enum)\s+(\w+)/g) || [];
+    const exportMatches =
+      code.match(/export\s+(?:const|function|class|interface|type|enum)\s+(\w+)/g) || [];
     for (const match of exportMatches) {
       const m = match.match(/(?:const|function|class|interface|type|enum)\s+(\w+)/);
       if (m) symbols.push(m[1]);

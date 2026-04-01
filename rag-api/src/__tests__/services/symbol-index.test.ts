@@ -98,7 +98,12 @@ describe('SymbolIndexService', () => {
 
     it('returns 0 and skips upsert when symbols array is empty', async () => {
       const count = await symbolIndex.indexFileSymbols(
-        'testproj', 'src/empty.ts', 'const x = 1;', [], 1, 1
+        'testproj',
+        'src/empty.ts',
+        'const x = 1;',
+        [],
+        1,
+        1
       );
 
       expect(count).toBe(0);
@@ -111,9 +116,7 @@ describe('SymbolIndexService', () => {
 
       const content = 'export interface MyInterface { name: string; }';
 
-      await symbolIndex.indexFileSymbols(
-        'proj', 'src/types.ts', content, ['MyInterface'], 1, 5
-      );
+      await symbolIndex.indexFileSymbols('proj', 'src/types.ts', content, ['MyInterface'], 1, 5);
 
       const upsertCall = mockedVS.upsert.mock.calls[0];
       const point = upsertCall[1][0];
@@ -125,9 +128,7 @@ describe('SymbolIndexService', () => {
 
       const content = 'export const myConst = 42;';
 
-      await symbolIndex.indexFileSymbols(
-        'proj', 'src/consts.ts', content, ['myConst'], 1, 1
-      );
+      await symbolIndex.indexFileSymbols('proj', 'src/consts.ts', content, ['myConst'], 1, 1);
 
       const point = mockedVS.upsert.mock.calls[0][1][0];
       expect(point.payload.exports).toBe(true);
@@ -137,7 +138,12 @@ describe('SymbolIndexService', () => {
       mockedEmbed.embedBatch.mockResolvedValue([fakeVector]);
 
       await symbolIndex.indexFileSymbols(
-        'proj', 'src/x.ts', 'export function foo() {}', ['foo'], 1, 3
+        'proj',
+        'src/x.ts',
+        'export function foo() {}',
+        ['foo'],
+        1,
+        3
       );
 
       const point = mockedVS.upsert.mock.calls[0][1][0];
@@ -289,10 +295,9 @@ describe('SymbolIndexService', () => {
     it('calls deleteByFilter with file filter on {project}_symbols', async () => {
       await symbolIndex.clearFileSymbols('testproj', 'src/old.ts');
 
-      expect(mockedVS.deleteByFilter).toHaveBeenCalledWith(
-        'testproj_symbols',
-        { must: [{ key: 'file', match: { value: 'src/old.ts' } }] }
-      );
+      expect(mockedVS.deleteByFilter).toHaveBeenCalledWith('testproj_symbols', {
+        must: [{ key: 'file', match: { value: 'src/old.ts' } }],
+      });
     });
 
     it('ignores 404 errors silently', async () => {

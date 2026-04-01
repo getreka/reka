@@ -18,14 +18,22 @@ export function createFeedbackTools(projectName: string): ToolSpec[] {
       description: `Provide feedback on a search result quality for ${projectName}. Helps improve future search results.`,
       schema: z.object({
         query: z.string().describe("The original search query"),
-        feedbackType: z.enum(["helpful", "not_helpful", "partially"]).describe("How helpful the results were"),
-        file: z.string().optional().describe("The file from results being rated"),
-        suggestedQuery: z.string().optional().describe("A better query that would have found the right results"),
+        feedbackType: z
+          .enum(["helpful", "not_helpful", "partially"])
+          .describe("How helpful the results were"),
+        file: z
+          .string()
+          .optional()
+          .describe("The file from results being rated"),
+        suggestedQuery: z
+          .string()
+          .optional()
+          .describe("A better query that would have found the right results"),
       }),
       annotations: TOOL_ANNOTATIONS["feedback_search"],
       handler: async (
         args: Record<string, unknown>,
-        ctx: ToolContext
+        ctx: ToolContext,
       ): Promise<string> => {
         const { query, feedbackType, file, suggestedQuery } = args as {
           query: string;
@@ -52,7 +60,8 @@ export function createFeedbackTools(projectName: string): ToolSpec[] {
         result += `- **Query:** ${query}\n`;
         result += `- **Feedback:** ${feedbackType}\n`;
         if (file) result += `- **File:** ${file}\n`;
-        if (suggestedQuery) result += `- **Suggested Query:** ${suggestedQuery}\n`;
+        if (suggestedQuery)
+          result += `- **Suggested Query:** ${suggestedQuery}\n`;
 
         return result;
       },
@@ -62,13 +71,18 @@ export function createFeedbackTools(projectName: string): ToolSpec[] {
       description: `Provide feedback on a memory's accuracy for ${projectName}. Helps keep memory quality high.`,
       schema: z.object({
         memoryId: z.string().describe("The memory ID to provide feedback on"),
-        feedback: z.enum(["accurate", "outdated", "incorrect"]).describe("Feedback on the memory's accuracy"),
-        correction: z.string().optional().describe("Corrected information if the memory is wrong"),
+        feedback: z
+          .enum(["accurate", "outdated", "incorrect"])
+          .describe("Feedback on the memory's accuracy"),
+        correction: z
+          .string()
+          .optional()
+          .describe("Corrected information if the memory is wrong"),
       }),
       annotations: TOOL_ANNOTATIONS["feedback_memory"],
       handler: async (
         args: Record<string, unknown>,
-        ctx: ToolContext
+        ctx: ToolContext,
       ): Promise<string> => {
         const { memoryId, feedback, correction } = args as {
           memoryId: string;
@@ -102,12 +116,15 @@ export function createFeedbackTools(projectName: string): ToolSpec[] {
       description: `Get query improvement suggestions based on feedback patterns for ${projectName}.`,
       schema: z.object({
         query: z.string().describe("The query to get suggestions for"),
-        context: z.string().optional().describe("Additional context about what you are looking for"),
+        context: z
+          .string()
+          .optional()
+          .describe("Additional context about what you are looking for"),
       }),
       annotations: TOOL_ANNOTATIONS["suggest_better_query"],
       handler: async (
         args: Record<string, unknown>,
-        ctx: ToolContext
+        ctx: ToolContext,
       ): Promise<string> => {
         const { query, context } = args as { query: string; context?: string };
 
@@ -164,7 +181,7 @@ export function createFeedbackTools(projectName: string): ToolSpec[] {
       annotations: TOOL_ANNOTATIONS["get_quality_metrics"],
       handler: async (
         _args: Record<string, unknown>,
-        ctx: ToolContext
+        ctx: ToolContext,
       ): Promise<string> => {
         const response = await ctx.api.get(`/api/quality/${ctx.projectName}`);
         const data = response.data;

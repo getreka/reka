@@ -160,7 +160,11 @@ describe('AgentRuntime', () => {
         {
           name: 'search_codebase',
           description: 'Search codebase',
-          input_schema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] },
+          input_schema: {
+            type: 'object',
+            properties: { query: { type: 'string' } },
+            required: ['query'],
+          },
         },
       ]);
     });

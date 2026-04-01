@@ -1,11 +1,13 @@
 # Transcript: Implement Rate Limiting Middleware for RAG API
 
 ## Task
+
 Implement rate limiting middleware for RAG API -- max 100 requests per minute per IP.
 
 ## Tool Calls
 
 ### 1. Context Briefing (RAG) + Read server.ts + Glob middleware
+
 **Tools:** `mcp__rag__context_briefing`, `Read`, `Glob` (parallel)
 
 - **context_briefing** with task "Implement rate limiting middleware for RAG API" and files `["rag-api/src/server.ts", "rag-api/src/utils/validation.ts"]`
@@ -16,6 +18,7 @@ Implement rate limiting middleware for RAG API -- max 100 requests per minute pe
   - Result: Found 3 existing middleware files: `error-handler.ts`, `async-handler.ts`, `auth.ts`.
 
 ### 2. Read existing middleware + package.json + config
+
 **Tools:** `Read` x4 (parallel)
 
 - **Read** `rag-api/src/middleware/auth.ts`
@@ -28,6 +31,7 @@ Implement rate limiting middleware for RAG API -- max 100 requests per minute pe
   - Result: Config interface + config object pattern. Environment variables with defaults. Has API_KEY, LOG_LEVEL, etc.
 
 ### 3. Read supporting files
+
 **Tools:** `Read` x3 (parallel)
 
 - **Read** `rag-api/src/middleware/async-handler.ts`
@@ -38,6 +42,7 @@ Implement rate limiting middleware for RAG API -- max 100 requests per minute pe
   - Result: Winston-based logger with child logger support.
 
 ### 4. Read tsconfig + check output directory
+
 **Tools:** `Read`, `Bash` (parallel)
 
 - **Read** `rag-api/tsconfig.json`
@@ -46,10 +51,13 @@ Implement rate limiting middleware for RAG API -- max 100 requests per minute pe
   - Result: Directory does not exist.
 
 ### 5. Create output directory
+
 **Tool:** `Bash`
+
 - Result: Permission denied. Switched to using Write tool directly.
 
 ### 6. Write output files
+
 **Tools:** `Write` x6 (sequential)
 
 - **Write** `outputs/rate-limiter.ts` -- Main middleware implementation (sliding window, in-memory, per-IP tracking)
@@ -77,11 +85,11 @@ Implement rate limiting middleware for RAG API -- max 100 requests per minute pe
 
 ## Summary of Output Files
 
-| File | Purpose | Target Location |
-|------|---------|-----------------|
-| `rate-limiter.ts` | Rate limiting middleware | `rag-api/src/middleware/rate-limiter.ts` |
-| `rate-limiter.test.ts` | Unit tests (11 test cases) | `rag-api/src/middleware/__tests__/rate-limiter.test.ts` |
-| `config.ts.patch` | Config changes (2 new env vars) | Apply to `rag-api/src/config.ts` |
-| `server.ts.patch` | Server registration (import + use) | Apply to `rag-api/src/server.ts` |
-| `metrics.json` | Tool call counts | N/A |
-| `transcript.md` | This transcript | N/A |
+| File                   | Purpose                            | Target Location                                         |
+| ---------------------- | ---------------------------------- | ------------------------------------------------------- |
+| `rate-limiter.ts`      | Rate limiting middleware           | `rag-api/src/middleware/rate-limiter.ts`                |
+| `rate-limiter.test.ts` | Unit tests (11 test cases)         | `rag-api/src/middleware/__tests__/rate-limiter.test.ts` |
+| `config.ts.patch`      | Config changes (2 new env vars)    | Apply to `rag-api/src/config.ts`                        |
+| `server.ts.patch`      | Server registration (import + use) | Apply to `rag-api/src/server.ts`                        |
+| `metrics.json`         | Tool call counts                   | N/A                                                     |
+| `transcript.md`        | This transcript                    | N/A                                                     |

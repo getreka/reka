@@ -12,20 +12,31 @@ import { TOOL_ANNOTATIONS } from "../annotations.js";
  * Create the session tools module with project-specific descriptions.
  * Accepts a mutable ctx reference to update activeSessionId on start/end.
  */
-export function createSessionTools(projectName: string, sharedCtx?: ToolContext): ToolSpec[] {
+export function createSessionTools(
+  projectName: string,
+  sharedCtx?: ToolContext,
+): ToolSpec[] {
   return [
     {
       name: "summarize_context",
       description: `Summarize the current working context for ${projectName}. Shows recently used tools, active features, recent queries, and suggested next steps.`,
       schema: z.object({
-        sessionId: z.string().optional().describe("Session ID to get context for. If omitted, returns the latest context."),
+        sessionId: z
+          .string()
+          .optional()
+          .describe(
+            "Session ID to get context for. If omitted, returns the latest context.",
+          ),
       }),
       annotations: TOOL_ANNOTATIONS["summarize_context"],
-      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
+      handler: async (
+        args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
         const { sessionId } = args as { sessionId?: string };
         const params = sessionId ? `?sessionId=${sessionId}` : "";
         const response = await ctx.api.get(
-          `/api/context/${ctx.projectName}${params}`
+          `/api/context/${ctx.projectName}${params}`,
         );
         const data = response.data;
 
@@ -33,17 +44,13 @@ export function createSessionTools(projectName: string, sharedCtx?: ToolContext)
 
         if (data.recentTools && data.recentTools.length > 0) {
           result += `**Recently Used Tools:**\n`;
-          result += data.recentTools
-            .map((t: string) => `- ${t}`)
-            .join("\n");
+          result += data.recentTools.map((t: string) => `- ${t}`).join("\n");
           result += "\n\n";
         }
 
         if (data.activeFeatures && data.activeFeatures.length > 0) {
           result += `**Active Features:**\n`;
-          result += data.activeFeatures
-            .map((f: string) => `- ${f}`)
-            .join("\n");
+          result += data.activeFeatures.map((f: string) => `- ${f}`).join("\n");
           result += "\n\n";
         }
 
@@ -72,17 +79,25 @@ export function createSessionTools(projectName: string, sharedCtx?: ToolContext)
       description: `Summarize changes made during a session for ${projectName}. Shows what was modified, tools used, and key actions taken.`,
       schema: z.object({
         sessionId: z.string().describe("Session ID to summarize changes for."),
-        includeCode: z.boolean().optional().describe("Whether to include code snippets in the summary (default: false)."),
+        includeCode: z
+          .boolean()
+          .optional()
+          .describe(
+            "Whether to include code snippets in the summary (default: false).",
+          ),
       }),
       annotations: TOOL_ANNOTATIONS["summarize_changes"],
-      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
+      handler: async (
+        args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
         const { sessionId, includeCode } = args as {
           sessionId: string;
           includeCode?: boolean;
         };
         const params = includeCode ? "?includeCode=true" : "";
         const response = await ctx.api.get(
-          `/api/changes/${ctx.projectName}/${sessionId}${params}`
+          `/api/changes/${ctx.projectName}/${sessionId}${params}`,
         );
         const data = response.data;
 
@@ -125,13 +140,19 @@ export function createSessionTools(projectName: string, sharedCtx?: ToolContext)
       name: "analyze_usage_patterns",
       description: `Analyze tool usage patterns for ${projectName}. Shows common workflows, detected patterns, and recommendations for improving productivity.`,
       schema: z.object({
-        days: z.coerce.number().optional().describe("Number of days to analyze (default: 7)."),
+        days: z.coerce
+          .number()
+          .optional()
+          .describe("Number of days to analyze (default: 7)."),
       }),
       annotations: TOOL_ANNOTATIONS["analyze_usage_patterns"],
-      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
+      handler: async (
+        args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
         const { days = 7 } = args as { days?: number };
         const response = await ctx.api.get(
-          `/api/patterns/${ctx.projectName}?days=${days}`
+          `/api/patterns/${ctx.projectName}?days=${days}`,
         );
         const data = response.data;
 
@@ -150,7 +171,7 @@ export function createSessionTools(projectName: string, sharedCtx?: ToolContext)
           result += data.commonWorkflows
             .map(
               (w: { tools: string[]; count: number; successRate: number }) =>
-                `- ${w.tools.join(" -> ")} (${w.count}x, ${(w.successRate * 100).toFixed(0)}% success)`
+                `- ${w.tools.join(" -> ")} (${w.count}x, ${(w.successRate * 100).toFixed(0)}% success)`,
             )
             .join("\n");
           result += "\n\n";
@@ -161,7 +182,7 @@ export function createSessionTools(projectName: string, sharedCtx?: ToolContext)
           result += data.detectedPatterns
             .map(
               (p: { name: string; description: string; suggestion: string }) =>
-                `- **${p.name}:** ${p.description}\n  *Suggestion:* ${p.suggestion}`
+                `- **${p.name}:** ${p.description}\n  *Suggestion:* ${p.suggestion}`,
             )
             .join("\n");
           result += "\n\n";
@@ -185,12 +206,11 @@ export function createSessionTools(projectName: string, sharedCtx?: ToolContext)
       annotations: TOOL_ANNOTATIONS["get_developer_profile"],
       handler: async (
         _args: Record<string, unknown>,
-        ctx: ToolContext
+        ctx: ToolContext,
       ): Promise<string> => {
-        const response = await ctx.api.get(
-          `/api/developer-profile`,
-          { headers: { "X-Project-Name": ctx.projectName } }
-        );
+        const response = await ctx.api.get(`/api/developer-profile`, {
+          headers: { "X-Project-Name": ctx.projectName },
+        });
         const p = response.data;
 
         if (!p.totalToolCalls) {
@@ -201,27 +221,39 @@ export function createSessionTools(projectName: string, sharedCtx?: ToolContext)
 
         if (p.frequentFiles.length > 0) {
           result += "**Frequent Files:**\n";
-          result += p.frequentFiles.slice(0, 10).map((f: any) => `- ${f.file} (${f.count}x)`).join("\n");
+          result += p.frequentFiles
+            .slice(0, 10)
+            .map((f: any) => `- ${f.file} (${f.count}x)`)
+            .join("\n");
           result += "\n\n";
         }
 
         if (p.preferredTools.length > 0) {
           result += "**Preferred Tools:**\n";
-          result += p.preferredTools.slice(0, 8).map((t: any) =>
-            `- ${t.tool}: ${t.count}x (avg ${Math.round(t.avgDurationMs)}ms)`
-          ).join("\n");
+          result += p.preferredTools
+            .slice(0, 8)
+            .map(
+              (t: any) =>
+                `- ${t.tool}: ${t.count}x (avg ${Math.round(t.avgDurationMs)}ms)`,
+            )
+            .join("\n");
           result += "\n\n";
         }
 
         if (p.peakHours.length > 0) {
           result += "**Peak Hours:** ";
-          result += p.peakHours.map((h: any) => `${h.hour}:00 (${h.count})`).join(", ");
+          result += p.peakHours
+            .map((h: any) => `${h.hour}:00 (${h.count})`)
+            .join(", ");
           result += "\n\n";
         }
 
         if (p.commonPatterns.length > 0) {
           result += "**Common Patterns:**\n";
-          result += p.commonPatterns.slice(0, 5).map((q: string) => `- "${truncate(q, 60)}"`).join("\n");
+          result += p.commonPatterns
+            .slice(0, 5)
+            .map((q: string) => `- "${truncate(q, 60)}"`)
+            .join("\n");
           result += "\n";
         }
 
@@ -232,12 +264,28 @@ export function createSessionTools(projectName: string, sharedCtx?: ToolContext)
       name: "start_session",
       description: `Start a new working session for ${projectName}. Tracks tool usage, file changes, and learnings throughout the session.`,
       schema: z.object({
-        sessionId: z.string().optional().describe("Custom session ID. If omitted, one will be generated."),
-        initialContext: z.string().optional().describe("Description of what this session is about (e.g., 'fixing auth bug', 'adding new API endpoint')."),
-        resumeFrom: z.string().optional().describe("Session ID to resume from. Carries over context from the previous session."),
+        sessionId: z
+          .string()
+          .optional()
+          .describe("Custom session ID. If omitted, one will be generated."),
+        initialContext: z
+          .string()
+          .optional()
+          .describe(
+            "Description of what this session is about (e.g., 'fixing auth bug', 'adding new API endpoint').",
+          ),
+        resumeFrom: z
+          .string()
+          .optional()
+          .describe(
+            "Session ID to resume from. Carries over context from the previous session.",
+          ),
       }),
       annotations: TOOL_ANNOTATIONS["start_session"],
-      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
+      handler: async (
+        args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
         const { sessionId, initialContext, resumeFrom } = args as {
           sessionId?: string;
           initialContext?: string;
@@ -273,9 +321,7 @@ export function createSessionTools(projectName: string, sharedCtx?: ToolContext)
 
         if (initialFiles && initialFiles.length > 0) {
           result += `\n**Initial Files:**\n`;
-          result += initialFiles
-            .map((f: string) => `- ${f}`)
-            .join("\n");
+          result += initialFiles.map((f: string) => `- ${f}`).join("\n");
           result += "\n";
         }
 
@@ -300,7 +346,10 @@ export function createSessionTools(projectName: string, sharedCtx?: ToolContext)
         sessionId: z.string().describe("Session ID to get context for."),
       }),
       annotations: TOOL_ANNOTATIONS["get_session_context"],
-      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
+      handler: async (
+        args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
         const { sessionId } = args as { sessionId: string };
         const response = await ctx.api.get(`/api/session/${sessionId}`);
         const data = response.data;
@@ -327,9 +376,7 @@ export function createSessionTools(projectName: string, sharedCtx?: ToolContext)
 
         if (data.activeFeatures && data.activeFeatures.length > 0) {
           result += `\n**Active Features:**\n`;
-          result += data.activeFeatures
-            .map((f: string) => `- ${f}`)
-            .join("\n");
+          result += data.activeFeatures.map((f: string) => `- ${f}`).join("\n");
           result += "\n";
         }
 
@@ -353,12 +400,28 @@ export function createSessionTools(projectName: string, sharedCtx?: ToolContext)
       description: `End a working session for ${projectName}. Saves a summary and optionally extracts learnings for future sessions.`,
       schema: z.object({
         sessionId: z.string().describe("Session ID to end."),
-        summary: z.string().optional().describe("Summary of what was accomplished during the session."),
-        autoSaveLearnings: z.boolean().optional().describe("Automatically save detected learnings to memory (default: true)."),
-        feedback: z.string().optional().describe("Optional feedback about the session (e.g., 'productive', 'too many context switches')."),
+        summary: z
+          .string()
+          .optional()
+          .describe("Summary of what was accomplished during the session."),
+        autoSaveLearnings: z
+          .boolean()
+          .optional()
+          .describe(
+            "Automatically save detected learnings to memory (default: true).",
+          ),
+        feedback: z
+          .string()
+          .optional()
+          .describe(
+            "Optional feedback about the session (e.g., 'productive', 'too many context switches').",
+          ),
       }),
       annotations: TOOL_ANNOTATIONS["end_session"],
-      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
+      handler: async (
+        args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
         const { sessionId, summary, autoSaveLearnings, feedback } = args as {
           sessionId: string;
           summary?: string;
@@ -367,7 +430,8 @@ export function createSessionTools(projectName: string, sharedCtx?: ToolContext)
         };
         const response = await ctx.api.post(`/api/session/${sessionId}/end`, {
           summary,
-          autoSaveLearnings: autoSaveLearnings !== undefined ? autoSaveLearnings : true,
+          autoSaveLearnings:
+            autoSaveLearnings !== undefined ? autoSaveLearnings : true,
           feedback,
         });
         const data = response.data;

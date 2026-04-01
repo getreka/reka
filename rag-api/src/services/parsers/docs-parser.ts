@@ -20,13 +20,15 @@ export class DocsParser implements FileParser {
     if (ext === '.rst') return this.parseRST(content);
 
     // Fallback
-    return [{
-      content,
-      startLine: 1,
-      endLine: content.split('\n').length,
-      language: 'text',
-      type: 'docs',
-    }];
+    return [
+      {
+        content,
+        startLine: 1,
+        endLine: content.split('\n').length,
+        language: 'text',
+        type: 'docs',
+      },
+    ];
   }
 
   private parseMarkdown(content: string): ParsedChunk[] {
@@ -79,13 +81,17 @@ export class DocsParser implements FileParser {
       }
     }
 
-    return chunks.length > 0 ? chunks : [{
-      content,
-      startLine: 1,
-      endLine: lines.length,
-      language: 'markdown',
-      type: 'docs',
-    }];
+    return chunks.length > 0
+      ? chunks
+      : [
+          {
+            content,
+            startLine: 1,
+            endLine: lines.length,
+            language: 'markdown',
+            type: 'docs',
+          },
+        ];
   }
 
   private parseRST(content: string): ParsedChunk[] {
@@ -135,13 +141,17 @@ export class DocsParser implements FileParser {
       }
     }
 
-    return chunks.length > 0 ? chunks : [{
-      content,
-      startLine: 1,
-      endLine: lines.length,
-      language: 'rst',
-      type: 'docs',
-    }];
+    return chunks.length > 0
+      ? chunks
+      : [
+          {
+            content,
+            startLine: 1,
+            endLine: lines.length,
+            language: 'rst',
+            type: 'docs',
+          },
+        ];
   }
 }
 

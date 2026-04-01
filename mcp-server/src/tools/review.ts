@@ -18,12 +18,26 @@ export function createReviewTools(projectName: string): ToolSpec[] {
       schema: z.object({
         code: z.string().describe("Code to review"),
         filePath: z.string().optional().describe("File path for context"),
-        reviewType: z.enum(["security", "performance", "patterns", "style", "general"]).optional().describe("Type of review focus (default: general)"),
-        diff: z.string().optional().describe("Git diff to review instead of full code"),
+        reviewType: z
+          .enum(["security", "performance", "patterns", "style", "general"])
+          .optional()
+          .describe("Type of review focus (default: general)"),
+        diff: z
+          .string()
+          .optional()
+          .describe("Git diff to review instead of full code"),
       }),
       annotations: TOOL_ANNOTATIONS["review_code"],
-      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
-        const { code, filePath, reviewType = "general", diff } = args as {
+      handler: async (
+        args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
+        const {
+          code,
+          filePath,
+          reviewType = "general",
+          diff,
+        } = args as {
           code: string;
           filePath?: string;
           reviewType?: string;
@@ -60,7 +74,7 @@ export function createReviewTools(projectName: string): ToolSpec[] {
                 line?: number;
                 suggestion?: string;
               },
-              i: number
+              i: number,
             ) => {
               const icon =
                 issue.severity === "critical"
@@ -74,7 +88,7 @@ export function createReviewTools(projectName: string): ToolSpec[] {
               result += `${issue.description}\n`;
               if (issue.line) result += `- Line: ${issue.line}\n`;
               if (issue.suggestion) result += `- Fix: ${issue.suggestion}\n`;
-            }
+            },
           );
           result += "\n";
         }
@@ -106,12 +120,24 @@ export function createReviewTools(projectName: string): ToolSpec[] {
       schema: z.object({
         code: z.string().describe("Code to generate tests for"),
         filePath: z.string().optional().describe("File path for context"),
-        framework: z.enum(["jest", "vitest", "pytest", "mocha"]).optional().describe("Test framework to use (default: jest)"),
-        testType: z.enum(["unit", "integration", "e2e"]).optional().describe("Type of tests to generate (default: unit)"),
-        coverage: z.enum(["minimal", "standard", "comprehensive"]).optional().describe("Coverage level (default: comprehensive)"),
+        framework: z
+          .enum(["jest", "vitest", "pytest", "mocha"])
+          .optional()
+          .describe("Test framework to use (default: jest)"),
+        testType: z
+          .enum(["unit", "integration", "e2e"])
+          .optional()
+          .describe("Type of tests to generate (default: unit)"),
+        coverage: z
+          .enum(["minimal", "standard", "comprehensive"])
+          .optional()
+          .describe("Coverage level (default: comprehensive)"),
       }),
       annotations: TOOL_ANNOTATIONS["generate_tests"],
-      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
+      handler: async (
+        args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
         const {
           code,
           filePath,
@@ -163,10 +189,16 @@ export function createReviewTools(projectName: string): ToolSpec[] {
       description: "Analyze existing tests for coverage and quality.",
       schema: z.object({
         testCode: z.string().describe("Test code to analyze"),
-        sourceCode: z.string().optional().describe("Optional source code being tested"),
+        sourceCode: z
+          .string()
+          .optional()
+          .describe("Optional source code being tested"),
       }),
       annotations: TOOL_ANNOTATIONS["analyze_tests"],
-      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
+      handler: async (
+        args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
         const { testCode, sourceCode } = args as {
           testCode: string;
           sourceCode?: string;

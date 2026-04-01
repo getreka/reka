@@ -2,7 +2,9 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 
 const mocks = vi.hoisted(() => ({
   embed: vi.fn().mockResolvedValue(Array(1024).fill(0)),
-  embedFull: vi.fn().mockResolvedValue({ dense: Array(1024).fill(0), sparse: { indices: [], values: [] } }),
+  embedFull: vi
+    .fn()
+    .mockResolvedValue({ dense: Array(1024).fill(0), sparse: { indices: [], values: [] } }),
   search: vi.fn().mockResolvedValue([]),
   searchHybridNative: vi.fn().mockResolvedValue([]),
   recall: vi.fn().mockResolvedValue([]),
@@ -46,7 +48,10 @@ describe('SmartDispatchService', () => {
   describe('dispatch — LLM routing', () => {
     it('uses LLM routing and executes plan', async () => {
       mocks.complete.mockResolvedValue({
-        text: JSON.stringify({ lookups: ['code_search', 'memory'], reasoning: 'debug task needs memory' }),
+        text: JSON.stringify({
+          lookups: ['code_search', 'memory'],
+          reasoning: 'debug task needs memory',
+        }),
       });
 
       const result = await smartDispatch.dispatch({

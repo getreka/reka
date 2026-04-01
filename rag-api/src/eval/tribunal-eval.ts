@@ -11,7 +11,12 @@
 import * as fs from 'fs';
 import * as path from 'path';
 import { EVAL_CASES, TribunalEvalCase } from './tribunal-cases';
-import { buildJudgeRubricPrompt, parseJudgeResponse, METRIC_THRESHOLDS, EvalScorecard } from './tribunal-judge-rubric';
+import {
+  buildJudgeRubricPrompt,
+  parseJudgeResponse,
+  METRIC_THRESHOLDS,
+  EvalScorecard,
+} from './tribunal-judge-rubric';
 import { tribunalService, TribunalResult } from '../services/tribunal';
 import { llm } from '../services/llm';
 import { logger } from '../utils/logger';
@@ -63,12 +68,12 @@ function parseArgs(): { filter: string; rounds: number; projectName: string } {
 
 function filterCases(filter: string): TribunalEvalCase[] {
   if (filter === 'all') return EVAL_CASES;
-  if (filter === 'arch') return EVAL_CASES.filter(c => c.category === 'architecture');
-  if (filter === 'code') return EVAL_CASES.filter(c => c.category === 'code-approach');
-  if (filter === 'tech') return EVAL_CASES.filter(c => c.category === 'tech-choice');
-  if (filter === 'rag') return EVAL_CASES.filter(c => c.category === 'rag-aware');
+  if (filter === 'arch') return EVAL_CASES.filter((c) => c.category === 'architecture');
+  if (filter === 'code') return EVAL_CASES.filter((c) => c.category === 'code-approach');
+  if (filter === 'tech') return EVAL_CASES.filter((c) => c.category === 'tech-choice');
+  if (filter === 'rag') return EVAL_CASES.filter((c) => c.category === 'rag-aware');
   // Single case by ID
-  return EVAL_CASES.filter(c => c.id === filter);
+  return EVAL_CASES.filter((c) => c.id === filter);
 }
 
 // ── Eval Runner ─────────────────────────────────────────────
@@ -76,7 +81,7 @@ function filterCases(filter: string): TribunalEvalCase[] {
 async function evaluateCase(
   evalCase: TribunalEvalCase,
   projectName: string,
-  rounds: number,
+  rounds: number
 ): Promise<EvalResult> {
   console.log(`\n  Running: ${evalCase.id} — ${evalCase.topic}`);
 
@@ -96,13 +101,15 @@ async function evaluateCase(
     maxRounds: rounds,
     useCodeContext,
     autoRecord: false,
-    maxBudget: 1.00,       // higher budget for eval
+    maxBudget: 1.0, // higher budget for eval
   });
 
-  console.log(`    Status: ${debateResult.status} | ${Math.round(debateResult.durationMs / 1000)}s | ~$${debateResult.cost.estimatedUsd.toFixed(3)}`);
+  console.log(
+    `    Status: ${debateResult.status} | ${Math.round(debateResult.durationMs / 1000)}s | ~$${debateResult.cost.estimatedUsd.toFixed(3)}`
+  );
 
   // Get verdict text for scoring
-  const verdictPhase = debateResult.phases.find(p => p.name === 'verdict');
+  const verdictPhase = debateResult.phases.find((p) => p.name === 'verdict');
   const verdictText = verdictPhase?.content || debateResult.verdict.reasoning;
 
   // Score with LLM-as-judge
@@ -170,7 +177,13 @@ async function runEval(): Promise<void> {
         caseId: evalCase.id,
         category: evalCase.category,
         topic: evalCase.topic,
-        scorecard: { caseId: evalCase.id, scores: [], averageScore: 0, pass: false, details: error.message },
+        scorecard: {
+          caseId: evalCase.id,
+          scores: [],
+          averageScore: 0,
+          pass: false,
+          details: error.message,
+        },
         cost: 0,
         latencyMs: 0,
         converged: false,
@@ -183,7 +196,7 @@ async function runEval(): Promise<void> {
 
   // ── Summary ─────────────────────────────────────────────
 
-  const passedCases = results.filter(r => r.scorecard.pass).length;
+  const passedCases = results.filter((r) => r.scorecard.pass).length;
   const avgMetrics: Record<string, number> = {};
   const metricSums: Record<string, { sum: number; count: number }> = {};
 
@@ -207,8 +220,8 @@ async function runEval(): Promise<void> {
     avgMetrics,
     totalCost: results.reduce((s, r) => s + r.cost, 0),
     avgLatencyMs: Math.round(results.reduce((s, r) => s + r.latencyMs, 0) / results.length),
-    convergenceRate: Math.round((results.filter(r => r.converged).length / results.length) * 100),
-    failedCases: results.filter(r => !r.scorecard.pass).map(r => r.caseId),
+    convergenceRate: Math.round((results.filter((r) => r.converged).length / results.length) * 100),
+    failedCases: results.filter((r) => !r.scorecard.pass).map((r) => r.caseId),
     results,
   };
 
@@ -237,7 +250,7 @@ async function runEval(): Promise<void> {
 
 // ── Entry Point ─────────────────────────────────────────────
 
-runEval().catch(error => {
+runEval().catch((error) => {
   console.error('Eval failed:', error);
   process.exit(1);
 });

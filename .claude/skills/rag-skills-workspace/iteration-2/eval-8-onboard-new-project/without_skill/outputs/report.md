@@ -2,23 +2,23 @@
 
 ## Project Details
 
-| Field | Value |
-|-------|-------|
-| Project Name | `myapp` |
-| Project Path | `/home/ake/myapp` |
-| RAG API URL | `http://localhost:3100` |
-| MCP Server | `/home/ake/shared-ai-infra/mcp-server/dist/index.js` |
-| Date | 2026-02-26 |
+| Field        | Value                                                |
+| ------------ | ---------------------------------------------------- |
+| Project Name | `myapp`                                              |
+| Project Path | `/home/ake/myapp`                                    |
+| RAG API URL  | `http://localhost:3100`                              |
+| MCP Server   | `/home/ake/shared-ai-infra/mcp-server/dist/index.js` |
+| Date         | 2026-02-26                                           |
 
 ## Infrastructure Health Check
 
-| Service | Status | Details |
-|---------|--------|---------|
-| RAG API (:3100) | RUNNING | Responding, 105 files indexed for current project |
-| Qdrant (:6333) | RUNNING | 50 collections across 6 projects |
-| Redis (:6380) | RUNNING | 165 keys, 3.84M memory used |
-| BGE-M3 (:8080) | RUNNING | Embedding service operational (1024d vectors) |
-| MCP Server (dist) | BUILT | `mcp-server/dist/index.js` exists with all 18 tool modules |
+| Service           | Status  | Details                                                    |
+| ----------------- | ------- | ---------------------------------------------------------- |
+| RAG API (:3100)   | RUNNING | Responding, 105 files indexed for current project          |
+| Qdrant (:6333)    | RUNNING | 50 collections across 6 projects                           |
+| Redis (:6380)     | RUNNING | 165 keys, 3.84M memory used                                |
+| BGE-M3 (:8080)    | RUNNING | Embedding service operational (1024d vectors)              |
+| MCP Server (dist) | BUILT   | `mcp-server/dist/index.js` exists with all 18 tool modules |
 
 ## Onboarding Steps
 
@@ -58,17 +58,20 @@ Add a `CLAUDE.md` file at `/home/ake/myapp/CLAUDE.md` with RAG integration instr
 This project has a RAG MCP server connected for persistent memory, codebase search, and architectural knowledge.
 
 ### Before ANY code change:
+
 1. `recall` - check prior context
 2. `hybrid_search` or `search_codebase` - find existing implementations
 3. `get_patterns` - check architectural patterns
 4. `get_adrs` - check architectural decisions
 
 ### After completing work:
+
 - `remember` - save important context
 - `record_adr` - document architectural decisions
 - `record_pattern` - document new patterns
 
 ### Tool Priority:
+
 1. Glob/Read - known file paths
 2. Grep - exact string matching
 3. hybrid_search - best general search (keyword + semantic)
@@ -83,11 +86,13 @@ This project has a RAG MCP server connected for persistent memory, codebase sear
 **Status: ATTEMPTED - 0 files found (directory does not exist)**
 
 Once the project has source code, run the indexing:
+
 ```
 Use `index_codebase` tool (no parameters needed - indexes entire project)
 ```
 
 This will create the following Qdrant collections:
+
 - `myapp_codebase` - legacy unified index
 - `myapp_code` - AST-parsed code with symbols/imports
 - `myapp_config` - YAML/JSON config files
@@ -102,6 +107,7 @@ This will create the following Qdrant collections:
 ### Step 4: Verify indexing
 
 After indexing, verify with:
+
 ```
 get_index_status  -> confirm completion
 get_project_stats -> verify collection sizes
@@ -110,6 +116,7 @@ get_project_stats -> verify collection sizes
 ### Step 5: Record initial patterns and ADRs (optional)
 
 Use `record_pattern` and `record_adr` to document:
+
 - API endpoint structure
 - Service/module organization
 - Naming conventions
@@ -121,14 +128,14 @@ Use `record_pattern` and `record_adr` to document:
 
 ### Existing Projects in RAG Infrastructure
 
-| Project | Collections | Vectors |
-|---------|-------------|---------|
-| beep | 11 | 104,043 |
-| beep-app-engine | 10 | 53,753 |
-| Beep-SaaS-AppEngine | 10 | 53,935 |
-| rag | 10 | 7,779 |
-| shared-ai-infra | 8 | 3,491 |
-| Oranta-Expo | 1 | 4 |
+| Project             | Collections | Vectors |
+| ------------------- | ----------- | ------- |
+| beep                | 11          | 104,043 |
+| beep-app-engine     | 10          | 53,753  |
+| Beep-SaaS-AppEngine | 10          | 53,935  |
+| rag                 | 10          | 7,779   |
+| shared-ai-infra     | 8           | 3,491   |
+| Oranta-Expo         | 1           | 4       |
 
 After onboarding, `myapp` will appear as a new project with its own isolated collections.
 
@@ -159,14 +166,14 @@ RAG API (:3100)
 
 ## Summary
 
-| Step | Status |
-|------|--------|
-| Infrastructure health check | PASSED - all services running |
-| MCP server build verification | PASSED - dist/index.js exists |
-| `.mcp.json` creation | BLOCKED - directory does not exist |
-| `CLAUDE.md` creation | BLOCKED - directory does not exist |
-| Codebase indexing | BLOCKED - no source files to index |
-| Index verification | BLOCKED - depends on indexing |
-| Pattern/ADR recording | BLOCKED - depends on having code to analyze |
+| Step                          | Status                                      |
+| ----------------------------- | ------------------------------------------- |
+| Infrastructure health check   | PASSED - all services running               |
+| MCP server build verification | PASSED - dist/index.js exists               |
+| `.mcp.json` creation          | BLOCKED - directory does not exist          |
+| `CLAUDE.md` creation          | BLOCKED - directory does not exist          |
+| Codebase indexing             | BLOCKED - no source files to index          |
+| Index verification            | BLOCKED - depends on indexing               |
+| Pattern/ADR recording         | BLOCKED - depends on having code to analyze |
 
 **Overall Status: PARTIALLY COMPLETE** - Infrastructure is ready and verified. Project directory `/home/ake/myapp` must be created before completing onboarding. All configuration templates and instructions are provided above.

@@ -11,9 +11,25 @@ describe('CodeParser', () => {
 
   describe('canParse()', () => {
     it.each([
-      '.ts', '.tsx', '.js', '.jsx', '.vue', '.py', '.go', '.rs',
-      '.java', '.c', '.cpp', '.cs', '.php', '.rb', '.swift', '.kt',
-      '.scala', '.sh', '.bash',
+      '.ts',
+      '.tsx',
+      '.js',
+      '.jsx',
+      '.vue',
+      '.py',
+      '.go',
+      '.rs',
+      '.java',
+      '.c',
+      '.cpp',
+      '.cs',
+      '.php',
+      '.rb',
+      '.swift',
+      '.kt',
+      '.scala',
+      '.sh',
+      '.bash',
     ])('returns true for %s files', (ext) => {
       expect(parser.canParse(`src/file${ext}`)).toBe(true);
     });
@@ -59,7 +75,7 @@ describe('CodeParser', () => {
       const chunks = parser.parse(content, 'src/user.ts');
 
       expect(chunks.length).toBeGreaterThanOrEqual(1);
-      const classChunk = chunks.find(c => c.symbols?.includes('UserService'));
+      const classChunk = chunks.find((c) => c.symbols?.includes('UserService'));
       expect(classChunk).toBeDefined();
       expect(classChunk!.language).toBe('typescript');
       expect(classChunk!.metadata?.kind).toMatch(/^class/);
@@ -138,7 +154,7 @@ export function createRepo(): Repo {
 }`;
       const chunks = parser.parse(content, 'src/repo.ts');
 
-      const symbols = chunks.flatMap(c => c.symbols ?? []);
+      const symbols = chunks.flatMap((c) => c.symbols ?? []);
       expect(symbols).toContain('IRepo');
       expect(symbols).toContain('Repo');
       expect(symbols).toContain('createRepo');
@@ -157,20 +173,23 @@ export function createRepo(): Repo {
 
     it('splits a large class into summary + per-method chunks', () => {
       // Build a class with many methods whose full text exceeds 3000 chars
-      const methods = Array.from({ length: 10 }, (_, i) => `
+      const methods = Array.from(
+        { length: 10 },
+        (_, i) => `
   method${i}(arg: string): string {
     const result = arg.repeat(${i + 1});
     const processed = result.split('').reverse().join('');
     return processed + '${i}'.padStart(20, '0');
-  }`).join('\n');
+  }`
+      ).join('\n');
 
       const content = `export class BigService {${methods}\n}`;
       const chunks = parser.parse(content, 'src/big.ts');
 
       // Large class should be split into summary + method chunks
       if (chunks.length > 1) {
-        const summaryChunk = chunks.find(c => c.metadata?.kind === 'class-summary');
-        const methodChunks = chunks.filter(c => c.metadata?.kind === 'method');
+        const summaryChunk = chunks.find((c) => c.metadata?.kind === 'class-summary');
+        const methodChunks = chunks.filter((c) => c.metadata?.kind === 'method');
         expect(summaryChunk).toBeDefined();
         expect(methodChunks.length).toBeGreaterThan(0);
       } else {
@@ -194,7 +213,7 @@ class Greeter:
       const chunks = parser.parse(content, 'src/greet.py');
 
       expect(chunks.length).toBeGreaterThanOrEqual(1);
-      const symbols = chunks.flatMap(c => c.symbols ?? []);
+      const symbols = chunks.flatMap((c) => c.symbols ?? []);
       expect(symbols).toContain('greet');
       expect(symbols).toContain('Greeter');
     });
@@ -213,7 +232,7 @@ type Config struct {
       const chunks = parser.parse(content, 'src/main.go');
 
       expect(chunks.length).toBeGreaterThanOrEqual(1);
-      const symbols = chunks.flatMap(c => c.symbols ?? []);
+      const symbols = chunks.flatMap((c) => c.symbols ?? []);
       expect(symbols).toContain('Add');
     });
 
@@ -286,7 +305,7 @@ def helper():
 
     it('deduplicates symbols', () => {
       const symbols = parser.extractSymbols('function foo() {}\nfunction foo() {}');
-      expect(symbols.filter(s => s === 'foo')).toHaveLength(1);
+      expect(symbols.filter((s) => s === 'foo')).toHaveLength(1);
     });
 
     it('ignores single-character names', () => {
@@ -319,7 +338,7 @@ def helper():
     it('deduplicates import paths', () => {
       const content = "import a from 'lodash';\nimport b from 'lodash';";
       const imports = parser.extractImports(content);
-      expect(imports.filter(i => i === 'lodash')).toHaveLength(1);
+      expect(imports.filter((i) => i === 'lodash')).toHaveLength(1);
     });
 
     it('returns empty array when no imports found', () => {

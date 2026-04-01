@@ -41,15 +41,12 @@ describe('RelationshipClassifier', () => {
 
   it('filters out low-confidence results', async () => {
     mockedLLM.completeWithBestProvider.mockResolvedValue({
-      text: JSON.stringify([
-        { id: 'mem-1', type: 'relates_to', reason: 'Maybe', confidence: 0.3 },
-      ]),
+      text: JSON.stringify([{ id: 'mem-1', type: 'relates_to', reason: 'Maybe', confidence: 0.3 }]),
     });
 
-    const result = await relationshipClassifier.classify(
-      { content: 'test', type: 'note' },
-      [{ id: 'mem-1', content: 'other', type: 'note' }]
-    );
+    const result = await relationshipClassifier.classify({ content: 'test', type: 'note' }, [
+      { id: 'mem-1', content: 'other', type: 'note' },
+    ]);
 
     expect(result).toHaveLength(0); // confidence < 0.5
   });
@@ -61,10 +58,9 @@ describe('RelationshipClassifier', () => {
       ]),
     });
 
-    const result = await relationshipClassifier.classify(
-      { content: 'test', type: 'note' },
-      [{ id: 'mem-1', content: 'other', type: 'note' }]
-    );
+    const result = await relationshipClassifier.classify({ content: 'test', type: 'note' }, [
+      { id: 'mem-1', content: 'other', type: 'note' },
+    ]);
 
     expect(result).toHaveLength(0);
   });
@@ -76,10 +72,9 @@ describe('RelationshipClassifier', () => {
       ]),
     });
 
-    const result = await relationshipClassifier.classify(
-      { content: 'test', type: 'note' },
-      [{ id: 'mem-1', content: 'other', type: 'note' }]
-    );
+    const result = await relationshipClassifier.classify({ content: 'test', type: 'note' }, [
+      { id: 'mem-1', content: 'other', type: 'note' },
+    ]);
 
     expect(result).toHaveLength(0);
   });
@@ -87,10 +82,9 @@ describe('RelationshipClassifier', () => {
   it('returns empty on LLM failure', async () => {
     mockedLLM.completeWithBestProvider.mockRejectedValue(new Error('timeout'));
 
-    const result = await relationshipClassifier.classify(
-      { content: 'test', type: 'note' },
-      [{ id: 'mem-1', content: 'other', type: 'note' }]
-    );
+    const result = await relationshipClassifier.classify({ content: 'test', type: 'note' }, [
+      { id: 'mem-1', content: 'other', type: 'note' },
+    ]);
 
     expect(result).toHaveLength(0);
   });
@@ -100,19 +94,15 @@ describe('RelationshipClassifier', () => {
       text: 'This is not JSON at all',
     });
 
-    const result = await relationshipClassifier.classify(
-      { content: 'test', type: 'note' },
-      [{ id: 'mem-1', content: 'other', type: 'note' }]
-    );
+    const result = await relationshipClassifier.classify({ content: 'test', type: 'note' }, [
+      { id: 'mem-1', content: 'other', type: 'note' },
+    ]);
 
     expect(result).toHaveLength(0);
   });
 
   it('returns empty for empty candidates', async () => {
-    const result = await relationshipClassifier.classify(
-      { content: 'test', type: 'note' },
-      []
-    );
+    const result = await relationshipClassifier.classify({ content: 'test', type: 'note' }, []);
 
     expect(result).toHaveLength(0);
     expect(mockedLLM.completeWithBestProvider).not.toHaveBeenCalled();
@@ -121,10 +111,9 @@ describe('RelationshipClassifier', () => {
   it('uses utility complexity and JSON format', async () => {
     mockedLLM.completeWithBestProvider.mockResolvedValue({ text: '[]' });
 
-    await relationshipClassifier.classify(
-      { content: 'test', type: 'note' },
-      [{ id: 'mem-1', content: 'other', type: 'note' }]
-    );
+    await relationshipClassifier.classify({ content: 'test', type: 'note' }, [
+      { id: 'mem-1', content: 'other', type: 'note' },
+    ]);
 
     expect(mockedLLM.completeWithBestProvider).toHaveBeenCalledWith(
       expect.any(String),

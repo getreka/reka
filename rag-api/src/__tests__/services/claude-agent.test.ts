@@ -24,18 +24,20 @@ describe('ClaudeAgentService', () => {
 
   describe('run()', () => {
     it('returns completed result on success', async () => {
-      mocks.query.mockReturnValue(mockMessages([
-        {
-          type: 'result',
-          subtype: 'success',
-          result: 'Found auth in auth.ts',
-          total_cost_usd: 0.05,
-          usage: { input_tokens: 500, output_tokens: 200 },
-          num_turns: 3,
-          duration_ms: 5000,
-          session_id: 'sess-1',
-        },
-      ]));
+      mocks.query.mockReturnValue(
+        mockMessages([
+          {
+            type: 'result',
+            subtype: 'success',
+            result: 'Found auth in auth.ts',
+            total_cost_usd: 0.05,
+            usage: { input_tokens: 500, output_tokens: 200 },
+            num_turns: 3,
+            duration_ms: 5000,
+            session_id: 'sess-1',
+          },
+        ])
+      );
 
       const result = await claudeAgentService.run({
         projectName: 'test',
@@ -53,15 +55,17 @@ describe('ClaudeAgentService', () => {
     });
 
     it('returns failed result on error', async () => {
-      mocks.query.mockReturnValue(mockMessages([
-        {
-          type: 'result',
-          subtype: 'error_during_execution',
-          errors: ['API rate limit exceeded'],
-          duration_ms: 1000,
-          session_id: 'sess-2',
-        },
-      ]));
+      mocks.query.mockReturnValue(
+        mockMessages([
+          {
+            type: 'result',
+            subtype: 'error_during_execution',
+            errors: ['API rate limit exceeded'],
+            duration_ms: 1000,
+            session_id: 'sess-2',
+          },
+        ])
+      );
 
       const result = await claudeAgentService.run({
         projectName: 'test',
@@ -75,22 +79,24 @@ describe('ClaudeAgentService', () => {
     });
 
     it('returns budget_exceeded when budget limit hit', async () => {
-      mocks.query.mockReturnValue(mockMessages([
-        {
-          type: 'result',
-          subtype: 'error_max_budget_usd',
-          errors: ['Budget exceeded'],
-          duration_ms: 30000,
-          session_id: 'sess-3',
-        },
-      ]));
+      mocks.query.mockReturnValue(
+        mockMessages([
+          {
+            type: 'result',
+            subtype: 'error_max_budget_usd',
+            errors: ['Budget exceeded'],
+            duration_ms: 30000,
+            session_id: 'sess-3',
+          },
+        ])
+      );
 
       const result = await claudeAgentService.run({
         projectName: 'test',
         projectPath: '/tmp/test',
         type: 'implement',
         task: 'implement feature',
-        maxBudgetUsd: 0.50,
+        maxBudgetUsd: 0.5,
       });
 
       expect(result.status).toBe('budget_exceeded');
@@ -134,18 +140,20 @@ describe('ClaudeAgentService', () => {
     });
 
     it('passes query options with correct config', async () => {
-      mocks.query.mockReturnValue(mockMessages([
-        {
-          type: 'result',
-          subtype: 'success',
-          result: 'done',
-          total_cost_usd: 0.01,
-          usage: { input_tokens: 10, output_tokens: 5 },
-          num_turns: 1,
-          duration_ms: 100,
-          session_id: 'sess-4',
-        },
-      ]));
+      mocks.query.mockReturnValue(
+        mockMessages([
+          {
+            type: 'result',
+            subtype: 'success',
+            result: 'done',
+            total_cost_usd: 0.01,
+            usage: { input_tokens: 10, output_tokens: 5 },
+            num_turns: 1,
+            duration_ms: 100,
+            session_id: 'sess-4',
+          },
+        ])
+      );
 
       await claudeAgentService.run({
         projectName: 'myproject',
@@ -202,18 +210,20 @@ describe('ClaudeAgentService', () => {
     });
 
     it('does not include messages when includeStreaming is false', async () => {
-      mocks.query.mockReturnValue(mockMessages([
-        {
-          type: 'result',
-          subtype: 'success',
-          result: 'done',
-          total_cost_usd: 0.01,
-          usage: { input_tokens: 10, output_tokens: 5 },
-          num_turns: 1,
-          duration_ms: 100,
-          session_id: 'sess-6',
-        },
-      ]));
+      mocks.query.mockReturnValue(
+        mockMessages([
+          {
+            type: 'result',
+            subtype: 'success',
+            result: 'done',
+            total_cost_usd: 0.01,
+            usage: { input_tokens: 10, output_tokens: 5 },
+            num_turns: 1,
+            duration_ms: 100,
+            session_id: 'sess-6',
+          },
+        ])
+      );
 
       const result = await claudeAgentService.run({
         projectName: 'test',
@@ -243,7 +253,7 @@ describe('ClaudeAgentService', () => {
       const types = claudeAgentService.getAgentTypes();
       expect(types).toHaveLength(5);
 
-      const typeNames = types.map(t => t.type);
+      const typeNames = types.map((t) => t.type);
       expect(typeNames).toContain('research');
       expect(typeNames).toContain('review');
       expect(typeNames).toContain('implement');

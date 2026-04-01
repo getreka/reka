@@ -136,6 +136,31 @@ export const createMemorySchema = z.object({
   metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
+export const factCategorySchema = z.enum([
+  'personal_info',
+  'preference',
+  'event',
+  'temporal',
+  'update',
+  'plan',
+]);
+
+export const batchItemSchema = z.object({
+  content: z.string().min(1).max(50000),
+  type: memoryTypeSchema.optional().default('note'),
+  tags: z.array(z.string().max(50)).max(20).optional(),
+  relatedTo: z.string().max(200).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+  factCategory: factCategorySchema.optional(),
+  factEntities: z.array(z.string().max(200)).max(50).optional(),
+  factDateTs: z.number().optional(),
+});
+
+export const batchCreateMemorySchema = z.object({
+  projectName: projectNameSchema.optional(),
+  items: z.array(batchItemSchema).min(1).max(100),
+});
+
 export const recallMemorySchema = z.object({
   projectName: projectNameSchema.optional(),
   query: z.string().min(1).max(5000),

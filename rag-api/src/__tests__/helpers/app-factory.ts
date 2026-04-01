@@ -1,7 +1,9 @@
 import express, { Router } from 'express';
 import { errorHandler } from '../../middleware/error-handler';
 
-export function createTestApp(...routes: Array<{ router: Router; prefix?: string }>): express.Express {
+export function createTestApp(
+  ...routes: Array<{ router: Router; prefix?: string }>
+): express.Express {
   const app = express();
   app.use(express.json());
   for (const { router, prefix = '/api' } of routes) {

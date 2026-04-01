@@ -19,7 +19,14 @@ import { withSpan } from '../utils/tracing';
 import { cacheService } from './cache';
 import config from '../config';
 
-export type LookupType = 'memory' | 'code_search' | 'patterns' | 'adrs' | 'graph' | 'docs' | 'symbols';
+export type LookupType =
+  | 'memory'
+  | 'code_search'
+  | 'patterns'
+  | 'adrs'
+  | 'graph'
+  | 'docs'
+  | 'symbols';
 
 export interface SmartDispatchRequest {
   projectName: string;
@@ -69,11 +76,15 @@ class SmartDispatchService {
    * Route a task to the appropriate lookups and execute them in parallel.
    */
   async dispatch(request: SmartDispatchRequest): Promise<SmartDispatchResult> {
-    return withSpan('smart_dispatch', {
-      task: request.task.slice(0, 100),
-      intent: request.intent || '',
-      project: request.projectName,
-    }, async (span) => this._dispatch(request, span));
+    return withSpan(
+      'smart_dispatch',
+      {
+        task: request.task.slice(0, 100),
+        intent: request.intent || '',
+        project: request.projectName,
+      },
+      async (span) => this._dispatch(request, span)
+    );
   }
 
   private async _dispatch(request: SmartDispatchRequest, span?: any): Promise<SmartDispatchResult> {
@@ -179,7 +190,7 @@ class SmartDispatchService {
    */
   private async getCachedRouting(
     projectName: string,
-    task: string,
+    task: string
   ): Promise<{ lookups: LookupType[]; reasoning: string; confidence: number } | null> {
     if (!cacheService.isEnabled()) return null;
 
@@ -199,7 +210,8 @@ class SmartDispatchService {
 
       // Apply confidence decay
       const daysSinceCreated = (Date.now() - cached.timestamp) / (1000 * 60 * 60 * 24);
-      const decayedConfidence = cached.confidence * Math.exp(-config.DISPATCH_CONFIDENCE_DECAY * daysSinceCreated);
+      const decayedConfidence =
+        cached.confidence * Math.exp(-config.DISPATCH_CONFIDENCE_DECAY * daysSinceCreated);
 
       if (decayedConfidence < config.DISPATCH_CONFIDENCE_THRESHOLD) {
         logger.debug('Smart dispatch cache expired (confidence decay)', {
@@ -228,7 +240,7 @@ class SmartDispatchService {
     projectName: string,
     task: string,
     lookups: LookupType[],
-    reasoning: string,
+    reasoning: string
   ): Promise<void> {
     if (!cacheService.isEnabled()) return;
 
@@ -238,12 +250,16 @@ class SmartDispatchService {
       const cacheKey = `routing:${projectName}:${embeddingHash}`;
       const ttlSeconds = config.DISPATCH_CACHE_TTL_DAYS * 24 * 60 * 60;
 
-      await cacheService.set(cacheKey, {
-        lookups,
-        reasoning,
-        confidence: 1.0,
-        timestamp: Date.now(),
-      }, ttlSeconds);
+      await cacheService.set(
+        cacheKey,
+        {
+          lookups,
+          reasoning,
+          confidence: 1.0,
+          timestamp: Date.now(),
+        },
+        ttlSeconds
+      );
     } catch (e: any) {
       logger.debug('Smart dispatch cache write failed', { error: e.message });
     }
@@ -254,7 +270,7 @@ class SmartDispatchService {
    */
   private hashEmbedding(embedding: number[]): string {
     // Use first 32 dimensions for a fast hash
-    const slice = embedding.slice(0, 32).map(v => Math.round(v * 1000));
+    const slice = embedding.slice(0, 32).map((v) => Math.round(v * 1000));
     const crypto = require('crypto');
     return crypto.createHash('md5').update(slice.join(',')).digest('hex').slice(0, 16);
   }
@@ -268,8 +284,7 @@ class SmartDispatchService {
     intent?: string
   ): Promise<{ lookups: LookupType[]; reasoning: string }> {
     const intentHint = intent ? `Intent: ${intent}` : '';
-    const prompt = ROUTING_PROMPT
-      .replace('{task}', task)
+    const prompt = ROUTING_PROMPT.replace('{task}', task)
       .replace('{files}', files?.length ? files.join(', ') : 'none')
       .replace('{intentHint}', intentHint);
 
@@ -281,9 +296,24 @@ class SmartDispatchService {
       format: 'json',
     });
 
-    const { data } = parseLLMOutput(result.text, routingSchema, { lookups: ['code_search'], reasoning: 'fallback' }, 'smart-dispatch');
-    const validLookups: LookupType[] = ['memory', 'code_search', 'patterns', 'adrs', 'graph', 'docs', 'symbols'];
-    const lookups = data.lookups.filter((l: string) => validLookups.includes(l as LookupType)) as LookupType[];
+    const { data } = parseLLMOutput(
+      result.text,
+      routingSchema,
+      { lookups: ['code_search'], reasoning: 'fallback' },
+      'smart-dispatch'
+    );
+    const validLookups: LookupType[] = [
+      'memory',
+      'code_search',
+      'patterns',
+      'adrs',
+      'graph',
+      'docs',
+      'symbols',
+    ];
+    const lookups = data.lookups.filter((l: string) =>
+      validLookups.includes(l as LookupType)
+    ) as LookupType[];
 
     // Ensure at least code_search is always included
     if (lookups.length === 0) {
@@ -372,47 +402,70 @@ class SmartDispatchService {
 
     if (lookupSet.has('memory')) {
       promises.push(
-        memoryService.recall({ projectName, query: task, limit: 5, type: 'all' })
-          .then(results => { context.memories = results; })
-          .catch(e => { logger.debug('Smart dispatch: memory lookup failed', { error: e.message }); })
+        memoryService
+          .recall({ projectName, query: task, limit: 5, type: 'all' })
+          .then((results) => {
+            context.memories = results;
+          })
+          .catch((e) => {
+            logger.debug('Smart dispatch: memory lookup failed', { error: e.message });
+          })
       );
     }
 
     if (lookupSet.has('code_search')) {
       promises.push(
         this.searchCode(projectName, task)
-          .then(results => { context.codeResults = results; })
-          .catch(e => { logger.debug('Smart dispatch: code search failed', { error: e.message }); })
+          .then((results) => {
+            context.codeResults = results;
+          })
+          .catch((e) => {
+            logger.debug('Smart dispatch: code search failed', { error: e.message });
+          })
       );
     }
 
     if (lookupSet.has('patterns')) {
       promises.push(
-        memoryService.recall({ projectName, query: task, type: 'context', limit: 5, tag: 'pattern' })
-          .then(results => { context.patterns = results.filter((r: any) => r.memory?.tags?.includes('pattern')); })
-          .catch(e => { logger.debug('Smart dispatch: patterns lookup failed', { error: e.message }); })
+        memoryService
+          .recall({ projectName, query: task, type: 'context', limit: 5, tag: 'pattern' })
+          .then((results) => {
+            context.patterns = results.filter((r: any) => r.memory?.tags?.includes('pattern'));
+          })
+          .catch((e) => {
+            logger.debug('Smart dispatch: patterns lookup failed', { error: e.message });
+          })
       );
     }
 
     if (lookupSet.has('adrs')) {
       promises.push(
-        memoryService.recall({ projectName, query: task, type: 'decision', limit: 3, tag: 'adr' })
-          .then(results => { context.adrs = results.filter((r: any) => r.memory?.tags?.includes('adr')); })
-          .catch(e => { logger.debug('Smart dispatch: ADR lookup failed', { error: e.message }); })
+        memoryService
+          .recall({ projectName, query: task, type: 'decision', limit: 3, tag: 'adr' })
+          .then((results) => {
+            context.adrs = results.filter((r: any) => r.memory?.tags?.includes('adr'));
+          })
+          .catch((e) => {
+            logger.debug('Smart dispatch: ADR lookup failed', { error: e.message });
+          })
       );
     }
 
     if (lookupSet.has('graph')) {
       // If no files provided, try to infer them from symbols in the task
-      const graphFiles = (files && files.length > 0) ? files : await this.inferFiles(projectName, task);
+      const graphFiles =
+        files && files.length > 0 ? files : await this.inferFiles(projectName, task);
       if (graphFiles.length > 0) {
         promises.push(
-          graphStore.expand(projectName, graphFiles.slice(0, 5), 1)
-            .then(expanded => {
-              const deps = expanded.filter(f => !graphFiles.includes(f));
-              context.graphDeps = deps.map(f => ({ file: f }));
+          graphStore
+            .expand(projectName, graphFiles.slice(0, 5), 1)
+            .then((expanded) => {
+              const deps = expanded.filter((f) => !graphFiles.includes(f));
+              context.graphDeps = deps.map((f) => ({ file: f }));
             })
-            .catch(e => { logger.debug('Smart dispatch: graph lookup failed', { error: e.message }); })
+            .catch((e) => {
+              logger.debug('Smart dispatch: graph lookup failed', { error: e.message });
+            })
         );
       }
     }
@@ -420,16 +473,24 @@ class SmartDispatchService {
     if (lookupSet.has('docs')) {
       promises.push(
         this.searchDocs(projectName, task)
-          .then(results => { context.docs = results; })
-          .catch(e => { logger.debug('Smart dispatch: docs lookup failed', { error: e.message }); })
+          .then((results) => {
+            context.docs = results;
+          })
+          .catch((e) => {
+            logger.debug('Smart dispatch: docs lookup failed', { error: e.message });
+          })
       );
     }
 
     if (lookupSet.has('symbols')) {
       promises.push(
         this.searchSymbols(projectName, task)
-          .then(results => { context.symbols = results; })
-          .catch(e => { logger.debug('Smart dispatch: symbols lookup failed', { error: e.message }); })
+          .then((results) => {
+            context.symbols = results;
+          })
+          .catch((e) => {
+            logger.debug('Smart dispatch: symbols lookup failed', { error: e.message });
+          })
       );
     }
 
@@ -487,11 +548,15 @@ class SmartDispatchService {
     return Array.from(seen.values())
       .sort((a, b) => b.score - a.score)
       .slice(0, 5)
-      .map(r => ({
+      .map((r) => ({
         file: r.payload.file,
         symbols: r.payload.symbols || [],
         imports: r.payload.imports || [],
-        preview: String(r.payload.content || '').split('\n').filter((l: string) => l.trim()).slice(0, 2).join('\n'),
+        preview: String(r.payload.content || '')
+          .split('\n')
+          .filter((l: string) => l.trim())
+          .slice(0, 2)
+          .join('\n'),
         score: r.score,
       }));
   }
@@ -504,7 +569,7 @@ class SmartDispatchService {
     try {
       const embedding = await embeddingService.embed(query);
       const results = await vectorStore.search(collection, embedding, 3);
-      return results.map(r => ({
+      return results.map((r) => ({
         file: r.payload.file,
         content: String(r.payload.content || '').slice(0, 300),
         score: r.score,
@@ -520,7 +585,8 @@ class SmartDispatchService {
    */
   private async searchSymbols(projectName: string, task: string): Promise<any[]> {
     // Extract potential symbol names from task (camelCase, PascalCase, snake_case words)
-    const symbolCandidates = task.match(/[A-Z][a-zA-Z0-9]+|[a-z]+[A-Z][a-zA-Z0-9]*|[a-z_]{3,}/g) || [];
+    const symbolCandidates =
+      task.match(/[A-Z][a-zA-Z0-9]+|[a-z]+[A-Z][a-zA-Z0-9]*|[a-z_]{3,}/g) || [];
     const uniqueSymbols = [...new Set(symbolCandidates)].slice(0, 3);
 
     const allResults: any[] = [];

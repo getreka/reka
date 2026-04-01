@@ -72,7 +72,7 @@ describe('listAgentTypes()', () => {
   });
 
   it('includes all expected type names', () => {
-    const names = listAgentTypes().map(t => t.name);
+    const names = listAgentTypes().map((t) => t.name);
     expect(names).toContain('research');
     expect(names).toContain('review');
     expect(names).toContain('documentation');
@@ -100,7 +100,13 @@ describe('getToolDefinitions()', () => {
   });
 
   it('each tool has required schema fields', () => {
-    const allActions = ['search_codebase', 'recall_memory', 'get_patterns', 'get_adrs', 'search_similar'];
+    const allActions = [
+      'search_codebase',
+      'recall_memory',
+      'get_patterns',
+      'get_adrs',
+      'search_similar',
+    ];
     const tools = getToolDefinitions(allActions);
     expect(tools).toHaveLength(5);
 

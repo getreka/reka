@@ -34,7 +34,7 @@ export interface EpisodicMemory {
   actions: string[];
   outcome?: string;
   tags: string[];
-  stability: number;          // Ebbinghaus S factor (in days)
+  stability: number; // Ebbinghaus S factor (in days)
   accessCount: number;
   lastAccessed: string;
   relationships?: MemoryRelation[];
@@ -46,9 +46,9 @@ export interface SemanticMemory {
   id: string;
   content: string;
   subtype: SemanticSubtype;
-  confidence: number;         // 0-1
+  confidence: number; // 0-1
   tags: string[];
-  stability: number;          // Ebbinghaus S factor (in days)
+  stability: number; // Ebbinghaus S factor (in days)
   accessCount: number;
   lastAccessed: string;
   relationships?: MemoryRelation[];
@@ -64,13 +64,13 @@ export interface SemanticMemory {
 export interface Anchor {
   type: 'file' | 'symbol';
   path: string;
-  name?: string;              // symbol name if type='symbol'
+  name?: string; // symbol name if type='symbol'
 }
 
 export interface LtmSearchResult {
   memory: EpisodicMemory | SemanticMemory;
   score: number;
-  retention: number;          // Ebbinghaus retention at query time
+  retention: number; // Ebbinghaus retention at query time
   collection: 'episodic' | 'semantic';
 }
 
@@ -105,7 +105,7 @@ export interface LtmRecallOptions {
   limit?: number;
   collections?: Array<'episodic' | 'semantic'>;
   subtype?: SemanticSubtype;
-  minRetention?: number;     // filter out memories below this retention (default 0.1)
+  minRetention?: number; // filter out memories below this retention (default 0.1)
 }
 
 // ── Ebbinghaus Decay ──────────────────────────────────────
@@ -119,9 +119,10 @@ const MS_PER_DAY = 24 * 60 * 60 * 1000;
 export function computeRetention(
   createdAt: string | number,
   stability: number,
-  accessCount: number,
+  accessCount: number
 ): number {
-  const ageMs = Date.now() - (typeof createdAt === 'number' ? createdAt : new Date(createdAt).getTime());
+  const ageMs =
+    Date.now() - (typeof createdAt === 'number' ? createdAt : new Date(createdAt).getTime());
   const ageDays = ageMs / MS_PER_DAY;
   const S = stability * (1 + accessCount * 0.5);
   return Math.exp(-ageDays / S);
@@ -132,9 +133,12 @@ export function computeRetention(
  */
 function getBaseStability(type: 'episodic' | SemanticSubtype): number {
   switch (type) {
-    case 'episodic': return config.EPISODIC_BASE_STABILITY_DAYS;
-    case 'procedure': return config.PROCEDURAL_BASE_STABILITY_DAYS;
-    default: return config.SEMANTIC_BASE_STABILITY_DAYS;
+    case 'episodic':
+      return config.EPISODIC_BASE_STABILITY_DAYS;
+    case 'procedure':
+      return config.PROCEDURAL_BASE_STABILITY_DAYS;
+    default:
+      return config.SEMANTIC_BASE_STABILITY_DAYS;
   }
 }
 
@@ -234,7 +238,11 @@ class LongTermMemoryService {
     const collection = this.semanticCollection(opts.projectName);
     await vectorStore.upsert(collection, [point]);
 
-    logger.debug('Stored semantic memory', { id, subtype: opts.subtype, project: opts.projectName });
+    logger.debug('Stored semantic memory', {
+      id,
+      subtype: opts.subtype,
+      project: opts.projectName,
+    });
     return memory;
   }
 
@@ -262,9 +270,10 @@ class LongTermMemoryService {
 
     // Search both collections in parallel
     const searches = collections.map(async (col) => {
-      const collection = col === 'episodic'
-        ? this.episodicCollection(projectName)
-        : this.semanticCollection(projectName);
+      const collection =
+        col === 'episodic'
+          ? this.episodicCollection(projectName)
+          : this.semanticCollection(projectName);
 
       const filter = col === 'semantic' ? semanticFilter : undefined;
 
@@ -275,7 +284,9 @@ class LongTermMemoryService {
         for (const r of searchResults) {
           const payload = r.payload;
           const createdAt = (payload.timestamp ?? payload.createdAt) as string;
-          const stability = (payload.stability as number) ?? getBaseStability(col === 'episodic' ? 'episodic' : 'insight');
+          const stability =
+            (payload.stability as number) ??
+            getBaseStability(col === 'episodic' ? 'episodic' : 'insight');
           const accessCount = (payload.accessCount as number) ?? 0;
 
           // Skip superseded
@@ -304,9 +315,7 @@ class LongTermMemoryService {
 
     await Promise.all(searches);
 
-    return results
-      .sort((a, b) => b.score - a.score)
-      .slice(0, limit);
+    return results.sort((a, b) => b.score - a.score).slice(0, limit);
   }
 
   /**
@@ -318,9 +327,10 @@ class LongTermMemoryService {
     memoryId: string,
     collectionType: 'episodic' | 'semantic'
   ): Promise<void> {
-    const collection = collectionType === 'episodic'
-      ? this.episodicCollection(projectName)
-      : this.semanticCollection(projectName);
+    const collection =
+      collectionType === 'episodic'
+        ? this.episodicCollection(projectName)
+        : this.semanticCollection(projectName);
 
     try {
       // Read current state
@@ -359,16 +369,17 @@ class LongTermMemoryService {
     collectionType: 'episodic' | 'semantic',
     opts?: { limit?: number; subtype?: SemanticSubtype }
   ): Promise<Array<EpisodicMemory | SemanticMemory>> {
-    const collection = collectionType === 'episodic'
-      ? this.episodicCollection(projectName)
-      : this.semanticCollection(projectName);
+    const collection =
+      collectionType === 'episodic'
+        ? this.episodicCollection(projectName)
+        : this.semanticCollection(projectName);
 
     try {
       const limit = opts?.limit ?? 20;
       const result = await vectorStore.scrollCollection(collection, limit);
 
       return result.points
-        .map(p => this.pointToMemory(p.payload as Record<string, unknown>, collectionType))
+        .map((p) => this.pointToMemory(p.payload as Record<string, unknown>, collectionType))
         .filter(Boolean);
     } catch (error: any) {
       if (error.status === 404) return [];
@@ -390,11 +401,15 @@ class LongTermMemoryService {
 
     try {
       episodicCount = await vectorStore.count(this.episodicCollection(projectName));
-    } catch { /* collection may not exist */ }
+    } catch {
+      /* collection may not exist */
+    }
 
     try {
       semanticCount = await vectorStore.count(this.semanticCollection(projectName));
-    } catch { /* collection may not exist */ }
+    } catch {
+      /* collection may not exist */
+    }
 
     return {
       episodic: { count: episodicCount },

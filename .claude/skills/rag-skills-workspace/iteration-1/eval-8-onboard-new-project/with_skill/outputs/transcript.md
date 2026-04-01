@@ -1,12 +1,15 @@
 # RAG Onboarding Transcript: /home/ake/myapp
 
 ## Task
+
 Pidklyuchy proekt /home/ake/myapp do RAG infrastruktury (Connect project /home/ake/myapp to RAG infrastructure)
 
 ## Skill Used
+
 `/home/ake/shared-ai-infra/.claude/skills/rag-onboard/SKILL.md`
 
 ## Prerequisites Check
+
 - **Project path:** `/home/ake/myapp` -- directory does NOT exist
 - **Project name:** `myapp` (derived from path)
 - **RAG API URL:** `http://localhost:3100` (default)
@@ -16,6 +19,7 @@ Pidklyuchy proekt /home/ake/myapp do RAG infrastruktury (Connect project /home/a
 ## Step 1: Configure Project (`setup_project`)
 
 **Tool call:** `setup_project`
+
 - `projectPath`: `/home/ake/myapp`
 - `projectName`: `myapp`
 - `ragApiUrl`: `http://localhost:3100`
@@ -32,9 +36,11 @@ Pidklyuchy proekt /home/ake/myapp do RAG infrastruktury (Connect project /home/a
 ## Step 2: Verify Infrastructure (Health Checks)
 
 ### RAG API (port 3100)
+
 **Tool call:** `curl -s --connect-timeout 3 localhost:3100/health`
 
 **Result:** OK
+
 ```json
 {
   "status": "ok",
@@ -54,16 +60,19 @@ Pidklyuchy proekt /home/ake/myapp do RAG infrastruktury (Connect project /home/a
 ```
 
 ### Qdrant (port 6333)
+
 **Tool call:** `curl -s --connect-timeout 3 localhost:6333/healthz`
 
 **Result:** OK -- `healthz check passed`
 
 ### BGE-M3 Embeddings (port 8080)
+
 **Tool call:** `curl -s --connect-timeout 3 localhost:8080/health`
 
 **Result:** OK
+
 ```json
-{"model": "BAAI/bge-m3", "status": "ok"}
+{ "model": "BAAI/bge-m3", "status": "ok" }
 ```
 
 **All infrastructure services are healthy.**
@@ -73,10 +82,12 @@ Pidklyuchy proekt /home/ake/myapp do RAG infrastruktury (Connect project /home/a
 ## Step 3: Index Codebase (`index_codebase`)
 
 **Tool call:** `index_codebase`
+
 - `path`: `/home/ake/myapp`
 - `force`: `false`
 
 **Result:**
+
 ```
 ## Indexing rag
 - Total files found: 0
@@ -95,6 +106,7 @@ Pidklyuchy proekt /home/ake/myapp do RAG infrastruktury (Connect project /home/a
 ### 4a. `get_index_status`
 
 **Result:**
+
 ```
 ## Index Status: rag
 - Status: idle
@@ -111,6 +123,7 @@ Pidklyuchy proekt /home/ake/myapp do RAG infrastruktury (Connect project /home/a
 ### 4c. `hybrid_search("main entry point")`
 
 **Result:** Returned results from the `rag` project:
+
 1. `mcp-server/src/index.ts:141-146` (3.2%) -- main server startup
 2. `rag-api/src/services/memory.ts:704-722` (3.1%) -- MemoryService.pointToMemory
 3. `rag-api/src/services/confluence.ts:222-344` (1.7%) -- ConfluenceService.indexConfluence
@@ -124,6 +137,7 @@ Pidklyuchy proekt /home/ake/myapp do RAG infrastruktury (Connect project /home/a
 ### 5a. `get_project_stats`
 
 **Result:**
+
 ```
 rag Project Statistics
 - Total Files: 105
@@ -149,34 +163,39 @@ Languages:
 ## Onboarding Status: myapp -- INCOMPLETE
 
 ### Issue
+
 The project directory `/home/ake/myapp` does not exist. Onboarding cannot be completed until the directory is created with project files.
 
 ### Infrastructure Status
+
 | Service | Port | Status |
-|---------|------|--------|
-| RAG API | 3100 | OK |
-| Qdrant | 6333 | OK |
-| BGE-M3 | 8080 | OK |
+| ------- | ---- | ------ |
+| RAG API | 3100 | OK     |
+| Qdrant  | 6333 | OK     |
+| BGE-M3  | 8080 | OK     |
 
 ### What Was Attempted
-| Step | Tool | Status |
-|------|------|--------|
-| 1. Configure Project | `setup_project` | FAILED (directory not found) |
+
+| Step                     | Tool                 | Status                          |
+| ------------------------ | -------------------- | ------------------------------- |
+| 1. Configure Project     | `setup_project`      | FAILED (directory not found)    |
 | 2. Verify Infrastructure | `curl` health checks | PASSED (all 3 services healthy) |
-| 3. Index Codebase | `index_codebase` | RAN (0 files found) |
-| 4. Verify Index | `get_index_status` | RAN (no collections for myapp) |
-| 5. Initial Analysis | `get_project_stats` | RAN (shows rag project stats) |
+| 3. Index Codebase        | `index_codebase`     | RAN (0 files found)             |
+| 4. Verify Index          | `get_index_status`   | RAN (no collections for myapp)  |
+| 5. Initial Analysis      | `get_project_stats`  | RAN (shows rag project stats)   |
 
 ### Collections Expected (when project exists)
-| Collection | Description |
-|------------|-------------|
-| myapp_code | Source code with AST metadata |
-| myapp_config | Configuration files |
-| myapp_docs | Documentation |
-| myapp_graph | Import/dependency edges |
-| myapp_symbols | Function/class/type index |
+
+| Collection    | Description                   |
+| ------------- | ----------------------------- |
+| myapp_code    | Source code with AST metadata |
+| myapp_config  | Configuration files           |
+| myapp_docs    | Documentation                 |
+| myapp_graph   | Import/dependency edges       |
+| myapp_symbols | Function/class/type index     |
 
 ### Next Steps (for the user)
+
 1. Create the project directory: `mkdir -p /home/ake/myapp`
 2. Add project source files to `/home/ake/myapp`
 3. Re-run onboarding: "Pidklyuchy proekt /home/ake/myapp do RAG infrastruktury"
@@ -187,16 +206,16 @@ The project directory `/home/ake/myapp` does not exist. Onboarding cannot be com
 
 ## Tool Call Summary
 
-| # | Tool | Parameters | Result |
-|---|------|-----------|--------|
-| 1 | `Glob` | pattern: `*`, path: `/home/ake/myapp` | Directory does not exist |
-| 2 | `setup_project` | projectPath: `/home/ake/myapp`, projectName: `myapp`, ragApiUrl: `http://localhost:3100`, updateClaudeMd: `true` | ENOENT error |
-| 3 | `Bash` (curl) | `localhost:3100/health` | OK |
-| 4 | `Bash` (curl) | `localhost:6333/healthz` | OK |
-| 5 | `Bash` (curl) | `localhost:8080/health` | OK |
-| 6 | `index_codebase` | path: `/home/ake/myapp`, force: `false` | 0 files indexed |
-| 7 | `get_index_status` | (none) | idle, 0 files |
-| 8 | `analyze_project_structure` | path: `/home/ake/myapp`, deep: `true` | Returned rag project structure |
-| 9 | `hybrid_search` | query: `main entry point`, limit: `3` | 3 results from rag project |
-| 10 | `get_project_stats` | (none) | rag project: 105 files, 1024 vectors |
-| 11 | `find_duplicates` | limit: `5` | No duplicates |
+| #   | Tool                        | Parameters                                                                                                       | Result                               |
+| --- | --------------------------- | ---------------------------------------------------------------------------------------------------------------- | ------------------------------------ |
+| 1   | `Glob`                      | pattern: `*`, path: `/home/ake/myapp`                                                                            | Directory does not exist             |
+| 2   | `setup_project`             | projectPath: `/home/ake/myapp`, projectName: `myapp`, ragApiUrl: `http://localhost:3100`, updateClaudeMd: `true` | ENOENT error                         |
+| 3   | `Bash` (curl)               | `localhost:3100/health`                                                                                          | OK                                   |
+| 4   | `Bash` (curl)               | `localhost:6333/healthz`                                                                                         | OK                                   |
+| 5   | `Bash` (curl)               | `localhost:8080/health`                                                                                          | OK                                   |
+| 6   | `index_codebase`            | path: `/home/ake/myapp`, force: `false`                                                                          | 0 files indexed                      |
+| 7   | `get_index_status`          | (none)                                                                                                           | idle, 0 files                        |
+| 8   | `analyze_project_structure` | path: `/home/ake/myapp`, deep: `true`                                                                            | Returned rag project structure       |
+| 9   | `hybrid_search`             | query: `main entry point`, limit: `3`                                                                            | 3 results from rag project           |
+| 10  | `get_project_stats`         | (none)                                                                                                           | rag project: 105 files, 1024 vectors |
+| 11  | `find_duplicates`           | limit: `5`                                                                                                       | No duplicates                        |

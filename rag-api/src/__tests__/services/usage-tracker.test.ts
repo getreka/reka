@@ -108,9 +108,27 @@ describe('UsageTrackerService', () => {
   describe('getStats()', () => {
     it('aggregates stats from scroll results', async () => {
       const usages = [
-        { toolName: 'search', timestamp: '2025-06-15T10:00:00Z', durationMs: 100, success: true, timestampMs: Date.now() },
-        { toolName: 'search', timestamp: '2025-06-15T11:00:00Z', durationMs: 200, success: true, timestampMs: Date.now() },
-        { toolName: 'recall', timestamp: '2025-06-15T10:00:00Z', durationMs: 50, success: false, timestampMs: Date.now() },
+        {
+          toolName: 'search',
+          timestamp: '2025-06-15T10:00:00Z',
+          durationMs: 100,
+          success: true,
+          timestampMs: Date.now(),
+        },
+        {
+          toolName: 'search',
+          timestamp: '2025-06-15T11:00:00Z',
+          durationMs: 200,
+          success: true,
+          timestampMs: Date.now(),
+        },
+        {
+          toolName: 'recall',
+          timestamp: '2025-06-15T10:00:00Z',
+          durationMs: 50,
+          success: false,
+          timestampMs: Date.now(),
+        },
       ];
 
       mockQdrantClient.scroll.mockResolvedValue({
@@ -130,11 +148,31 @@ describe('UsageTrackerService', () => {
     it('paginates through scroll results', async () => {
       mockQdrantClient.scroll
         .mockResolvedValueOnce({
-          points: [{ id: '1', payload: { toolName: 'a', timestamp: '2025-01-01T00:00:00Z', durationMs: 10, success: true } }],
+          points: [
+            {
+              id: '1',
+              payload: {
+                toolName: 'a',
+                timestamp: '2025-01-01T00:00:00Z',
+                durationMs: 10,
+                success: true,
+              },
+            },
+          ],
           next_page_offset: 'next',
         })
         .mockResolvedValueOnce({
-          points: [{ id: '2', payload: { toolName: 'b', timestamp: '2025-01-01T01:00:00Z', durationMs: 20, success: true } }],
+          points: [
+            {
+              id: '2',
+              payload: {
+                toolName: 'b',
+                timestamp: '2025-01-01T01:00:00Z',
+                durationMs: 20,
+                success: true,
+              },
+            },
+          ],
           next_page_offset: undefined,
         });
 
@@ -209,12 +247,25 @@ describe('UsageTrackerService', () => {
     it('detects n-gram workflows', async () => {
       // Two sessions with same tool sequence → workflow detected
       const makeSession = (sid: string) => [
-        { toolName: 'search', timestamp: `2025-06-15T10:00:0${sid === 's1' ? '0' : '5'}Z`, durationMs: 10, sessionId: sid },
-        { toolName: 'recall', timestamp: `2025-06-15T10:01:0${sid === 's1' ? '0' : '5'}Z`, durationMs: 10, sessionId: sid },
+        {
+          toolName: 'search',
+          timestamp: `2025-06-15T10:00:0${sid === 's1' ? '0' : '5'}Z`,
+          durationMs: 10,
+          sessionId: sid,
+        },
+        {
+          toolName: 'recall',
+          timestamp: `2025-06-15T10:01:0${sid === 's1' ? '0' : '5'}Z`,
+          durationMs: 10,
+          sessionId: sid,
+        },
       ];
 
       mockQdrantClient.scroll.mockResolvedValue({
-        points: [...makeSession('s1'), ...makeSession('s2')].map((u, i) => ({ id: `id-${i}`, payload: u })),
+        points: [...makeSession('s1'), ...makeSession('s2')].map((u, i) => ({
+          id: `id-${i}`,
+          payload: u,
+        })),
         next_page_offset: undefined,
       });
 
@@ -239,10 +290,42 @@ describe('UsageTrackerService', () => {
     it('aggregates low-result queries', async () => {
       mockQdrantClient.scroll.mockResolvedValue({
         points: [
-          { id: '1', payload: { inputSummary: 'missing feature', toolName: 'search', resultCount: 0, success: true } },
-          { id: '2', payload: { inputSummary: 'missing feature', toolName: 'search', resultCount: 1, success: true } },
-          { id: '3', payload: { inputSummary: 'another gap', toolName: 'search', resultCount: 0, success: true } },
-          { id: '4', payload: { inputSummary: 'another gap', toolName: 'search', resultCount: 0, success: true } },
+          {
+            id: '1',
+            payload: {
+              inputSummary: 'missing feature',
+              toolName: 'search',
+              resultCount: 0,
+              success: true,
+            },
+          },
+          {
+            id: '2',
+            payload: {
+              inputSummary: 'missing feature',
+              toolName: 'search',
+              resultCount: 1,
+              success: true,
+            },
+          },
+          {
+            id: '3',
+            payload: {
+              inputSummary: 'another gap',
+              toolName: 'search',
+              resultCount: 0,
+              success: true,
+            },
+          },
+          {
+            id: '4',
+            payload: {
+              inputSummary: 'another gap',
+              toolName: 'search',
+              resultCount: 0,
+              success: true,
+            },
+          },
         ],
         next_page_offset: undefined,
       });
@@ -256,7 +339,15 @@ describe('UsageTrackerService', () => {
     it('filters out queries with fewer than 2 occurrences', async () => {
       mockQdrantClient.scroll.mockResolvedValue({
         points: [
-          { id: '1', payload: { inputSummary: 'unique query', toolName: 'search', resultCount: 0, success: true } },
+          {
+            id: '1',
+            payload: {
+              inputSummary: 'unique query',
+              toolName: 'search',
+              resultCount: 0,
+              success: true,
+            },
+          },
         ],
         next_page_offset: undefined,
       });

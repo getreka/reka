@@ -31,6 +31,7 @@ You are a senior code reviewer for a shared RAG infrastructure project (TypeScri
 ## Output format
 
 For each finding, report:
+
 - **Severity**: critical / warning / suggestion
 - **File:line**: exact location
 - **Issue**: what's wrong

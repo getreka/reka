@@ -17,7 +17,7 @@ export interface LLMUsageEntry {
   completionTokens: number;
   totalTokens: number;
   durationMs: number;
-  caller: string;         // e.g. 'smart-dispatch', 'agent-runtime', 'review'
+  caller: string; // e.g. 'smart-dispatch', 'agent-runtime', 'review'
   projectName?: string;
   timestamp: string;
   thinking: boolean;
@@ -107,7 +107,7 @@ class LLMUsageLogger {
         }
 
         const zeroVector = new Array(config.VECTOR_SIZE).fill(0);
-        const points = projectEntries.map(entry => ({
+        const points = projectEntries.map((entry) => ({
           vector: zeroVector,
           payload: entry as unknown as Record<string, unknown>,
         }));

@@ -52,8 +52,9 @@ class ReconsolidationService {
     for (const mem of results) {
       if (mem.collection === 'episodic' || mem.collection === 'semantic') {
         tasks.push(
-          memoryLtm.strengthenOnRecall(projectName, mem.id, mem.collection)
-            .catch(err => logger.debug('Strengthen failed', { id: mem.id, error: err.message }))
+          memoryLtm
+            .strengthenOnRecall(projectName, mem.id, mem.collection)
+            .catch((err) => logger.debug('Strengthen failed', { id: mem.id, error: err.message }))
         );
       }
     }
@@ -133,7 +134,10 @@ class ReconsolidationService {
 
           // Get pairs above threshold
           const pairs = await redis.zrangebyscore(
-            key, config.CORECALL_THRESHOLD, '+inf', 'WITHSCORES'
+            key,
+            config.CORECALL_THRESHOLD,
+            '+inf',
+            'WITHSCORES'
           );
 
           for (let i = 0; i < pairs.length; i += 2) {
@@ -177,7 +181,9 @@ class ReconsolidationService {
               await redis.zrem(`corecall:${projectName}:${otherId}`, memoryId);
             } catch (err: any) {
               logger.debug('Co-recall relationship creation failed', {
-                memoryId, otherId, error: err.message,
+                memoryId,
+                otherId,
+                error: err.message,
               });
             }
           }
@@ -188,7 +194,11 @@ class ReconsolidationService {
     }
 
     if (relationshipsCreated > 0) {
-      logger.info('Co-recall relationships created', { processed, relationshipsCreated, projectName });
+      logger.info('Co-recall relationships created', {
+        processed,
+        relationshipsCreated,
+        projectName,
+      });
     }
 
     return { processed, relationshipsCreated };
@@ -267,7 +277,7 @@ class ReconsolidationService {
         if (retrieved?.length > 0) {
           const existing = (retrieved[0].payload.relationships as MemoryRelation[]) ?? [];
           // Don't duplicate
-          if (existing.some(r => r.targetId === relation.targetId)) return;
+          if (existing.some((r) => r.targetId === relation.targetId)) return;
 
           await client.setPayload(collection, {
             points: [memoryId],

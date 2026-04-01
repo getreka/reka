@@ -92,9 +92,7 @@ describe('VectorStoreService', () => {
       });
       mockQdrantClient.upsert.mockResolvedValue(true);
 
-      await vectorStore.upsert('col', [
-        { vector: [0.1], payload: { test: true } },
-      ]);
+      await vectorStore.upsert('col', [{ vector: [0.1], payload: { test: true } }]);
 
       const points = mockQdrantClient.upsert.mock.calls[0][1].points;
       expect(points[0].id).toBeDefined();
@@ -125,9 +123,7 @@ describe('VectorStoreService', () => {
 
       mockQdrantClient.search
         .mockRejectedValueOnce(error400)
-        .mockResolvedValueOnce([
-          { id: 'c', score: 0.7, payload: { file: 'z.ts' } },
-        ]);
+        .mockResolvedValueOnce([{ id: 'c', score: 0.7, payload: { file: 'z.ts' } }]);
 
       const results = await vectorStore.search('col', [0.1], 5);
 
@@ -227,9 +223,7 @@ describe('VectorStoreService', () => {
       await vectorStore.createAlias('my_alias', 'my_collection');
 
       expect(mockQdrantClient.updateCollectionAliases).toHaveBeenCalledWith({
-        actions: [
-          { create_alias: { alias_name: 'my_alias', collection_name: 'my_collection' } },
-        ],
+        actions: [{ create_alias: { alias_name: 'my_alias', collection_name: 'my_collection' } }],
       });
     });
 
@@ -250,9 +244,7 @@ describe('VectorStoreService', () => {
   describe('searchHybridNative', () => {
     it('uses Query API with prefetch + RRF', async () => {
       mockQdrantClient.query.mockResolvedValue({
-        points: [
-          { id: 'x', score: 0.95, payload: { file: 'a.ts' } },
-        ],
+        points: [{ id: 'x', score: 0.95, payload: { file: 'a.ts' } }],
       });
 
       const results = await vectorStore.searchHybridNative(
@@ -274,12 +266,8 @@ describe('VectorStoreService', () => {
       (error400 as any).status = 400;
       mockQdrantClient.search
         .mockRejectedValueOnce(error400)
-        .mockResolvedValueOnce([
-          { id: 'd1', score: 0.9, payload: { file: 'a.ts' } },
-        ])
-        .mockResolvedValueOnce([
-          { id: 's1', score: 0.8, payload: { file: 'b.ts' } },
-        ]);
+        .mockResolvedValueOnce([{ id: 'd1', score: 0.9, payload: { file: 'a.ts' } }])
+        .mockResolvedValueOnce([{ id: 's1', score: 0.8, payload: { file: 'b.ts' } }]);
 
       const results = await vectorStore.searchHybridNative(
         'col',
@@ -367,9 +355,7 @@ describe('VectorStoreService', () => {
   describe('scrollCollection', () => {
     it('returns mapped points with nextOffset', async () => {
       mockQdrantClient.scroll.mockResolvedValue({
-        points: [
-          { id: 'p1', payload: { file: 'a.ts' } },
-        ],
+        points: [{ id: 'p1', payload: { file: 'a.ts' } }],
         next_page_offset: 'next-1',
       });
 

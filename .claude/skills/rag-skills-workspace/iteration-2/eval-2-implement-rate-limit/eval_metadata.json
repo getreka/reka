@@ -1,1 +1,31 @@
-{"eval_id":2,"eval_name":"implement-rate-limit","prompt":"Реалізуй rate limiting middleware для RAG API — максимум 100 запитів на хвилину на IP","assertions":[{"type":"tool","text":"Calls context_briefing before any code changes"},{"type":"tool","text":"Calls review_code or check_architecture after writing code"},{"type":"tool","text":"Calls remember or record_adr to capture the decision"},{"type":"outcome","text":"Implementation plan lists specific files to modify with rationale"},{"type":"outcome","text":"Plan includes blast radius section identifying dependent files"},{"type":"outcome","text":"Written code implements rate limiting logic (contains IP tracking and request counting)"}]}
+{
+  "eval_id": 2,
+  "eval_name": "implement-rate-limit",
+  "prompt": "Реалізуй rate limiting middleware для RAG API — максимум 100 запитів на хвилину на IP",
+  "assertions": [
+    {
+      "type": "tool",
+      "text": "Calls context_briefing before any code changes"
+    },
+    {
+      "type": "tool",
+      "text": "Calls review_code or check_architecture after writing code"
+    },
+    {
+      "type": "tool",
+      "text": "Calls remember or record_adr to capture the decision"
+    },
+    {
+      "type": "outcome",
+      "text": "Implementation plan lists specific files to modify with rationale"
+    },
+    {
+      "type": "outcome",
+      "text": "Plan includes blast radius section identifying dependent files"
+    },
+    {
+      "type": "outcome",
+      "text": "Written code implements rate limiting logic (contains IP tracking and request counting)"
+    }
+  ]
+}

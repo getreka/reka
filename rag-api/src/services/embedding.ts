@@ -69,10 +69,7 @@ class EmbeddingService {
   /**
    * Embed with session-aware multi-level caching
    */
-  async embedWithSession(
-    text: string,
-    options: SessionCacheOptions
-  ): Promise<number[]> {
+  async embedWithSession(text: string, options: SessionCacheOptions): Promise<number[]> {
     // Try multi-level cache
     const { embedding, level } = await cacheService.getSessionEmbedding(text, options);
     if (embedding) {
@@ -91,10 +88,7 @@ class EmbeddingService {
   /**
    * Embed with detailed result including cache info
    */
-  async embedWithDetails(
-    text: string,
-    options?: EmbedOptions
-  ): Promise<EmbeddingResult> {
+  async embedWithDetails(text: string, options?: EmbedOptions): Promise<EmbeddingResult> {
     if (options?.sessionId && options?.projectName) {
       const { embedding, level } = await cacheService.getSessionEmbedding(text, {
         sessionId: options.sessionId,
@@ -188,7 +182,7 @@ class EmbeddingService {
     }
     // Fallback: dense only
     const embeddings = await this.embedBatch(texts);
-    return embeddings.map(dense => ({ dense, sparse: { indices: [], values: [] } }));
+    return embeddings.map((dense) => ({ dense, sparse: { indices: [], values: [] } }));
   }
 
   private async embedFullWithBGE(text: string): Promise<FullEmbeddingResult> {
@@ -347,7 +341,8 @@ class EmbeddingService {
    * Queries get prefixed; documents do not.
    */
   private readonly TASK_INSTRUCTIONS: Record<string, string> = {
-    code_search: 'Given a code search query, retrieve relevant source code snippets that match the query',
+    code_search:
+      'Given a code search query, retrieve relevant source code snippets that match the query',
     memory_recall: 'Given a memory query, retrieve relevant past decisions, insights and context',
     doc_search: 'Given a technical question, retrieve relevant documentation passages',
     general: 'Given a search query, retrieve relevant text passages that answer the query',
@@ -383,9 +378,15 @@ class EmbeddingService {
 
     // Check cache first
     for (let i = 0; i < texts.length; i++) {
-      const cached = options?.sessionId && options?.projectName
-        ? (await cacheService.getSessionEmbedding(texts[i], { sessionId: options.sessionId, projectName: options.projectName })).embedding
-        : await cacheService.getEmbedding(texts[i]);
+      const cached =
+        options?.sessionId && options?.projectName
+          ? (
+              await cacheService.getSessionEmbedding(texts[i], {
+                sessionId: options.sessionId,
+                projectName: options.projectName,
+              })
+            ).embedding
+          : await cacheService.getEmbedding(texts[i]);
       if (cached) {
         embeddings[i] = cached;
       } else {
@@ -401,10 +402,14 @@ class EmbeddingService {
     for (let b = 0; b < uncachedTexts.length; b += BATCH_SIZE) {
       const batch = uncachedTexts.slice(b, b + BATCH_SIZE);
       try {
-        const response = await axios.post(`${config.OLLAMA_URL}/api/embed`, {
-          model: config.OLLAMA_EMBEDDING_MODEL,
-          input: batch,
-        }, { timeout: 60000 });
+        const response = await axios.post(
+          `${config.OLLAMA_URL}/api/embed`,
+          {
+            model: config.OLLAMA_EMBEDDING_MODEL,
+            input: batch,
+          },
+          { timeout: 60000 }
+        );
 
         const computed: number[][] = response.data.embeddings;
         for (let j = 0; j < computed.length; j++) {
@@ -423,7 +428,10 @@ class EmbeddingService {
           }
         }
       } catch (error: any) {
-        logger.error('Ollama batch embedding failed', { error: error.message, batchSize: batch.length });
+        logger.error('Ollama batch embedding failed', {
+          error: error.message,
+          batchSize: batch.length,
+        });
         // Fallback: embed one by one
         for (let j = 0; j < batch.length; j++) {
           const idx = uncachedIndices[b + j];
@@ -443,10 +451,14 @@ class EmbeddingService {
 
   private async embedWithOllama(text: string): Promise<number[]> {
     try {
-      const response = await axios.post(`${config.OLLAMA_URL}/api/embed`, {
-        model: config.OLLAMA_EMBEDDING_MODEL,
-        input: text,
-      }, { timeout: 30000 });
+      const response = await axios.post(
+        `${config.OLLAMA_URL}/api/embed`,
+        {
+          model: config.OLLAMA_EMBEDDING_MODEL,
+          input: text,
+        },
+        { timeout: 30000 }
+      );
       const embedding: number[] = response.data.embeddings[0];
       // MRL truncation: Qwen3 outputs up to 2560d, truncate to VECTOR_SIZE
       return embedding.slice(0, config.VECTOR_SIZE);

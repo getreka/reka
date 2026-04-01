@@ -80,6 +80,8 @@ const INDEXED_FIELDS: Array<{ fieldName: string; type: 'keyword' | 'integer' | '
 class VectorStoreService {
   private client: QdrantClient;
   private initialized: boolean = false;
+  // Cache: collection name -> true if it uses named vectors ('dense'/'sparse')
+  private namedVectorCollections = new Map<string, boolean>();
 
   constructor() {
     this.client = new QdrantClient({
@@ -99,6 +101,27 @@ class VectorStoreService {
     } catch (error) {
       logger.error('Failed to connect to Qdrant', { error });
       throw error;
+    }
+  }
+
+  /**
+   * Check if a collection uses named vectors (e.g., 'dense'/'sparse').
+   * Caches the result to avoid repeated API calls.
+   */
+  private async hasNamedVectors(collection: string): Promise<boolean> {
+    const cached = this.namedVectorCollections.get(collection);
+    if (cached !== undefined) return cached;
+
+    try {
+      const info = await this.client.getCollection(collection);
+      const vectors = (info as any).config?.params?.vectors;
+      // Named vectors have object keys like { dense: {...}, sparse: {...} }
+      // Anonymous vectors have { size, distance } directly
+      const isNamed = vectors && typeof vectors === 'object' && !('size' in vectors);
+      this.namedVectorCollections.set(collection, !!isNamed);
+      return !!isNamed;
+    } catch {
+      return false;
     }
   }
 
@@ -649,10 +672,10 @@ class VectorStoreService {
     };
 
     try {
-      // Try named vector first (for collections with sparse vector support)
-      const namedVector = { name: 'dense', vector } as any;
+      const useNamed = await this.hasNamedVectors(collection);
+      const vectorParam = useNamed ? ({ name: 'dense', vector } as any) : vector;
       const results = await this.client.search(collection, {
-        vector: namedVector,
+        vector: vectorParam,
         ...searchParams,
       });
 
@@ -665,8 +688,9 @@ class VectorStoreService {
       if (error.status === 404) {
         return [];
       }
-      // Fall back to anonymous vector (collections without named vectors)
+      // If named vector cache was wrong, invalidate and retry with anonymous
       if (error.message?.includes('Bad Request') || error.status === 400) {
+        this.namedVectorCollections.delete(collection);
         const results = await this.client.search(collection, {
           vector,
           ...searchParams,

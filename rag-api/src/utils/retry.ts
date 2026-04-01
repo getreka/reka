@@ -24,7 +24,7 @@ const DEFAULT_OPTIONS: RetryOptions = {
  * Sleep for a specified duration
  */
 function sleep(ms: number): Promise<void> {
-  return new Promise(resolve => setTimeout(resolve, ms));
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 /**
@@ -70,10 +70,7 @@ export async function withRetry<T>(
     try {
       // Execute with optional timeout
       if (opts.timeoutMs) {
-        return await Promise.race([
-          operation(),
-          createTimeout<T>(opts.timeoutMs, operationName),
-        ]);
+        return await Promise.race([operation(), createTimeout<T>(opts.timeoutMs, operationName)]);
       }
       return await operation();
     } catch (error) {
@@ -93,10 +90,13 @@ export async function withRetry<T>(
       const delayMs = calculateDelay(attempt, opts);
 
       // Log retry
-      logger.warn(`${operationName} failed (attempt ${attempt}/${opts.maxAttempts}), retrying in ${Math.round(delayMs)}ms`, {
-        error: lastError.message,
-        attempt,
-      });
+      logger.warn(
+        `${operationName} failed (attempt ${attempt}/${opts.maxAttempts}), retrying in ${Math.round(delayMs)}ms`,
+        {
+          error: lastError.message,
+          attempt,
+        }
+      );
 
       // Call onRetry callback
       if (opts.onRetry) {
@@ -123,11 +123,7 @@ export function retryable<T extends (...args: any[]) => Promise<any>>(
   operationName?: string
 ): T {
   return (async (...args: Parameters<T>): Promise<ReturnType<T>> => {
-    return withRetry(
-      () => fn(...args),
-      options,
-      operationName || fn.name || 'function'
-    );
+    return withRetry(() => fn(...args), options, operationName || fn.name || 'function');
   }) as T;
 }
 
@@ -135,11 +131,7 @@ export function retryable<T extends (...args: any[]) => Promise<any>>(
  * Retry decorator for class methods
  */
 export function Retry(options: Partial<RetryOptions> = {}) {
-  return function (
-    target: any,
-    propertyKey: string,
-    descriptor: PropertyDescriptor
-  ) {
+  return function (target: any, propertyKey: string, descriptor: PropertyDescriptor) {
     const originalMethod = descriptor.value;
 
     descriptor.value = async function (...args: any[]) {

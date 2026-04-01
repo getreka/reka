@@ -37,8 +37,18 @@ class UsagePatternService {
     return { recentTools: [], recentQueries: [], activeFeatures: [], suggestedNextSteps: [] };
   }
 
-  async summarizeChanges(_projectName: string, _sessionId: string, _options: { includeCode?: boolean } = {}) {
-    return { summary: 'Summarization disabled', toolsUsed: [], filesAffected: [], keyActions: [], duration: 0 };
+  async summarizeChanges(
+    _projectName: string,
+    _sessionId: string,
+    _options: { includeCode?: boolean } = {}
+  ) {
+    return {
+      summary: 'Summarization disabled',
+      toolsUsed: [],
+      filesAffected: [],
+      keyActions: [],
+      duration: 0,
+    };
   }
 
   /**
@@ -72,10 +82,12 @@ class UsagePatternService {
           with_payload: true,
           with_vector: false,
           filter: {
-            must: [{
-              key: 'timestamp',
-              range: { gte: cutoff.toISOString() },
-            }],
+            must: [
+              {
+                key: 'timestamp',
+                range: { gte: cutoff.toISOString() },
+              },
+            ],
           },
         });
 
@@ -88,11 +100,12 @@ class UsagePatternService {
       if (usages.length === 0) return profile;
 
       profile.totalToolCalls = usages.length;
-      profile.totalSessions = new Set(usages.map(u => u.sessionId).filter(Boolean)).size;
-      profile.lastActive = usages
-        .map(u => u.timestamp)
-        .sort()
-        .pop() || '';
+      profile.totalSessions = new Set(usages.map((u) => u.sessionId).filter(Boolean)).size;
+      profile.lastActive =
+        usages
+          .map((u) => u.timestamp)
+          .sort()
+          .pop() || '';
 
       // Frequent files from metadata
       const fileCounts = new Map<string, number>();
@@ -120,7 +133,11 @@ class UsagePatternService {
       profile.preferredTools = [...toolStats.entries()]
         .sort((a, b) => b[1].count - a[1].count)
         .slice(0, 15)
-        .map(([tool, s]) => ({ tool, count: s.count, avgDurationMs: Math.round(s.totalDuration / s.count) }));
+        .map(([tool, s]) => ({
+          tool,
+          count: s.count,
+          avgDurationMs: Math.round(s.totalDuration / s.count),
+        }));
 
       // Peak hours
       const hourCounts = new Map<number, number>();

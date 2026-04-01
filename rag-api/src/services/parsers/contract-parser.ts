@@ -29,13 +29,15 @@ export class ContractParser implements FileParser {
       return this.parseOpenAPI(content, ext);
     }
 
-    return [{
-      content,
-      startLine: 1,
-      endLine: content.split('\n').length,
-      language: 'contract',
-      type: 'contract',
-    }];
+    return [
+      {
+        content,
+        startLine: 1,
+        endLine: content.split('\n').length,
+        language: 'contract',
+        type: 'contract',
+      },
+    ];
   }
 
   private parseProto(content: string): ParsedChunk[] {
@@ -78,15 +80,24 @@ export class ContractParser implements FileParser {
       });
     }
 
-    return chunks.length > 0 ? chunks : [{
-      content, startLine: 1, endLine: lines.length, language: 'protobuf', type: 'contract',
-    }];
+    return chunks.length > 0
+      ? chunks
+      : [
+          {
+            content,
+            startLine: 1,
+            endLine: lines.length,
+            language: 'protobuf',
+            type: 'contract',
+          },
+        ];
   }
 
   private parseGraphQL(content: string): ParsedChunk[] {
     const lines = content.split('\n');
     const chunks: ParsedChunk[] = [];
-    const blockPattern = /^(type|input|enum|interface|union|scalar|query|mutation|subscription)\s+(\w+)/i;
+    const blockPattern =
+      /^(type|input|enum|interface|union|scalar|query|mutation|subscription)\s+(\w+)/i;
     let currentStart = 0;
     let currentLines: string[] = [];
     let currentSymbol = '';
@@ -123,9 +134,17 @@ export class ContractParser implements FileParser {
       });
     }
 
-    return chunks.length > 0 ? chunks : [{
-      content, startLine: 1, endLine: lines.length, language: 'graphql', type: 'contract',
-    }];
+    return chunks.length > 0
+      ? chunks
+      : [
+          {
+            content,
+            startLine: 1,
+            endLine: lines.length,
+            language: 'graphql',
+            type: 'contract',
+          },
+        ];
   }
 
   private parseOpenAPI(content: string, ext: string): ParsedChunk[] {
@@ -172,9 +191,17 @@ export class ContractParser implements FileParser {
       });
     }
 
-    return chunks.length > 0 ? chunks : [{
-      content, startLine: 1, endLine: lines.length, language, type: 'contract',
-    }];
+    return chunks.length > 0
+      ? chunks
+      : [
+          {
+            content,
+            startLine: 1,
+            endLine: lines.length,
+            language,
+            type: 'contract',
+          },
+        ];
   }
 }
 

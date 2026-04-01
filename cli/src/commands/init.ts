@@ -37,10 +37,14 @@ export async function initCommand(opts: {
 
     try {
       // Step 1: Create device session
-      const { data: device } = await axios.post(`${demoApiUrl}/api/auth/device`);
+      const { data: device } = await axios.post(
+        `${demoApiUrl}/api/auth/device`,
+      );
 
       // Step 2: Open browser
-      console.log(`  Your verification code: ${chalk.bold.cyan(device.userCode)}`);
+      console.log(
+        `  Your verification code: ${chalk.bold.cyan(device.userCode)}`,
+      );
       console.log(`  Opening browser to sign in...\n`);
 
       try {
@@ -69,8 +73,12 @@ export async function initCommand(opts: {
           console.log(chalk.green(`  ✓ Project: ${poll.projectName}`));
           console.log(chalk.green(`  ✓ .mcp.json written`));
           console.log("");
-          console.log("  Your AI assistant now has memory. Open it and start asking!");
-          console.log(chalk.yellow("  Note: demo data may be reset periodically."));
+          console.log(
+            "  Your AI assistant now has memory. Open it and start asking!",
+          );
+          console.log(
+            chalk.yellow("  Note: demo data may be reset periodically."),
+          );
           console.log("");
           return;
         }
@@ -85,7 +93,9 @@ export async function initCommand(opts: {
     } catch (err: any) {
       const msg = err.response?.data?.error || err.message;
       console.log(chalk.red(`\n  Demo unavailable: ${msg}`));
-      console.log(chalk.yellow(`  Try self-hosted instead: docker-compose up -d\n`));
+      console.log(
+        chalk.yellow(`  Try self-hosted instead: docker-compose up -d\n`),
+      );
     }
     return;
   }

@@ -36,7 +36,6 @@ const STALE_AGE_MS = parseInt(process.env.STALE_MEMORY_AGE_DAYS || '30', 10) * 8
 const LOW_CONFIDENCE_THRESHOLD = 0.4;
 
 class StaleMemoryDetector {
-
   /**
    * Detect potentially stale memories for a project.
    */
@@ -73,9 +72,13 @@ class StaleMemoryDetector {
           // Rule 1: Already superseded
           if (supersededBy) {
             staleMemories.push({
-              id, content: content.slice(0, 200), type,
+              id,
+              content: content.slice(0, 200),
+              type,
               reason: `Superseded by ${supersededBy}`,
-              createdAt, confidence, tags,
+              createdAt,
+              confidence,
+              tags,
             });
             continue;
           }
@@ -85,20 +88,33 @@ class StaleMemoryDetector {
             const ageMs = now - new Date(createdAt).getTime();
             if (ageMs > STALE_AGE_MS && source === 'auto_conversation' && !validated) {
               staleMemories.push({
-                id, content: content.slice(0, 200), type,
+                id,
+                content: content.slice(0, 200),
+                type,
                 reason: `Auto-extracted ${Math.round(ageMs / 86_400_000)}d ago, never validated`,
-                createdAt, confidence, tags,
+                createdAt,
+                confidence,
+                tags,
               });
               continue;
             }
           }
 
           // Rule 3: Low confidence auto-extracted
-          if (source === 'auto_conversation' && confidence !== undefined && confidence < LOW_CONFIDENCE_THRESHOLD && !validated) {
+          if (
+            source === 'auto_conversation' &&
+            confidence !== undefined &&
+            confidence < LOW_CONFIDENCE_THRESHOLD &&
+            !validated
+          ) {
             staleMemories.push({
-              id, content: content.slice(0, 200), type,
+              id,
+              content: content.slice(0, 200),
+              type,
               reason: `Low confidence (${confidence.toFixed(2)}) auto-extracted, never validated`,
-              createdAt, confidence, tags,
+              createdAt,
+              confidence,
+              tags,
             });
             continue;
           }
@@ -108,9 +124,13 @@ class StaleMemoryDetector {
             const ageMs = now - new Date(createdAt).getTime();
             if (ageMs > 90 * 86_400_000 && type === 'note') {
               staleMemories.push({
-                id, content: content.slice(0, 200), type,
+                id,
+                content: content.slice(0, 200),
+                type,
                 reason: `Generic note older than 90 days`,
-                createdAt, confidence, tags,
+                createdAt,
+                confidence,
+                tags,
               });
             }
           }
@@ -141,7 +161,7 @@ class StaleMemoryDetector {
                 const id = String(point.id);
                 const content = (payload.content as string) || '';
                 const type = (payload.subtype ?? payload.type ?? 'note') as string;
-                const createdAt = (payload.timestamp ?? payload.createdAt) as string || '';
+                const createdAt = ((payload.timestamp ?? payload.createdAt) as string) || '';
                 const stability = (payload.stability as number) ?? 7;
                 const accessCount = (payload.accessCount as number) ?? 0;
                 const tags = (payload.tags as string[]) || [];
@@ -151,9 +171,12 @@ class StaleMemoryDetector {
                   const retention = computeRetention(createdAt, stability, accessCount);
                   if (retention < 0.1) {
                     staleMemories.push({
-                      id, content: content.slice(0, 200), type,
+                      id,
+                      content: content.slice(0, 200),
+                      type,
                       reason: `Ebbinghaus retention ${(retention * 100).toFixed(1)}%, never accessed (stability=${stability}d)`,
-                      createdAt, tags,
+                      createdAt,
+                      tags,
                     });
                   }
                 }

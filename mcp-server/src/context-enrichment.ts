@@ -64,7 +64,10 @@ export const DEFAULT_SKIP_TOOLS = new Set([
 
 export class ContextEnricher {
   private config: EnrichmentConfig;
-  private cache = new Map<string, { result: string | null; expiresAt: number }>();
+  private cache = new Map<
+    string,
+    { result: string | null; expiresAt: number }
+  >();
   private static CACHE_TTL_MS = 5 * 60 * 1000; // 5 minutes
 
   constructor(config: Partial<EnrichmentConfig> = {}) {
@@ -91,7 +94,7 @@ export class ContextEnricher {
   async before(
     name: string,
     args: Record<string, unknown>,
-    ctx: ToolContext
+    ctx: ToolContext,
   ): Promise<string | null> {
     // Skip non-enrichable tools
     if (this.config.skipTools.has(name)) return null;
@@ -102,7 +105,7 @@ export class ContextEnricher {
     if (!query) return null;
 
     // Check per-session cache
-    const cacheKey = `${ctx.activeSessionId || 'no-session'}:${query.slice(0, 100)}`;
+    const cacheKey = `${ctx.activeSessionId || "no-session"}:${query.slice(0, 100)}`;
     const cached = this.cache.get(cacheKey);
     if (cached && Date.now() < cached.expiresAt) {
       return cached.result;
@@ -110,7 +113,8 @@ export class ContextEnricher {
 
     try {
       const memories = await this.recallWithTimeout(query, ctx);
-      const result = memories.length === 0 ? null : this.formatContext(memories);
+      const result =
+        memories.length === 0 ? null : this.formatContext(memories);
 
       // Store in cache
       this.cache.set(cacheKey, {
@@ -140,7 +144,7 @@ export class ContextEnricher {
     name: string,
     args: Record<string, unknown>,
     result: string,
-    ctx: ToolContext
+    ctx: ToolContext,
   ): void {
     // Session activity tracking
     if (ctx.activeSessionId) {
@@ -213,13 +217,10 @@ export class ContextEnricher {
    */
   private async recallWithTimeout(
     query: string,
-    ctx: ToolContext
+    ctx: ToolContext,
   ): Promise<RecalledMemory[]> {
     const controller = new AbortController();
-    const timeout = setTimeout(
-      () => controller.abort(),
-      this.config.timeoutMs
-    );
+    const timeout = setTimeout(() => controller.abort(), this.config.timeoutMs);
 
     try {
       // Parallel recall: general memories + decisions/ADRs + LTM (when enabled)
@@ -236,7 +237,7 @@ export class ContextEnricher {
               limit: this.config.maxAutoRecall,
               type: "all",
             },
-            { signal: controller.signal }
+            { signal: controller.signal },
           )
           .catch(() => null),
         ctx.api
@@ -248,7 +249,7 @@ export class ContextEnricher {
               limit: 2,
               type: "decision",
             },
-            { signal: controller.signal }
+            { signal: controller.signal },
           )
           .catch(() => null),
       ];
@@ -265,9 +266,9 @@ export class ContextEnricher {
                 limit: this.config.maxAutoRecall,
                 graphRecall: graphRecallEnabled,
               },
-              { signal: controller.signal }
+              { signal: controller.signal },
             )
-            .catch(() => null)
+            .catch(() => null),
         );
       }
 
@@ -279,7 +280,10 @@ export class ContextEnricher {
       // Process general memories
       if (memoriesRes?.data?.memories) {
         for (const m of memoriesRes.data.memories) {
-          if (m.score >= this.config.minRelevance && !seenIds.has(m.memory?.id)) {
+          if (
+            m.score >= this.config.minRelevance &&
+            !seenIds.has(m.memory?.id)
+          ) {
             seenIds.add(m.memory?.id);
             memories.push({
               type: m.memory?.type || "note",
@@ -293,7 +297,10 @@ export class ContextEnricher {
       // Process decisions/ADRs
       if (decisionsRes?.data?.memories) {
         for (const m of decisionsRes.data.memories) {
-          if (m.score >= this.config.minRelevance && !seenIds.has(m.memory?.id)) {
+          if (
+            m.score >= this.config.minRelevance &&
+            !seenIds.has(m.memory?.id)
+          ) {
             seenIds.add(m.memory?.id);
             memories.push({
               type: m.memory?.type || "decision",
@@ -333,7 +340,7 @@ export class ContextEnricher {
    */
   private formatContext(memories: RecalledMemory[]): string {
     const lines = memories.map(
-      (m) => `- [${m.type}] ${m.content.slice(0, 150).replace(/\n/g, " ")}`
+      (m) => `- [${m.type}] ${m.content.slice(0, 150).replace(/\n/g, " ")}`,
     );
     return `--- Project Context ---\n${lines.join("\n")}\n---`;
   }

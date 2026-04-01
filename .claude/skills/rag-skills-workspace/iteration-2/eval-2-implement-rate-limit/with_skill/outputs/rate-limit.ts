@@ -9,12 +9,12 @@
  * Returns 429 with Retry-After header when limit is exceeded.
  */
 
-import { Request, Response, NextFunction } from 'express';
-import config from '../config';
-import { logger } from '../utils/logger';
-import { rateLimitedRequestsTotal } from '../utils/metrics';
+import { Request, Response, NextFunction } from "express";
+import config from "../config";
+import { logger } from "../utils/logger";
+import { rateLimitedRequestsTotal } from "../utils/metrics";
 
-const SKIP_RATE_LIMIT_PATHS = ['/health', '/metrics'];
+const SKIP_RATE_LIMIT_PATHS = ["/health", "/metrics"];
 
 /** Timestamps of requests per IP */
 const ipRequestMap = new Map<string, number[]>();
@@ -26,19 +26,22 @@ let cleanupInterval: ReturnType<typeof setInterval> | null = null;
  * Extract client IP from request, respecting X-Forwarded-For behind proxies.
  */
 function getClientIp(req: Request): string {
-  const forwarded = req.headers['x-forwarded-for'];
-  if (typeof forwarded === 'string') {
+  const forwarded = req.headers["x-forwarded-for"];
+  if (typeof forwarded === "string") {
     // Take the first IP in the chain (original client)
-    return forwarded.split(',')[0].trim();
+    return forwarded.split(",")[0].trim();
   }
-  return req.ip || req.socket.remoteAddress || 'unknown';
+  return req.ip || req.socket.remoteAddress || "unknown";
 }
 
 /**
  * Remove expired request timestamps from the sliding window.
  * Called on every request for the specific IP, and periodically for all IPs.
  */
-function pruneExpiredEntries(timestamps: number[], windowStart: number): number[] {
+function pruneExpiredEntries(
+  timestamps: number[],
+  windowStart: number,
+): number[] {
   // Binary search for the first timestamp within the window
   let lo = 0;
   let hi = timestamps.length;
@@ -79,7 +82,9 @@ function startCleanupTimer(): void {
     }
 
     if (cleaned > 0) {
-      logger.debug(`Rate limiter cleanup: removed ${cleaned} expired IP entries, ${ipRequestMap.size} remaining`);
+      logger.debug(
+        `Rate limiter cleanup: removed ${cleaned} expired IP entries, ${ipRequestMap.size} remaining`,
+      );
     }
   }, CLEANUP_INTERVAL_MS);
 
@@ -96,7 +101,11 @@ function startCleanupTimer(): void {
  * within the configured window (default 60s). If the count exceeds
  * the limit (default 100), returns 429 Too Many Requests.
  */
-export function rateLimitMiddleware(req: Request, res: Response, next: NextFunction): void {
+export function rateLimitMiddleware(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): void {
   // Skip rate limiting if disabled (limit = 0)
   if (config.RATE_LIMIT_MAX <= 0) {
     return next();
@@ -125,37 +134,41 @@ export function rateLimitMiddleware(req: Request, res: Response, next: NextFunct
   const remaining = Math.max(0, config.RATE_LIMIT_MAX - currentCount - 1);
 
   // Calculate reset time (end of current window from oldest request, or from now)
-  const windowResetMs = timestamps.length > 0
-    ? timestamps[0] + config.RATE_LIMIT_WINDOW_MS
-    : now + config.RATE_LIMIT_WINDOW_MS;
+  const windowResetMs =
+    timestamps.length > 0
+      ? timestamps[0] + config.RATE_LIMIT_WINDOW_MS
+      : now + config.RATE_LIMIT_WINDOW_MS;
   const resetEpochSeconds = Math.ceil(windowResetMs / 1000);
 
   // Set rate limit headers on every response
-  res.setHeader('X-RateLimit-Limit', config.RATE_LIMIT_MAX);
-  res.setHeader('X-RateLimit-Remaining', Math.max(0, remaining));
-  res.setHeader('X-RateLimit-Reset', resetEpochSeconds);
+  res.setHeader("X-RateLimit-Limit", config.RATE_LIMIT_MAX);
+  res.setHeader("X-RateLimit-Remaining", Math.max(0, remaining));
+  res.setHeader("X-RateLimit-Reset", resetEpochSeconds);
 
   // Check if limit exceeded
   if (currentCount >= config.RATE_LIMIT_MAX) {
     const retryAfterSeconds = Math.ceil((windowResetMs - now) / 1000);
 
     // Record metric
-    const projectName = (req.headers['x-project-name'] as string) || 'unknown';
+    const projectName = (req.headers["x-project-name"] as string) || "unknown";
     rateLimitedRequestsTotal.inc({ ip: clientIp, project: projectName });
 
-    logger.warn(`Rate limit exceeded for IP ${clientIp}: ${currentCount}/${config.RATE_LIMIT_MAX} requests in window`, {
-      ip: clientIp,
-      count: currentCount,
-      limit: config.RATE_LIMIT_MAX,
-      path: req.path,
-    });
+    logger.warn(
+      `Rate limit exceeded for IP ${clientIp}: ${currentCount}/${config.RATE_LIMIT_MAX} requests in window`,
+      {
+        ip: clientIp,
+        count: currentCount,
+        limit: config.RATE_LIMIT_MAX,
+        path: req.path,
+      },
+    );
 
-    res.setHeader('Retry-After', retryAfterSeconds);
-    res.setHeader('X-RateLimit-Remaining', 0);
+    res.setHeader("Retry-After", retryAfterSeconds);
+    res.setHeader("X-RateLimit-Remaining", 0);
 
     res.status(429).json({
-      error: 'Too many requests',
-      code: 'RATE_LIMIT',
+      error: "Too many requests",
+      code: "RATE_LIMIT",
       retryAfter: retryAfterSeconds,
     });
     return;

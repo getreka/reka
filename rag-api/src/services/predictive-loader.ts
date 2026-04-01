@@ -70,12 +70,8 @@ const TOOL_CHAIN_MAP: Record<string, { nextTool: string; inputType: string }[]> 
     { nextTool: 'search_codebase', inputType: 'query' },
     { nextTool: 'get_feature_status', inputType: 'query' },
   ],
-  ask_codebase: [
-    { nextTool: 'search_codebase', inputType: 'query' },
-  ],
-  recall: [
-    { nextTool: 'search_codebase', inputType: 'query' },
-  ],
+  ask_codebase: [{ nextTool: 'search_codebase', inputType: 'query' }],
+  recall: [{ nextTool: 'search_codebase', inputType: 'query' }],
   start_session: [
     { nextTool: 'search_codebase', inputType: 'query' },
     { nextTool: 'recall', inputType: 'query' },
@@ -107,32 +103,30 @@ class PredictiveLoaderService {
 
     try {
       // Strategy 1: File-based predictions
-      const filePredictions = await this.predictFromFiles(
-        projectName, context.currentFiles || []
-      );
+      const filePredictions = await this.predictFromFiles(projectName, context.currentFiles || []);
       predictions.push(...filePredictions);
 
       // Strategy 2: Query-based predictions
-      const queryPredictions = this.predictFromQueries(
-        context.recentQueries || []
-      );
+      const queryPredictions = this.predictFromQueries(context.recentQueries || []);
       predictions.push(...queryPredictions);
 
       // Strategy 3: Tool chain predictions
       const toolPredictions = this.predictFromToolChain(
-        context.toolsUsed || [], context.recentQueries || []
+        context.toolsUsed || [],
+        context.recentQueries || []
       );
       predictions.push(...toolPredictions);
 
       // Strategy 4: Feature context predictions
       const featurePredictions = this.predictFromFeatures(
-        projectName, context.activeFeatures || []
+        projectName,
+        context.activeFeatures || []
       );
       predictions.push(...featurePredictions);
 
       // Filter by confidence and deduplicate
       const filtered = predictions
-        .filter(p => p.confidence >= MIN_CONFIDENCE)
+        .filter((p) => p.confidence >= MIN_CONFIDENCE)
         .sort((a, b) => b.confidence - a.confidence);
 
       // Deduplicate by resource
@@ -200,9 +194,7 @@ class PredictiveLoaderService {
       const results = await Promise.allSettled(
         batch.map(async (prediction) => {
           try {
-            const prefetched = await this.prefetchPrediction(
-              projectName, sessionId, prediction
-            );
+            const prefetched = await this.prefetchPrediction(projectName, sessionId, prediction);
             return { prediction, prefetched };
           } catch (error: any) {
             logger.debug('Prefetch failed for prediction', {
@@ -256,61 +248,38 @@ class PredictiveLoaderService {
   /**
    * Track whether a prediction was actually used (cache hit)
    */
-  async trackHit(
-    projectName: string,
-    sessionId: string,
-    resource: string
-  ): Promise<void> {
+  async trackHit(projectName: string, sessionId: string, resource: string): Promise<void> {
     const statsKey = this.getStatsKey(projectName, sessionId);
     const stats = this.statsCache.get(statsKey) || this.emptyStats();
 
     stats.totalHits++;
-    stats.hitRate = stats.totalPredictions > 0
-      ? stats.totalHits / stats.totalPredictions
-      : 0;
+    stats.hitRate = stats.totalPredictions > 0 ? stats.totalHits / stats.totalPredictions : 0;
 
     this.statsCache.set(statsKey, stats);
 
     // Also persist to cache for cross-process access
-    await cacheService.set(
-      `prediction_stats:${projectName}:${sessionId}`,
-      stats,
-      3600
-    );
+    await cacheService.set(`prediction_stats:${projectName}:${sessionId}`, stats, 3600);
   }
 
   /**
    * Track a prediction miss
    */
-  async trackMiss(
-    projectName: string,
-    sessionId: string,
-    resource: string
-  ): Promise<void> {
+  async trackMiss(projectName: string, sessionId: string, resource: string): Promise<void> {
     const statsKey = this.getStatsKey(projectName, sessionId);
     const stats = this.statsCache.get(statsKey) || this.emptyStats();
 
     stats.totalMisses++;
-    stats.hitRate = stats.totalPredictions > 0
-      ? stats.totalHits / stats.totalPredictions
-      : 0;
+    stats.hitRate = stats.totalPredictions > 0 ? stats.totalHits / stats.totalPredictions : 0;
 
     this.statsCache.set(statsKey, stats);
 
-    await cacheService.set(
-      `prediction_stats:${projectName}:${sessionId}`,
-      stats,
-      3600
-    );
+    await cacheService.set(`prediction_stats:${projectName}:${sessionId}`, stats, 3600);
   }
 
   /**
    * Get prediction accuracy stats
    */
-  async getStats(
-    projectName: string,
-    sessionId?: string
-  ): Promise<PredictionStats> {
+  async getStats(projectName: string, sessionId?: string): Promise<PredictionStats> {
     if (sessionId) {
       // Try in-memory first
       const statsKey = this.getStatsKey(projectName, sessionId);
@@ -344,14 +313,12 @@ class PredictiveLoaderService {
       }
     }
 
-    allStats.hitRate = allStats.totalPredictions > 0
-      ? allStats.totalHits / allStats.totalPredictions
-      : 0;
+    allStats.hitRate =
+      allStats.totalPredictions > 0 ? allStats.totalHits / allStats.totalPredictions : 0;
 
     for (const strategyStats of Object.values(allStats.byStrategy)) {
-      strategyStats.hitRate = strategyStats.predictions > 0
-        ? strategyStats.hits / strategyStats.predictions
-        : 0;
+      strategyStats.hitRate =
+        strategyStats.predictions > 0 ? strategyStats.hits / strategyStats.predictions : 0;
     }
 
     return allStats;
@@ -414,10 +381,20 @@ class PredictiveLoaderService {
     const secondLastQuery = recentQueries[recentQueries.length - 2];
 
     // If recent queries share keywords, predict more queries with those keywords
-    const lastWords = new Set(lastQuery.toLowerCase().split(/\s+/).filter(w => w.length > 3));
-    const secondLastWords = new Set(secondLastQuery.toLowerCase().split(/\s+/).filter(w => w.length > 3));
+    const lastWords = new Set(
+      lastQuery
+        .toLowerCase()
+        .split(/\s+/)
+        .filter((w) => w.length > 3)
+    );
+    const secondLastWords = new Set(
+      secondLastQuery
+        .toLowerCase()
+        .split(/\s+/)
+        .filter((w) => w.length > 3)
+    );
 
-    const sharedKeywords = [...lastWords].filter(w => secondLastWords.has(w));
+    const sharedKeywords = [...lastWords].filter((w) => secondLastWords.has(w));
 
     if (sharedKeywords.length > 0) {
       // User is exploring a topic — predict they'll search for related terms
@@ -448,10 +425,7 @@ class PredictiveLoaderService {
   /**
    * Strategy 3: Predict next tool inputs based on tool chain patterns
    */
-  private predictFromToolChain(
-    toolsUsed: string[],
-    recentQueries: string[]
-  ): Prediction[] {
+  private predictFromToolChain(toolsUsed: string[], recentQueries: string[]): Prediction[] {
     if (toolsUsed.length === 0) return [];
 
     const predictions: Prediction[] = [];
@@ -478,10 +452,7 @@ class PredictiveLoaderService {
   /**
    * Strategy 4: Predict resources needed for active features
    */
-  private predictFromFeatures(
-    projectName: string,
-    activeFeatures: string[]
-  ): Prediction[] {
+  private predictFromFeatures(projectName: string, activeFeatures: string[]): Prediction[] {
     if (activeFeatures.length === 0) return [];
 
     const predictions: Prediction[] = [];
@@ -527,7 +498,10 @@ class PredictiveLoaderService {
       case 'file':
       case 'feature': {
         // Prefetch embedding for the resource (with session caching)
-        const embedding = await embeddingService.embedWithSession(prediction.resource, cacheOptions);
+        const embedding = await embeddingService.embedWithSession(
+          prediction.resource,
+          cacheOptions
+        );
 
         // Also prefetch search results for codebase
         const collection = `${projectName}_codebase`;
@@ -550,7 +524,10 @@ class PredictiveLoaderService {
       case 'query':
       case 'tool_input': {
         // Prefetch embedding for the query (with session caching)
-        const embedding = await embeddingService.embedWithSession(prediction.resource, cacheOptions);
+        const embedding = await embeddingService.embedWithSession(
+          prediction.resource,
+          cacheOptions
+        );
 
         // Prefetch search results in codebase collection
         const collection = `${projectName}_codebase`;
@@ -578,11 +555,7 @@ class PredictiveLoaderService {
   // Helpers
   // ============================================
 
-  private trackPredictionMade(
-    projectName: string,
-    sessionId: string,
-    strategy: string
-  ): void {
+  private trackPredictionMade(projectName: string, sessionId: string, strategy: string): void {
     const statsKey = this.getStatsKey(projectName, sessionId);
     const stats = this.statsCache.get(statsKey) || this.emptyStats();
 

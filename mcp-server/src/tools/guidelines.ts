@@ -12,22 +12,46 @@ export function createGuidelinesTools(projectName: string): ToolSpec[] {
       name: "get_rag_guidelines",
       description: `Get recommended settings and best practices for working with RAG in ${projectName}. Shows optimal tool usage patterns, query strategies, and session management tips.`,
       schema: z.object({
-        focus: z.enum(["all", "search", "memory", "session", "feedback", "performance"]).optional().describe("Focus area for guidelines (default: all)"),
-        context: z.enum(["coding", "debugging", "reviewing", "learning", "documenting"]).optional().describe("Current work context for tailored recommendations"),
+        focus: z
+          .enum([
+            "all",
+            "search",
+            "memory",
+            "session",
+            "feedback",
+            "performance",
+          ])
+          .optional()
+          .describe("Focus area for guidelines (default: all)"),
+        context: z
+          .enum(["coding", "debugging", "reviewing", "learning", "documenting"])
+          .optional()
+          .describe("Current work context for tailored recommendations"),
       }),
       annotations: TOOL_ANNOTATIONS["get_rag_guidelines"],
-      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
-        const { focus = "all", context } = args as { focus?: string; context?: string };
+      handler: async (
+        args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
+        const { focus = "all", context } = args as {
+          focus?: string;
+          context?: string;
+        };
 
         let result = `# 📚 RAG Guidelines for ${ctx.projectName}\n\n`;
 
         if (context) {
           const contextTips: Record<string, string> = {
-            coding: "🔧 **Mode: Coding** - Focus on implementation patterns and related code",
-            debugging: "🐛 **Mode: Debugging** - Focus on error patterns and similar issues",
-            reviewing: "👀 **Mode: Reviewing** - Focus on patterns, ADRs, and best practices",
-            learning: "📖 **Mode: Learning** - Focus on documentation and explanations",
-            documenting: "📝 **Mode: Documenting** - Focus on existing docs and patterns",
+            coding:
+              "🔧 **Mode: Coding** - Focus on implementation patterns and related code",
+            debugging:
+              "🐛 **Mode: Debugging** - Focus on error patterns and similar issues",
+            reviewing:
+              "👀 **Mode: Reviewing** - Focus on patterns, ADRs, and best practices",
+            learning:
+              "📖 **Mode: Learning** - Focus on documentation and explanations",
+            documenting:
+              "📝 **Mode: Documenting** - Focus on existing docs and patterns",
           };
           result += `${contextTips[context] || ""}\n\n`;
         }

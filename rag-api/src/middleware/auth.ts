@@ -129,10 +129,7 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction) 
   }
 
   // Resolve project: from key mapping, or fallback to header (legacy keys)
-  const projectName =
-    matched.projectName ||
-    (req.headers['x-project-name'] as string) ||
-    'default';
+  const projectName = matched.projectName || (req.headers['x-project-name'] as string) || 'default';
 
   req.authContext = {
     keyName: matched.label || matched.id,

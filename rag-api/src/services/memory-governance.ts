@@ -6,7 +6,15 @@
 import { v4 as uuidv4 } from 'uuid';
 import { vectorStore, VectorPoint } from './vector-store';
 import { embeddingService } from './embedding';
-import { memoryService, Memory, MemoryType, MemorySource, CreateMemoryOptions, SearchMemoryOptions, MemorySearchResult } from './memory';
+import {
+  memoryService,
+  Memory,
+  MemoryType,
+  MemorySource,
+  CreateMemoryOptions,
+  SearchMemoryOptions,
+  MemorySearchResult,
+} from './memory';
 import { memoryLtm, type SemanticSubtype } from './memory-ltm';
 import { qualityGates } from './quality-gates';
 import { feedbackService } from './feedback';
@@ -53,7 +61,9 @@ class MemoryGovernanceService {
       let promoted = 0;
       try {
         const durableResults = await vectorStore['client'].scroll(durable, {
-          limit: 200, with_payload: true, with_vector: false,
+          limit: 200,
+          with_payload: true,
+          with_vector: false,
           filter: {
             should: [
               { key: 'metadata.originalSource', match: { value: 'auto_conversation' } },
@@ -63,20 +73,29 @@ class MemoryGovernanceService {
           },
         });
         promoted = durableResults.points.length;
-      } catch { /* collection may not exist */ }
+      } catch {
+        /* collection may not exist */
+      }
 
       // Count still in quarantine (rejected or pending)
       let pending = 0;
       try {
         const pendingResults = await vectorStore['client'].scroll(quarantine, {
-          limit: 200, with_payload: false, with_vector: false,
+          limit: 200,
+          with_payload: false,
+          with_vector: false,
         });
         pending = pendingResults.points.length;
-      } catch { /* collection may not exist */ }
+      } catch {
+        /* collection may not exist */
+      }
 
       const total = promoted + pending;
       if (total < 5) {
-        this.thresholdCache.set(projectName, { value: DEFAULT, expiresAt: Date.now() + 30 * 60 * 1000 });
+        this.thresholdCache.set(projectName, {
+          value: DEFAULT,
+          expiresAt: Date.now() + 30 * 60 * 1000,
+        });
         return DEFAULT;
       }
 
@@ -85,8 +104,14 @@ class MemoryGovernanceService {
       // successRate 0.0 → 0.8, successRate 1.0 → 0.4
       const threshold = Math.max(0.4, Math.min(0.8, 0.8 - successRate * 0.4));
 
-      this.thresholdCache.set(projectName, { value: threshold, expiresAt: Date.now() + 30 * 60 * 1000 });
-      logger.debug(`Adaptive threshold for ${projectName}: ${threshold.toFixed(2)} (${promoted}/${total} promoted)`, { project: projectName });
+      this.thresholdCache.set(projectName, {
+        value: threshold,
+        expiresAt: Date.now() + 30 * 60 * 1000,
+      });
+      logger.debug(
+        `Adaptive threshold for ${projectName}: ${threshold.toFixed(2)} (${promoted}/${total} promoted)`,
+        { project: projectName }
+      );
       return threshold;
     } catch (err: any) {
       logger.debug('Adaptive threshold computation failed, using default', { error: err.message });
@@ -112,19 +137,25 @@ class MemoryGovernanceService {
       // Phase 2: also store manual memories in semantic LTM for Ebbinghaus tracking
       if (config.CONSOLIDATION_ENABLED) {
         const subtypeMap: Record<string, SemanticSubtype> = {
-          decision: 'decision', insight: 'insight', procedure: 'procedure',
+          decision: 'decision',
+          insight: 'insight',
+          procedure: 'procedure',
         };
         const subtype = subtypeMap[memoryOptions.type ?? ''];
         if (subtype) {
-          memoryLtm.storeSemantic({
-            projectName,
-            content: memoryOptions.content,
-            subtype,
-            confidence: 0.9,
-            tags: memoryOptions.tags,
-            source: 'manual',
-            metadata: { durableId: memory.id },
-          }).catch(err => logger.debug('LTM store for manual memory failed', { error: err.message }));
+          memoryLtm
+            .storeSemantic({
+              projectName,
+              content: memoryOptions.content,
+              subtype,
+              confidence: 0.9,
+              tags: memoryOptions.tags,
+              source: 'manual',
+              metadata: { durableId: memory.id },
+            })
+            .catch((err) =>
+              logger.debug('LTM store for manual memory failed', { error: err.message })
+            );
         }
       }
 
@@ -134,7 +165,10 @@ class MemoryGovernanceService {
     // Auto-generated → check adaptive threshold, then quarantine
     const threshold = await this.getAdaptiveThreshold(projectName);
     if (confidence !== undefined && confidence < threshold) {
-      logger.debug(`Memory below adaptive threshold (${confidence} < ${threshold.toFixed(2)}), skipped`, { project: projectName });
+      logger.debug(
+        `Memory below adaptive threshold (${confidence} < ${threshold.toFixed(2)}), skipped`,
+        { project: projectName }
+      );
       // Return a stub memory without persisting
       return {
         id: uuidv4(),
@@ -189,7 +223,11 @@ class MemoryGovernanceService {
     };
 
     await vectorStore.upsert(collectionName, [point]);
-    logger.info(`Memory quarantined: ${memory.type}`, { id: memory.id, project: projectName, source });
+    logger.info(`Memory quarantined: ${memory.type}`, {
+      id: memory.id,
+      project: projectName,
+      source,
+    });
     return memory;
   }
 
@@ -212,8 +250,13 @@ class MemoryGovernanceService {
       });
 
       if (!report.passed) {
-        const failedGates = report.gates.filter(g => !g.passed).map(g => g.gate);
-        throw new Error(`Quality gates failed: ${failedGates.join(', ')}. Details: ${report.gates.filter(g => !g.passed).map(g => g.details).join('; ')}`);
+        const failedGates = report.gates.filter((g) => !g.passed).map((g) => g.gate);
+        throw new Error(
+          `Quality gates failed: ${failedGates.join(', ')}. Details: ${report.gates
+            .filter((g) => !g.passed)
+            .map((g) => g.details)
+            .join('; ')}`
+        );
       }
     }
 
@@ -247,7 +290,7 @@ class MemoryGovernanceService {
       tags: (payload.tags as string[]) || [],
       relatedTo: payload.relatedTo as string | undefined,
       metadata: {
-        ...(payload.metadata as Record<string, unknown> || {}),
+        ...((payload.metadata as Record<string, unknown>) || {}),
         validated: true,
         promotedAt: new Date().toISOString(),
         promoteReason: reason,
@@ -257,7 +300,10 @@ class MemoryGovernanceService {
       },
     });
 
-    logger.info(`Memory promoted: ${memoryId} → ${promotedMemory.id}`, { project: projectName, reason });
+    logger.info(`Memory promoted: ${memoryId} → ${promotedMemory.id}`, {
+      project: projectName,
+      reason,
+    });
     return promotedMemory;
   }
 
@@ -306,7 +352,7 @@ class MemoryGovernanceService {
 
     const results = await vectorStore.search(collectionName, embedding, limit, filter);
 
-    return results.map(r => ({
+    return results.map((r) => ({
       memory: {
         id: r.id,
         type: r.payload.type as MemoryType,
@@ -327,7 +373,11 @@ class MemoryGovernanceService {
   /**
    * List quarantine memories (non-semantic, for review UI).
    */
-  async listQuarantine(projectName: string, limit: number = 20, offset?: string | number): Promise<Memory[]> {
+  async listQuarantine(
+    projectName: string,
+    limit: number = 20,
+    offset?: string | number
+  ): Promise<Memory[]> {
     const collectionName = this.getQuarantineCollection(projectName);
 
     try {
@@ -338,7 +388,7 @@ class MemoryGovernanceService {
         with_vector: false,
       });
 
-      return results.points.map(p => {
+      return results.points.map((p) => {
         const payload = p.payload as Record<string, unknown>;
         return {
           id: p.id as string,
@@ -355,14 +405,16 @@ class MemoryGovernanceService {
         };
       });
     } catch (error: any) {
-      if (error.status === 404) return [];
+      if (error.status === 404 || error.status === 400) return [];
       throw error;
     }
   }
   /**
    * Auto-promote memories with 3+ positive feedback from quarantine to durable.
    */
-  async autoPromoteByFeedback(projectName: string): Promise<{ promoted: string[]; errors: string[] }> {
+  async autoPromoteByFeedback(
+    projectName: string
+  ): Promise<{ promoted: string[]; errors: string[] }> {
     const promoted: string[] = [];
     const errors: string[] = [];
 
@@ -372,7 +424,12 @@ class MemoryGovernanceService {
       for (const [memoryId, counts] of feedbackCounts) {
         if (counts.accurate >= 3) {
           try {
-            await this.promote(projectName, memoryId, 'human_validated', `Auto-promoted: ${counts.accurate} accurate feedback`);
+            await this.promote(
+              projectName,
+              memoryId,
+              'human_validated',
+              `Auto-promoted: ${counts.accurate} accurate feedback`
+            );
             promoted.push(memoryId);
           } catch (error: any) {
             // Memory might not be in quarantine (already promoted or durable)
@@ -411,14 +468,22 @@ class MemoryGovernanceService {
             const quarantineCollection = this.getQuarantineCollection(projectName);
             await vectorStore.delete(quarantineCollection, [memoryId]);
             pruned.push(memoryId);
-            memoryGovernanceTotal.inc({ operation: 'prune', tier: 'quarantine', project: projectName });
+            memoryGovernanceTotal.inc({
+              operation: 'prune',
+              tier: 'quarantine',
+              project: projectName,
+            });
           } catch {
             try {
               // Then try durable
               const durableCollection = this.getDurableCollection(projectName);
               await vectorStore.delete(durableCollection, [memoryId]);
               pruned.push(memoryId);
-              memoryGovernanceTotal.inc({ operation: 'prune', tier: 'durable', project: projectName });
+              memoryGovernanceTotal.inc({
+                operation: 'prune',
+                tier: 'durable',
+                project: projectName,
+              });
             } catch (error: any) {
               errors.push(`${memoryId}: ${error.message}`);
             }
@@ -459,14 +524,21 @@ class MemoryGovernanceService {
   /**
    * Cleanup expired quarantine memories (older than TTL).
    */
-  async cleanupExpiredQuarantine(projectName: string): Promise<{ rejected: string[]; errors: string[] }> {
-    const end = maintenanceDuration.startTimer({ operation: 'quarantine_cleanup', project: projectName });
+  async cleanupExpiredQuarantine(
+    projectName: string
+  ): Promise<{ rejected: string[]; errors: string[] }> {
+    const end = maintenanceDuration.startTimer({
+      operation: 'quarantine_cleanup',
+      project: projectName,
+    });
     const rejected: string[] = [];
     const errors: string[] = [];
 
     try {
       const collectionName = this.getQuarantineCollection(projectName);
-      const cutoff = new Date(Date.now() - config.MEMORY_QUARANTINE_TTL_DAYS * 24 * 60 * 60 * 1000).toISOString();
+      const cutoff = new Date(
+        Date.now() - config.MEMORY_QUARANTINE_TTL_DAYS * 24 * 60 * 60 * 1000
+      ).toISOString();
 
       let offset: string | number | undefined = undefined;
 
@@ -491,7 +563,10 @@ class MemoryGovernanceService {
           try {
             await vectorStore.delete(collectionName, chunk);
             rejected.push(...chunk);
-            memoryGovernanceTotal.inc({ operation: 'quarantine_expired', tier: 'quarantine', project: projectName }, chunk.length);
+            memoryGovernanceTotal.inc(
+              { operation: 'quarantine_expired', tier: 'quarantine', project: projectName },
+              chunk.length
+            );
           } catch (err: any) {
             errors.push(`Batch delete failed: ${err.message}`);
           }
@@ -500,7 +575,9 @@ class MemoryGovernanceService {
         offset = response.next_page_offset as string | number | undefined;
       } while (offset);
 
-      logger.info(`Quarantine cleanup: ${rejected.length} expired memories removed`, { project: projectName });
+      logger.info(`Quarantine cleanup: ${rejected.length} expired memories removed`, {
+        project: projectName,
+      });
     } catch (error: any) {
       if (error.status !== 404) {
         errors.push(`Quarantine cleanup failed: ${error.message}`);
@@ -558,7 +635,7 @@ class MemoryGovernanceService {
       }
 
       for (const cluster of mergeResult.merged) {
-        const originalIds = cluster.original.map(m => m.id);
+        const originalIds = cluster.original.map((m) => m.id);
         const mergedContent = cluster.merged.content;
 
         if (!dryRun) {
@@ -585,20 +662,34 @@ class MemoryGovernanceService {
                   updatedAt: new Date().toISOString(),
                 },
               });
-              memoryGovernanceTotal.inc({ operation: 'compaction_superseded', tier: 'durable', project: projectName });
+              memoryGovernanceTotal.inc({
+                operation: 'compaction_superseded',
+                tier: 'durable',
+                project: projectName,
+              });
             } catch (err: any) {
-              logger.debug('Failed to mark superseded during compaction', { origId, error: err.message });
+              logger.debug('Failed to mark superseded during compaction', {
+                origId,
+                error: err.message,
+              });
             }
           }
 
-          memoryGovernanceTotal.inc({ operation: 'compaction_merged', tier: 'durable', project: projectName });
+          memoryGovernanceTotal.inc({
+            operation: 'compaction_merged',
+            tier: 'durable',
+            project: projectName,
+          });
           result.clusters.push({ originalIds, mergedId: newMemory.id, mergedContent });
         } else {
           result.clusters.push({ originalIds, mergedContent });
         }
       }
 
-      logger.info(`Compaction: ${result.clusters.length} clusters${dryRun ? ' (dry run)' : ' merged'}`, { project: projectName });
+      logger.info(
+        `Compaction: ${result.clusters.length} clusters${dryRun ? ' (dry run)' : ' merged'}`,
+        { project: projectName }
+      );
     } catch (error: any) {
       if (error.status !== 404) {
         logger.error('Compaction failed', { error: error.message, project: projectName });
@@ -643,13 +734,17 @@ class MemoryGovernanceService {
 
     if (ops.quarantine_cleanup) {
       parallelTasks.push(
-        this.cleanupExpiredQuarantine(projectName).then(r => { result.quarantine_cleanup = r; })
+        this.cleanupExpiredQuarantine(projectName).then((r) => {
+          result.quarantine_cleanup = r;
+        })
       );
     }
 
     if (ops.feedback_maintenance) {
       parallelTasks.push(
-        this.runFeedbackMaintenance(projectName).then(r => { result.feedback_maintenance = r; })
+        this.runFeedbackMaintenance(projectName).then((r) => {
+          result.feedback_maintenance = r;
+        })
       );
     }
 

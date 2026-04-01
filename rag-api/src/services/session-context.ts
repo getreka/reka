@@ -284,7 +284,17 @@ class SessionContextService {
 
     const context = await this.getSession(projectName, sessionId);
     if (!context) {
-      throw new Error(`Session not found: ${sessionId}`);
+      // Return graceful summary instead of throwing — session may have expired or never started
+      logger.warn(`Session not found: ${sessionId}, returning empty summary`);
+      return {
+        sessionId,
+        duration: 0,
+        toolsUsed: [],
+        filesAffected: [],
+        queriesCount: 0,
+        learningsSaved: 0,
+        summary: summary || 'Session not found or already ended',
+      };
     }
 
     // Calculate duration

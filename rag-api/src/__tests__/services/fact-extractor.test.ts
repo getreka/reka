@@ -49,10 +49,12 @@ describe('FactExtractorService', () => {
 
   describe('extractFacts()', () => {
     it('extracts file references from observation text', async () => {
-      const task = buildTask([{
-        tool: 'search_codebase',
-        result: '[1] src/services/memory.ts (score: 0.92)\nHandles memory storage and recall',
-      }]);
+      const task = buildTask([
+        {
+          tool: 'search_codebase',
+          result: '[1] src/services/memory.ts (score: 0.92)\nHandles memory storage and recall',
+        },
+      ]);
 
       const facts = await factExtractor.extractFacts(task);
 
@@ -63,23 +65,27 @@ describe('FactExtractorService', () => {
     });
 
     it('extracts multiple file references from one observation', async () => {
-      const task = buildTask([{
-        tool: 'search_codebase',
-        result: '[1] src/a.ts (score: 0.9)\nFirst file\n[2] src/b.ts (score: 0.8)\nSecond file',
-      }]);
+      const task = buildTask([
+        {
+          tool: 'search_codebase',
+          result: '[1] src/a.ts (score: 0.9)\nFirst file\n[2] src/b.ts (score: 0.8)\nSecond file',
+        },
+      ]);
 
       const facts = await factExtractor.extractFacts(task);
       expect(facts).toHaveLength(2);
     });
 
     it('extracts import/dependency patterns', async () => {
-      const task = buildTask([{
-        tool: 'search_codebase',
-        result: 'Found: import { vectorStore } from \'./vector-store\'',
-      }]);
+      const task = buildTask([
+        {
+          tool: 'search_codebase',
+          result: "Found: import { vectorStore } from './vector-store'",
+        },
+      ]);
 
       const facts = await factExtractor.extractFacts(task);
-      expect(facts.some(f => f.type === 'dependency')).toBe(true);
+      expect(facts.some((f) => f.type === 'dependency')).toBe(true);
     });
 
     it('deduplicates facts by content prefix', async () => {
@@ -95,9 +101,7 @@ describe('FactExtractorService', () => {
     it('skips steps without observations', async () => {
       const task = {
         ...buildTask([]),
-        steps: [
-          { iteration: 1, timestamp: new Date().toISOString(), thought: 'thinking...' },
-        ],
+        steps: [{ iteration: 1, timestamp: new Date().toISOString(), thought: 'thinking...' }],
       } as any;
 
       const facts = await factExtractor.extractFacts(task);
@@ -105,10 +109,12 @@ describe('FactExtractorService', () => {
     });
 
     it('caps confidence at 1.0', async () => {
-      const task = buildTask([{
-        tool: 'search_codebase',
-        result: '[1] src/a.ts (score: 1.50)\nContent here',
-      }]);
+      const task = buildTask([
+        {
+          tool: 'search_codebase',
+          result: '[1] src/a.ts (score: 1.50)\nContent here',
+        },
+      ]);
 
       const facts = await factExtractor.extractFacts(task);
       expect(facts[0].confidence).toBeLessThanOrEqual(1);
@@ -117,30 +123,36 @@ describe('FactExtractorService', () => {
 
   describe('classifyFact (via extractFacts)', () => {
     it('classifies as pattern when tool is get_patterns', async () => {
-      const task = buildTask([{
-        tool: 'get_patterns',
-        result: '[1] src/patterns.ts (score: 0.9)\nService Layer pattern',
-      }]);
+      const task = buildTask([
+        {
+          tool: 'get_patterns',
+          result: '[1] src/patterns.ts (score: 0.9)\nService Layer pattern',
+        },
+      ]);
 
       const facts = await factExtractor.extractFacts(task);
       expect(facts[0].type).toBe('pattern');
     });
 
     it('classifies as issue when content contains error', async () => {
-      const task = buildTask([{
-        tool: 'search_codebase',
-        result: '[1] src/bug.ts (score: 0.9)\nThis has an error in the logic',
-      }]);
+      const task = buildTask([
+        {
+          tool: 'search_codebase',
+          result: '[1] src/bug.ts (score: 0.9)\nThis has an error in the logic',
+        },
+      ]);
 
       const facts = await factExtractor.extractFacts(task);
       expect(facts[0].type).toBe('issue');
     });
 
     it('defaults to finding when no pattern matches', async () => {
-      const task = buildTask([{
-        tool: 'search_codebase',
-        result: '[1] src/utils.ts (score: 0.9)\nHelper function for formatting',
-      }]);
+      const task = buildTask([
+        {
+          tool: 'search_codebase',
+          result: '[1] src/utils.ts (score: 0.9)\nHelper function for formatting',
+        },
+      ]);
 
       const facts = await factExtractor.extractFacts(task);
       expect(facts[0].type).toBe('finding');
@@ -149,10 +161,12 @@ describe('FactExtractorService', () => {
 
   describe('saveFacts()', () => {
     it('ingests facts via memoryGovernance and saves audit log', async () => {
-      const task = buildTask([{
-        tool: 'search_codebase',
-        result: '[1] src/a.ts (score: 0.9)\nSome finding',
-      }]);
+      const task = buildTask([
+        {
+          tool: 'search_codebase',
+          result: '[1] src/a.ts (score: 0.9)\nSome finding',
+        },
+      ]);
 
       const result = await factExtractor.saveFacts('test', task);
 
@@ -173,10 +187,12 @@ describe('FactExtractorService', () => {
         .mockRejectedValueOnce(new Error('fail'))
         .mockResolvedValueOnce({ id: 'mem-2' } as any);
 
-      const task = buildTask([{
-        tool: 'search_codebase',
-        result: '[1] src/a.ts (score: 0.9)\nFact one\n[2] src/b.ts (score: 0.8)\nFact two',
-      }]);
+      const task = buildTask([
+        {
+          tool: 'search_codebase',
+          result: '[1] src/a.ts (score: 0.9)\nFact one\n[2] src/b.ts (score: 0.8)\nFact two',
+        },
+      ]);
 
       const result = await factExtractor.saveFacts('test', task);
       expect(result.factsCount).toBe(1); // One failed, one succeeded
@@ -185,10 +201,12 @@ describe('FactExtractorService', () => {
     it('handles cache.set failure gracefully', async () => {
       mockedCache.set.mockRejectedValue(new Error('redis down'));
 
-      const task = buildTask([{
-        tool: 'search_codebase',
-        result: '[1] src/a.ts (score: 0.9)\nContent',
-      }]);
+      const task = buildTask([
+        {
+          tool: 'search_codebase',
+          result: '[1] src/a.ts (score: 0.9)\nContent',
+        },
+      ]);
 
       // Should not throw
       const result = await factExtractor.saveFacts('test', task);
