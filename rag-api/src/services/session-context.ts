@@ -80,87 +80,122 @@ class SessionContextService {
   }
 
   /**
-   * Start a new session or resume existing
+   * Start a new session or resume existing.
+   *
+   * Returns fast with a minimal context (cache + working memory init only).
+   * Heavy operations (stale cleanup, previous session lookup, entity extraction,
+   * Qdrant persist, briefing) run in the background and update the cached context
+   * when they complete.
    */
   async startSession(options: StartSessionOptions): Promise<SessionContext> {
-    const { projectName, sessionId = uuidv4(), initialContext, resumeFrom, metadata } = options;
+    const { projectName, sessionId = uuidv4(), metadata } = options;
 
-    // Cleanup stale active sessions before looking for resumable ones
-    await this.cleanupStaleSessions(projectName);
+    // Create minimal context immediately — no I/O
+    const context = this.createNewContext(sessionId, projectName, metadata);
 
-    let context: SessionContext;
-
-    // Try to resume from previous session (explicit or auto-detected)
-    const resumeId = resumeFrom || (await this.findLastSessionId(projectName));
-    if (resumeId) {
-      const previousContext = await this.getSession(projectName, resumeId);
-      if (previousContext) {
-        context = {
-          sessionId,
-          projectName,
-          startedAt: new Date().toISOString(),
-          lastActivityAt: new Date().toISOString(),
-          status: 'active',
-          currentFiles: previousContext.currentFiles,
-          recentQueries: previousContext.recentQueries.slice(-5),
-          activeFeatures: previousContext.activeFeatures,
-          toolsUsed: [],
-          pendingLearnings: [],
-          decisions: previousContext.decisions,
-          metadata: { ...previousContext.metadata, ...metadata, resumedFrom: resumeId },
-        };
-      } else {
-        context = this.createNewContext(sessionId, projectName, metadata);
-      }
-    } else {
-      context = this.createNewContext(sessionId, projectName, metadata);
-    }
-
-    // Process initial context
-    if (initialContext) {
-      const extracted = await conversationAnalyzer.extractEntities(initialContext);
-      context.currentFiles = [...context.currentFiles, ...extracted.files];
-      context.activeFeatures = [...context.activeFeatures, ...extracted.concepts];
-    }
-
-    // Store in cache for fast access
+    // Store in cache for fast access (Redis only — fast)
     await cacheService.set(
       this.getCacheKey(projectName, sessionId),
       context,
       3600 // 1 hour TTL
     );
 
-    // Also persist to Qdrant for durability
-    await this.persistSession(context);
-
-    logger.info(`Session started: ${sessionId}`, { projectName, resumeFrom });
-
-    // Initialize working memory for this session (human memory layer)
+    // Initialize working memory for this session (Redis only — fast)
     workingMemory
       .init(projectName, sessionId)
       .catch((err) => logger.debug('Working memory init failed', { error: err.message }));
 
-    // Emit domain event (in-process SSE + BullMQ when enabled)
+    logger.info(`Session started (fast): ${sessionId}`, { projectName });
+
+    // Emit domain event (fire-and-forget)
     publishEvent('session:started', {
       projectName,
       sessionId: context.sessionId,
-      resumedFrom: resumeFrom,
+      resumedFrom: options.resumeFrom,
       initialContext: options.initialContext,
     }).catch(() => {});
 
-    // Background work handled by session-lifecycle worker via session:started event
+    // ── Background: heavy operations that enrich the session ──
+    this.enrichSessionBackground(context, options).catch((err) =>
+      logger.debug('Background session enrichment failed', { error: err.message })
+    );
 
-    // Build briefing with project profile + recalled context
+    return context;
+  }
+
+  /**
+   * Background enrichment: runs after startSession returns.
+   * Updates the cached session context with data from previous sessions,
+   * entity extraction, Qdrant persistence, and briefing.
+   */
+  private async enrichSessionBackground(
+    context: SessionContext,
+    options: StartSessionOptions
+  ): Promise<void> {
+    const { projectName, initialContext, resumeFrom } = options;
+    const { sessionId } = context;
+    let enriched = { ...context };
+
+    // 1. Cleanup stale sessions (Qdrant query — can be slow)
+    await this.cleanupStaleSessions(projectName).catch((err) =>
+      logger.debug('Stale session cleanup failed', { error: err.message })
+    );
+
+    // 2. Try to resume from previous session
     try {
-      const briefing = await this.buildSessionBriefing(context);
+      const resumeId = resumeFrom || (await this.findLastSessionId(projectName));
+      if (resumeId) {
+        const previousContext = await this.getSession(projectName, resumeId);
+        if (previousContext) {
+          enriched = {
+            ...enriched,
+            currentFiles: previousContext.currentFiles,
+            recentQueries: previousContext.recentQueries.slice(-5),
+            activeFeatures: previousContext.activeFeatures,
+            decisions: previousContext.decisions,
+            metadata: { ...enriched.metadata, resumedFrom: resumeId },
+          };
+        }
+      }
+    } catch (err: any) {
+      logger.debug('Session resume lookup failed', { error: err.message });
+    }
+
+    // 3. Extract entities from initial context
+    if (initialContext) {
+      try {
+        const extracted = await conversationAnalyzer.extractEntities(initialContext);
+        enriched.currentFiles = [...enriched.currentFiles, ...extracted.files];
+        enriched.activeFeatures = [...enriched.activeFeatures, ...extracted.concepts];
+      } catch (err: any) {
+        logger.debug('Entity extraction failed', { error: err.message });
+      }
+    }
+
+    // 4. Persist to Qdrant for durability
+    await this.persistSession(enriched).catch((err) =>
+      logger.debug('Session persist failed', { error: err.message })
+    );
+
+    // 5. Build briefing (project profile + memory recall)
+    try {
+      const briefing = await this.buildSessionBriefing(enriched);
       if (briefing) {
-        context.metadata = { ...context.metadata, briefing };
+        enriched.metadata = { ...enriched.metadata, briefing };
       }
     } catch (err: any) {
       logger.debug('Failed to build session briefing', { error: err.message });
     }
 
-    return context;
+    // 6. Update cache with enriched context
+    await cacheService.set(this.getCacheKey(projectName, sessionId), enriched, 3600);
+
+    logger.info(`Session enriched (background): ${sessionId}`, {
+      projectName,
+      files: enriched.currentFiles.length,
+      features: enriched.activeFeatures.length,
+      hasBriefing: !!enriched.metadata?.briefing,
+    });
   }
 
   /**

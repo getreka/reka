@@ -158,6 +158,7 @@ async function doAutoStartSession(ctx: ToolContext): Promise<void> {
     const sid = session?.sessionId || response.data?.sessionId;
     if (sid) {
       ctx.activeSessionId = sid;
+      clearFallbackSessionId();
     }
 
     // Fire-and-forget: ensure critical collections exist
@@ -215,6 +216,25 @@ function extractFiles(args: Record<string, unknown>): string[] {
   return files.slice(0, 20);
 }
 
+/**
+ * Per-process fallback session ID.
+ * Used when start_session times out / fails so sensory events
+ * are still captured instead of silently dropped.
+ */
+let fallbackSessionId: string | null = null;
+
+function getFallbackSessionId(): string {
+  if (!fallbackSessionId) {
+    fallbackSessionId = `local-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  }
+  return fallbackSessionId;
+}
+
+/** Reset fallback when a real session is established */
+export function clearFallbackSessionId(): void {
+  fallbackSessionId = null;
+}
+
 /** Fire-and-forget: capture tool event in sensory buffer */
 function appendToSensoryBuffer(
   name: string,
@@ -224,13 +244,14 @@ function appendToSensoryBuffer(
   resultText: string,
   ctx: ToolContext,
 ): void {
-  if (!ctx.activeSessionId) return;
   if (TRACKING_EXCLUDE.has(name)) return;
+
+  const sessionId = ctx.activeSessionId || getFallbackSessionId();
 
   ctx.api
     .post("/api/sensory/append", {
       projectName: ctx.projectName,
-      sessionId: ctx.activeSessionId,
+      sessionId,
       toolName: name,
       inputSummary: summarizeInput(name, args).slice(0, 500),
       outputSummary: (resultText || "").slice(0, 500),

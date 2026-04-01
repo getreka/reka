@@ -89,7 +89,7 @@ describe('SessionContextService', () => {
       expect(mocks.cacheSet).toHaveBeenCalled();
     });
 
-    it('resumes from previous session when resumeFrom given', async () => {
+    it('returns fast minimal context, enriches in background with resume data', async () => {
       const prevContext = {
         sessionId: 'prev',
         projectName: 'test',
@@ -104,38 +104,56 @@ describe('SessionContextService', () => {
         metadata: {},
         status: 'ended',
       };
-      // cacheGet is called: once for getSession(prev) during resume
-      // We need to return prevContext when getSession is called with 'prev'
       mocks.cacheGet.mockImplementation(async (key: string) => {
         if (key.includes('prev')) return prevContext;
         return null;
       });
 
+      // startSession returns immediately with minimal context
       const ctx = await sessionContext.startSession({
         projectName: 'test',
         sessionId: 'sess-2',
         resumeFrom: 'prev',
       });
 
-      expect(ctx.currentFiles).toEqual(['a.ts']);
-      expect(ctx.decisions).toEqual(['use JWT']);
+      // Fast path: returns empty context (resume happens in background)
+      expect(ctx.sessionId).toBe('sess-2');
+      expect(ctx.status).toBe('active');
+      expect(ctx.currentFiles).toEqual([]);
+
+      // Wait for background enrichment to complete
+      await vi.waitFor(
+        async () => {
+          expect(mocks.cacheSet).toHaveBeenCalledTimes(2); // initial + enriched
+        },
+        { timeout: 1000 }
+      );
     });
 
-    it('extracts entities from initialContext', async () => {
+    it('returns fast minimal context, enriches with entities in background', async () => {
       mocks.extractEntities.mockResolvedValue({
         files: ['src/auth.ts'],
         functions: ['login'],
         concepts: ['authentication'],
       });
 
+      // startSession returns immediately
       const ctx = await sessionContext.startSession({
         projectName: 'test',
         sessionId: 'sess-3',
         initialContext: 'Working on auth in src/auth.ts',
       });
 
-      expect(ctx.currentFiles).toContain('src/auth.ts');
-      expect(ctx.activeFeatures).toContain('authentication');
+      // Fast path: empty context returned
+      expect(ctx.currentFiles).toEqual([]);
+
+      // Wait for background enrichment
+      await vi.waitFor(
+        async () => {
+          expect(mocks.extractEntities).toHaveBeenCalledWith('Working on auth in src/auth.ts');
+        },
+        { timeout: 1000 }
+      );
     });
   });
 
