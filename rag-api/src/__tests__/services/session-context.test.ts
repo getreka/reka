@@ -204,13 +204,16 @@ describe('SessionContextService', () => {
       expect(mocks.cacheDelete).toHaveBeenCalled();
     });
 
-    it('throws when session not found', async () => {
+    it('returns summary when session not found', async () => {
       mocks.cacheGet.mockResolvedValue(null);
       mocks.scroll.mockResolvedValue({ points: [] });
 
-      await expect(
-        sessionContext.endSession({ projectName: 'test', sessionId: 'nonexistent' })
-      ).rejects.toThrow('Session not found');
+      const result = await sessionContext.endSession({
+        projectName: 'test',
+        sessionId: 'nonexistent',
+      });
+      expect(result.sessionId).toBe('nonexistent');
+      expect(result.summary).toBe('Session not found or already ended');
     });
   });
 });
