@@ -30,7 +30,7 @@
     "@opentelemetry/semantic-conventions": "^1.40.0",
     "@qdrant/js-client-rest": "^1.16.2",
     "@types/ioredis": "^4.28.10",
-    "axios": "^1.6.0",
+    "axios": "^1.13.5",
     "bcryptjs": "^3.0.3",
     "bullmq": "^5.71.1",
     "cors": "^2.8.5",
