@@ -7,6 +7,7 @@
   <p>Self-hosted RAG infrastructure for AI coding assistants.<br/>Give Claude Code, Cursor, or Windsurf persistent memory across sessions.</p>
 
   <p>
+    <a href="https://github.com/getreka/reka-plugin"><img src="https://img.shields.io/badge/Claude_Code-Plugin-7C3AED?style=flat-square" alt="Claude Code Plugin" /></a>
     <a href="https://www.npmjs.com/package/@getreka/mcp"><img src="https://img.shields.io/npm/v/@getreka/mcp?style=flat-square&color=cb3837&label=@getreka/mcp" alt="npm" /></a>
     <a href="https://www.npmjs.com/package/@getreka/cli"><img src="https://img.shields.io/npm/v/@getreka/cli?style=flat-square&color=cb3837&label=@getreka/cli" alt="npm" /></a>
     <a href="https://github.com/getreka/reka/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-BSL--1.1-blue?style=flat-square" alt="License" /></a>
@@ -14,6 +15,7 @@
   </p>
 
   <p>
+    <a href="#claude-code-plugin">Plugin</a> &middot;
     <a href="#quick-start">Quick Start</a> &middot;
     <a href="#how-it-works">How It Works</a> &middot;
     <a href="#features">Features</a> &middot;
@@ -32,9 +34,56 @@ Your AI coding assistant forgets everything between sessions. Every new conversa
 
 ---
 
+## Claude Code Plugin
+
+The fastest way to use Reka. Two commands inside Claude Code:
+
+```
+/plugin marketplace add getreka/reka-plugin
+/plugin install reka@reka-plugins
+```
+
+The plugin gives you the full Reka experience without any manual MCP configuration:
+
+| What you get | Details |
+|---|---|
+| **10 commands** | `/reka:code`, `/reka:investigate`, `/reka:review`, `/reka:arch`, `/reka:debate`, `/reka:start`, `/reka:end`, `/reka:onboard`, `/reka:memory-review`, `/reka:restart-api` |
+| **5 agents** | feature-builder, code-reviewer, test-writer, rag-researcher, rag-ops -- all with persistent memory |
+| **4 hooks** | Auto session lifecycle, context checks before edits, Prettier + tsc on save, memory consolidation on stop |
+| **MCP server** | `@getreka/mcp` auto-configured with your API key (stored in OS keychain) |
+
+### Team auto-install
+
+Add to your project's `.claude/settings.json` and every team member gets the plugin automatically:
+
+```json
+{
+  "extraKnownMarketplaces": {
+    "reka-plugins": {
+      "source": { "source": "github", "repo": "getreka/reka-plugin" }
+    }
+  },
+  "enabledPlugins": {
+    "reka@reka-plugins": true
+  }
+}
+```
+
+> **Plugin repo:** [getreka/reka-plugin](https://github.com/getreka/reka-plugin) -- full docs, commands reference, and architecture overview.
+
+---
+
 ## Quick Start
 
-Three commands. Under 5 minutes.
+### Option A: Claude Code Plugin (recommended)
+
+```
+/plugin marketplace add getreka/reka-plugin
+/plugin install reka@reka-plugins
+/reka:start
+```
+
+### Option B: MCP Server + CLI
 
 ```bash
 # 1. Start the infrastructure
@@ -84,11 +133,12 @@ The generated `.mcp.json`:
 ## How It Works
 
 ```
- Claude Code / Cursor / Windsurf
+ Claude Code + Reka Plugin
         │
-        │ MCP Protocol
+        │  10 commands · 5 agents · 4 hooks
+        │
         ▼
- @getreka/mcp            ← npm package, zero config
+ @getreka/mcp            ← npm package, auto-configured by plugin
         │
         │ HTTP + API Key
         ▼
@@ -136,10 +186,10 @@ No cross-contamination between projects. One backend serves them all.
 
 ### Platform
 
+- **Claude Code plugin** -- 10 commands, 5 agents, 4 hooks, auto-configured MCP
 - **MCP native** -- works with Claude Code, Cursor, Windsurf out of the box
 - **35 tools** -- search, memory, indexing, agents, architecture, review
 - **Dashboard** -- Vue 3 web UI for memory review and analytics
-- **Monitoring** -- Prometheus + Grafana + Jaeger (optional)
 
 ### LLM & Embedding
 
@@ -172,6 +222,8 @@ Self-hosted is the full platform with zero limitations. Hybrid and Cloud are com
 | Node.js   | 22+          | Latest LTS                     |
 | Disk      | ~2 GB        | SSD recommended                |
 | GPU       | Not required | NVIDIA for Ollama acceleration |
+
+For the **Claude Code plugin only**: Claude Code 1.0.33+, Node.js 22+. Docker required only for self-hosted backend.
 
 ---
 
@@ -230,6 +282,7 @@ Memory explorer, search playground, project analytics, indexing status, system h
 |                   | **Reka**       | Cursor Memory | Cody (Sourcegraph) | Continue.dev | Greptile   |
 | ----------------- | -------------- | ------------- | ------------------ | ------------ | ---------- |
 | Self-hosted       | Fully          | Cloud only    | Partial            | Yes          | Cloud only |
+| Claude Code plugin| Yes            | No            | No                 | No           | No         |
 | Memory governance | Full lifecycle | No            | No                 | No           | No         |
 | Multi-project     | Isolated       | Per-workspace | Yes                | Limited      | Yes        |
 | Code graph        | Yes            | No            | Yes                | No           | Yes        |
@@ -251,6 +304,8 @@ reka/
 ├── docker/           # Dockerfiles, Grafana, Prometheus configs
 └── docker-compose.yml
 ```
+
+**Plugin:** [getreka/reka-plugin](https://github.com/getreka/reka-plugin) -- Claude Code plugin (separate repo)
 
 ---
 
@@ -277,6 +332,7 @@ The only restriction: you cannot offer Reka as a managed service competing with 
 <div align="center">
   <p><strong>Give your AI assistant the memory it deserves.</strong></p>
   <p>
+    <a href="#claude-code-plugin">Install Plugin</a> &middot;
     <a href="#quick-start">Get started</a> &middot;
     <a href="https://getreka.dev">getreka.dev</a> &middot;
     <a href="https://github.com/getreka/reka/issues">Report an issue</a>
