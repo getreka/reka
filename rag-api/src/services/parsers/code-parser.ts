@@ -5,6 +5,7 @@
 import * as path from 'path';
 import { Project } from 'ts-morph';
 import type { FileParser, ParsedChunk } from './base-parser';
+import config from '../../config';
 
 const CODE_EXTENSIONS = new Set([
   '.ts',
@@ -398,7 +399,7 @@ export class CodeParser implements FileParser {
     allImports: string[]
   ): ParsedChunk[] {
     const chunks: ParsedChunk[] = [];
-    const maxChunkSize = 1000;
+    const maxChunkSize = config.CHUNK_SIZE;
     let currentStart = 0;
     let currentSize = 0;
     let chunkLines: string[] = [];

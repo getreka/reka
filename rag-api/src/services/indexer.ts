@@ -160,7 +160,7 @@ export function getCollectionName(
 /**
  * Chunk code into smaller pieces
  */
-function chunkCode(content: string, maxChunkSize: number = 1000): string[] {
+function chunkCode(content: string, maxChunkSize: number = config.CHUNK_SIZE): string[] {
   const lines = content.split('\n');
   const chunks: string[] = [];
   let currentChunk: string[] = [];

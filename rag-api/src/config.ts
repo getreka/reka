@@ -186,6 +186,12 @@ export interface Config {
   LSP_IDLE_SHUTDOWN_MS: number;
   LSP_MAX_CONCURRENT: number;
 
+  // Search tuning
+  CHUNK_SIZE: number;
+  CODE_BOOST: number;
+  GRAPH_EXPAND_SCORE_THRESHOLD: number;
+  RERANKER_MAX_CHARS: number;
+
   // Logging
   LOG_LEVEL: string;
 }
@@ -341,7 +347,12 @@ const config: Config = {
   SPREADING_ACTIVATION_HOP_DECAY: parseFloat(process.env.SPREADING_ACTIVATION_HOP_DECAY || '0.7'),
   SPREADING_ACTIVATION_CACHE_TTL: parseInt(process.env.SPREADING_ACTIVATION_CACHE_TTL || '300', 10),
 
-  // Logging
+  // Search tuning
+  CHUNK_SIZE: parseInt(process.env.CHUNK_SIZE || '500', 10),
+  CODE_BOOST: parseFloat(process.env.CODE_BOOST || '1.15'),
+  GRAPH_EXPAND_SCORE_THRESHOLD: parseFloat(process.env.GRAPH_EXPAND_SCORE_THRESHOLD || '0.5'),
+  RERANKER_MAX_CHARS: parseInt(process.env.RERANKER_MAX_CHARS || '800', 10),
+
   LOG_LEVEL: process.env.LOG_LEVEL || 'info',
 };
 
