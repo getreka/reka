@@ -51,6 +51,8 @@ const corsOrigins = process.env.CORS_ORIGIN
   : [
       'http://localhost:3000',
       'http://127.0.0.1:3000',
+      'https://app.getreka.dev',
+      'https://api.getreka.dev',
       'https://demo.akeryuu.com',
       'https://cdl.akeryuu.com',
     ];
@@ -106,12 +108,15 @@ app.post('/api/waitlist', async (req: Request, res: Response) => {
     }
     const client = cacheService.getClient();
     if (client) {
-      await client.lpush('waitlist', JSON.stringify({
-        email: email.trim().toLowerCase(),
-        plan: plan || 'unknown',
-        ts: new Date().toISOString(),
-        ip: req.ip,
-      }));
+      await client.lpush(
+        'waitlist',
+        JSON.stringify({
+          email: email.trim().toLowerCase(),
+          plan: plan || 'unknown',
+          ts: new Date().toISOString(),
+          ip: req.ip,
+        })
+      );
     }
     res.json({ ok: true });
   } catch {

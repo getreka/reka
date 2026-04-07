@@ -290,8 +290,8 @@ const config: Config = {
 
   // Demo mode
   DEMO_MODE: process.env.DEMO_MODE === 'true',
-  DEMO_DASHBOARD_URL: process.env.DEMO_DASHBOARD_URL || 'https://demo.akeryuu.com',
-  DEMO_API_URL: process.env.DEMO_API_URL || 'https://rag.akeryuu.com',
+  DEMO_DASHBOARD_URL: process.env.DEMO_DASHBOARD_URL || 'https://app.getreka.dev',
+  DEMO_API_URL: process.env.DEMO_API_URL || 'https://api.getreka.dev',
 
   // Memory Governance
   MEMORY_QUARANTINE_TTL_DAYS: parseInt(process.env.MEMORY_QUARANTINE_TTL_DAYS || '7', 10),
