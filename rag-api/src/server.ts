@@ -97,6 +97,28 @@ app.use((req: Request, res: Response, next: NextFunction) => {
 // Demo auth routes (public, before API key auth)
 app.use('/api/auth', demoAuthRoutes);
 
+// Waitlist endpoint (public, stores email + plan in Redis)
+app.post('/api/waitlist', async (req: Request, res: Response) => {
+  try {
+    const { email, plan } = req.body || {};
+    if (!email || typeof email !== 'string' || !email.includes('@')) {
+      return res.status(400).json({ error: 'Valid email required' });
+    }
+    const client = cacheService.getClient();
+    if (client) {
+      await client.lpush('waitlist', JSON.stringify({
+        email: email.trim().toLowerCase(),
+        plan: plan || 'unknown',
+        ts: new Date().toISOString(),
+        ip: req.ip,
+      }));
+    }
+    res.json({ ok: true });
+  } catch {
+    res.json({ ok: true }); // fail silently — don't block the user
+  }
+});
+
 // API key authentication (skips /health and /metrics)
 app.use(authMiddleware);
 
