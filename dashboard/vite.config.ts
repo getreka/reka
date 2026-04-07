@@ -12,7 +12,7 @@ export default defineConfig({
   preview: {
     port: 3001,
     host: "0.0.0.0",
-    allowedHosts: ["demo.akeryuu.com"],
+    allowedHosts: ["app.getreka.dev", "demo.akeryuu.com"],
   },
   server: {
     port: 3000,
