@@ -157,7 +157,7 @@ services:
       dockerfile: Dockerfile
     container_name: shared-dashboard
     ports:
-      - "127.0.0.1:3000:3000"
+      - "127.0.0.1:3001:3000"
     deploy:
       resources:
         limits:
@@ -167,6 +167,26 @@ services:
         condition: service_healthy
     healthcheck:
       test: ["CMD", "curl", "-f", "http://localhost:3000/"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+    restart: unless-stopped
+
+  # Landing page - Astro static site
+  landing:
+    build:
+      context: ../landing
+      dockerfile: Dockerfile
+    container_name: shared-landing
+    ports:
+      - "127.0.0.1:4001:4000"
+    deploy:
+      resources:
+        limits:
+          memory: 128M
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:4000/"]
       interval: 30s
       timeout: 10s
       retries: 3
