@@ -44,6 +44,11 @@ const SALIENCE_MAP: Record<string, number> = {
   // Errors and failures (highest salience)
   error: 0.9,
 
+  // Session lifecycle (high salience — track starts/ends/consolidation)
+  start_session: 0.8,
+  end_session: 0.8,
+  consolidation: 0.85,
+
   // Decisions and architecture
   record_adr: 0.85,
   record_pattern: 0.85,

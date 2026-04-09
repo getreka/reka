@@ -336,6 +336,23 @@ export function createSessionTools(
           result += `\n**Session Briefing:**\n${data.briefing}\n`;
         }
 
+        // Ingest session start into sensory buffer (fire-and-forget)
+        if (sid) {
+          ctx.api
+            .post("/api/sensory/append", {
+              projectName: ctx.projectName,
+              sessionId: sid,
+              toolName: "start_session",
+              inputSummary: initialContext || "session started",
+              outputSummary: `Session ${sid} started${resumedFrom ? ` (resumed from ${resumedFrom})` : ""}`,
+              filesTouched: session?.currentFiles || [],
+              success: true,
+              durationMs:
+                Date.now() - Date.parse(started || new Date().toISOString()),
+            })
+            .catch(() => {});
+        }
+
         return result;
       },
     },
@@ -472,6 +489,20 @@ export function createSessionTools(
           }
           result += "\n";
         }
+
+        // Ingest session end into sensory buffer (fire-and-forget)
+        ctx.api
+          .post("/api/sensory/append", {
+            projectName: ctx.projectName,
+            sessionId,
+            toolName: "end_session",
+            inputSummary: summary || "session ended",
+            outputSummary: `Duration: ${data.duration ?? "?"}min, learnings: ${data.learningsSaved ?? 0}, tools: ${data.toolsUsedCount ?? 0}, files: ${data.filesAffectedCount ?? 0}`,
+            filesTouched: data.filesAffected || [],
+            success: true,
+            durationMs: data.duration ? data.duration * 60000 : 0,
+          })
+          .catch(() => {});
 
         return result;
       },
