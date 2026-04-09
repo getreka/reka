@@ -36,6 +36,9 @@ export const TOOL_TIMEOUTS: Record<string, number> = {
   grouped_search: 15_000,
   search_docs: 10_000,
   find_symbol: 10_000,
+  // Session lifecycle — consolidation can take up to 2 min
+  start_session: 15_000,
+  end_session: 120_000,
   // Memory / recall — 10 s
   recall: 10_000,
   remember: 10_000,

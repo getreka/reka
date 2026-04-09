@@ -143,7 +143,8 @@ class ConsolidationAgentService {
       );
       result.patternsDetected = patterns.length;
 
-      if (Date.now() - startTime > timeout) return this.finalize(result, startTime);
+      if (Date.now() - startTime > timeout)
+        return this.finalize(result, startTime, projectName, sessionId);
 
       // Step 3: SIGNIFICANCE TAGGING (implicit in pattern detection scores)
       const significantPatterns = patterns.filter((p) => p.significance >= 0.5);
@@ -155,7 +156,8 @@ class ConsolidationAgentService {
         timeout - (Date.now() - startTime)
       );
 
-      if (Date.now() - startTime > timeout) return this.finalize(result, startTime);
+      if (Date.now() - startTime > timeout)
+        return this.finalize(result, startTime, projectName, sessionId);
 
       // Step 5 & 6 & 7: Store memories with relationships and anchors
       for (const mem of abstracted) {
@@ -216,10 +218,12 @@ class ConsolidationAgentService {
         }
       }
 
-      return this.finalize(result, startTime);
+      return this.finalize(result, startTime, projectName, sessionId);
     } catch (error: any) {
       logger.warn('Consolidation failed', { error: error.message, projectName, sessionId });
       result.durationMs = Date.now() - startTime;
+      // Ingest consolidation failure into sensory buffer
+      this.ingestConsolidationEvent(projectName, sessionId, result, false, error.message);
       return result;
     }
   }
@@ -408,7 +412,12 @@ class ConsolidationAgentService {
     }
   }
 
-  private finalize(result: ConsolidationResult, startTime: number): ConsolidationResult {
+  private finalize(
+    result: ConsolidationResult,
+    startTime: number,
+    projectName?: string,
+    sessionId?: string
+  ): ConsolidationResult {
     result.durationMs = Date.now() - startTime;
     logger.info('Consolidation complete', {
       episodic: result.episodic.length,
@@ -418,7 +427,47 @@ class ConsolidationAgentService {
       events: result.totalEventsProcessed,
       durationMs: result.durationMs,
     });
+
+    // Ingest consolidation result into sensory buffer
+    if (projectName && sessionId) {
+      this.ingestConsolidationEvent(projectName, sessionId, result, true);
+    }
+
     return result;
+  }
+
+  /** Fire-and-forget: capture consolidation result as sensory event */
+  private ingestConsolidationEvent(
+    projectName: string,
+    sessionId: string,
+    result: ConsolidationResult,
+    success: boolean,
+    errorMessage?: string
+  ): void {
+    const outputParts = [
+      `episodic: ${result.episodic.length}`,
+      `semantic: ${result.semantic.length}`,
+      `patterns: ${result.patternsDetected}`,
+      `events: ${result.totalEventsProcessed}`,
+      `duration: ${result.durationMs}ms`,
+    ];
+    if (errorMessage) outputParts.push(`error: ${errorMessage}`);
+
+    sensoryBuffer
+      .append(projectName, sessionId, {
+        toolName: 'consolidation',
+        inputSummary: `Consolidation for session ${sessionId}`,
+        outputSummary: outputParts.join(', '),
+        filesTouched: result.anchors
+          .filter((a) => a.type === 'file')
+          .map((a) => a.path)
+          .slice(0, 20),
+        success,
+        durationMs: result.durationMs,
+        salience: success ? 0.85 : 1.0,
+        timestamp: new Date().toISOString(),
+      })
+      .catch(() => {});
   }
 }
 
