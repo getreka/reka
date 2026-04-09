@@ -142,8 +142,8 @@ export class ContextEnricher {
    */
   after(
     name: string,
-    args: Record<string, unknown>,
-    result: string,
+    _args: Record<string, unknown>,
+    _result: string,
     ctx: ToolContext,
   ): void {
     // Session activity tracking
@@ -157,33 +157,7 @@ export class ContextEnricher {
         .catch(() => {});
     }
 
-    // Implicit positive feedback for enrichable search tools
-    if (this.config.enrichableTools.has(name)) {
-      const query = this.extractQuery(args);
-      if (
-        query &&
-        result &&
-        !result.includes("No results") &&
-        !result.includes("not found") &&
-        !result.includes("No relevant context found")
-      ) {
-        // Count approximate results for weighted feedback
-        const numbered = result.match(/^\d+\./gm);
-        const bullets = result.match(/^[-*] /gm);
-        const resultCount = numbered?.length ?? bullets?.length ?? 1;
-
-        ctx.api
-          .post("/api/feedback/search", {
-            projectName: ctx.projectName,
-            query,
-            feedbackType: "helpful",
-            toolName: name,
-            resultCount,
-            sessionId: ctx.activeSessionId,
-          })
-          .catch(() => {});
-      }
-    }
+    // NOTE: Implicit feedback removed — /api/feedback/search route does not exist yet
   }
 
   /**
