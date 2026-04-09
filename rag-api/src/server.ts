@@ -124,11 +124,11 @@ app.post('/api/waitlist', async (req: Request, res: Response) => {
   }
 });
 
+// Rate limiting BEFORE auth — blocks brute-force before auth processing
+app.use(rateLimitMiddleware);
+
 // API key authentication (skips /health and /metrics)
 app.use(authMiddleware);
-
-// Rate limiting (tiered: default/llm/indexing)
-app.use(rateLimitMiddleware);
 
 // Health check
 app.get('/health', async (req: Request, res: Response) => {

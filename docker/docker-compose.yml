@@ -92,7 +92,7 @@ services:
       - "127.0.0.1:6380:6379" # Different port to avoid conflicts with project-specific Redis
     volumes:
       - redis_data:/data
-    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy allkeys-lru
+    command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy noeviction
     deploy:
       resources:
         limits:

@@ -563,6 +563,14 @@ class SessionContextService {
             endReason: 'stale_cleanup',
           },
         });
+
+        // Trigger consolidation via session:ending event (same as normal endSession)
+        publishEvent('session:ending', {
+          projectName,
+          sessionId: session.sessionId,
+          summary: 'Auto-ended: stale session (no activity for 2+ hours)',
+        }).catch(() => {});
+
         logger.info(`Cleaned up stale session: ${session.sessionId}`, { projectName });
       }
     } catch (error: any) {
