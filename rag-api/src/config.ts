@@ -222,7 +222,7 @@ const config: Config = {
     'models.llm.standard.provider',
     'ollama'
   ) as Config['LLM_PROVIDER'],
-  OLLAMA_MODEL: envOrYaml('OLLAMA_MODEL', 'models.llm.utility.model', 'qwen3.5:35b'),
+  OLLAMA_MODEL: envOrYaml('OLLAMA_MODEL', 'models.llm.utility.model', 'qwen3.5:27b'),
   OPENAI_MODEL: envOrYaml('OPENAI_MODEL', 'models.llm.standard.model', 'gpt-4-turbo-preview'),
   ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY || yamlConfig?.models?.llm?.complex?.api_key,
   ANTHROPIC_MODEL: envOrYaml('ANTHROPIC_MODEL', 'models.llm.complex.model', 'claude-sonnet-4-6'),
@@ -237,7 +237,7 @@ const config: Config = {
   OLLAMA_THINK_BUDGET: parseInt(process.env.OLLAMA_THINK_BUDGET || '8192', 10),
 
   // Agent Runtime
-  AGENT_OLLAMA_MODEL: process.env.AGENT_OLLAMA_MODEL || process.env.OLLAMA_MODEL || 'qwen3.5:35b',
+  AGENT_OLLAMA_MODEL: process.env.AGENT_OLLAMA_MODEL || process.env.OLLAMA_MODEL || 'qwen3.5:27b',
   AGENT_MAX_ITERATIONS: parseInt(process.env.AGENT_MAX_ITERATIONS || '8', 10),
   AGENT_TIMEOUT: parseInt(process.env.AGENT_TIMEOUT || '180000', 10),
 
