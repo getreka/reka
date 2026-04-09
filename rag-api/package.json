@@ -1,6 +1,6 @@
 {
   "name": "@shared/rag-api",
-  "version": "2.2.1",
+  "version": "2.3.0",
   "description": "Shared RAG API for multi-project support",
   "main": "dist/server.js",
   "scripts": {
