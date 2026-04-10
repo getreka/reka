@@ -1,5 +1,4 @@
 import { createWorker } from '../queues';
-import config from '../../config';
 import { logger } from '../../utils/logger';
 import type { SensoryEvent } from '../../services/sensory-buffer';
 
@@ -122,11 +121,25 @@ export function startSessionLifecycleWorker(): void {
             summary?: string;
           };
 
-          // Run consolidation agent
+          // Run consolidation agent (skip if short session with manual memories already saved)
           try {
-            const agent = await getConsolidationAgent();
-            await agent.consolidate(projectName, sessionId);
-            logger.debug('Session consolidation completed', { sessionId });
+            const { sensoryBuffer } = await import('../../services/sensory-buffer');
+            const events = await sensoryBuffer.read(projectName, sessionId, { count: 50 });
+            const hasManualMemories = events.some(
+              (e) => e.toolName === 'remember' || e.toolName === 'batch_remember'
+            );
+            const tooFewEvents = events.length < 5;
+
+            if (hasManualMemories && tooFewEvents) {
+              logger.info('Consolidation skipped: short session with manual memories', {
+                sessionId,
+                events: events.length,
+              });
+            } else {
+              const agent = await getConsolidationAgent();
+              await agent.consolidate(projectName, sessionId);
+              logger.info('Session consolidation completed', { sessionId, events: events.length });
+            }
           } catch (err: any) {
             logger.debug('Consolidation failed', { error: err.message, sessionId });
           }

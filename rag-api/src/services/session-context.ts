@@ -18,7 +18,7 @@ import { usagePatterns } from './usage-patterns';
 import { cacheService } from './cache';
 import { projectProfileService } from './project-profile';
 import { workingMemory } from './working-memory';
-import { consolidationAgent } from './consolidation-agent';
+// consolidation runs async via session-lifecycle worker (not in endSession request path)
 import { logger } from '../utils/logger';
 import config from '../config';
 import { publishEvent } from '../events/emitter';
@@ -345,37 +345,20 @@ class SessionContextService {
       // Ignore errors
     }
 
-    // Save learnings: use consolidation agent (Phase 2) or legacy path
+    // Consolidation runs async via session:ending event → session-lifecycle worker.
+    // Count manual memories saved during this session as learningsSaved.
     let learningsSaved = 0;
-    if (config.CONSOLIDATION_ENABLED && autoSaveLearnings) {
-      // Phase 2: Consolidation agent processes WM + sensory buffer → episodic/semantic LTM
-      try {
-        const consolidation = await consolidationAgent.consolidate(projectName, sessionId);
-        learningsSaved = consolidation.episodic.length + consolidation.semantic.length;
-        logger.info(`Consolidation produced ${learningsSaved} memories`, {
-          episodic: consolidation.episodic.length,
-          semantic: consolidation.semantic.length,
-          patterns: consolidation.patternsDetected,
-          durationMs: consolidation.durationMs,
-        });
-      } catch (err: any) {
-        logger.warn('Consolidation failed, falling back to legacy path', { error: err.message });
-        // Fall through to legacy path below
-        learningsSaved = await this.legacyExtractLearnings(
-          projectName,
-          sessionId,
-          context,
-          autoSaveLearnings
-        );
-      }
-    } else {
-      // Legacy path: pending learnings + conversation analyzer
+    if (!config.CONSOLIDATION_ENABLED && autoSaveLearnings) {
+      // Legacy path only when consolidation is disabled
       learningsSaved = await this.legacyExtractLearnings(
         projectName,
         sessionId,
         context,
         autoSaveLearnings
       );
+    } else {
+      // Count pending learnings + decisions as "already saved" manual memories
+      learningsSaved = (context.pendingLearnings?.length || 0) + (context.decisions?.length || 0);
     }
 
     // Update session status
