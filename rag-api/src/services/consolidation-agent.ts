@@ -252,16 +252,28 @@ class ConsolidationAgentService {
     ].join('\n');
 
     try {
+      logger.info('Consolidation REPLAY input', {
+        wmSlots: wmSlots.length,
+        events: events.length,
+        eventSummaryLen: eventSummary.length,
+        eventSummaryPreview: eventSummary.slice(0, 500),
+      });
+
       const result = await this.llmCall(
         `Session events:\n${eventSummary.slice(0, 3000)}`,
         PATTERN_DETECTION_PROMPT,
         Math.min(remainingMs, config.CONSOLIDATION_LLM_TIMEOUT_MS)
       );
 
+      logger.info('Consolidation PATTERN_DETECTION output', {
+        rawLen: result.length,
+        rawPreview: result.slice(0, 500),
+      });
+
       const parsed = this.parseJson<{ patterns: ExtractedPattern[] }>(result);
       return parsed?.patterns ?? [];
-    } catch (error) {
-      logger.debug('Pattern detection LLM call failed', { error });
+    } catch (error: any) {
+      logger.warn('Pattern detection LLM call failed', { error: error.message });
       return [];
     }
   }
@@ -284,12 +296,29 @@ class ConsolidationAgentService {
         .map((s) => `[${s.toolName}] ${s.content} (files: ${s.files.join(', ')})`),
     ].join('\n');
 
+    logger.info('Consolidation ABSTRACTION input', {
+      patternsCount: patterns.length,
+      wmSlotsAboveThreshold: wmSlots.filter((s) => s.salience >= 0.5).length,
+      observationsLen: observations.length,
+      observationsPreview: observations.slice(0, 500),
+    });
+
+    if (!observations.trim()) {
+      logger.warn('Consolidation ABSTRACTION: empty observations, skipping LLM call');
+      return [];
+    }
+
     try {
       const result = await this.llmCall(
         `Session observations:\n${observations.slice(0, 3000)}`,
         ABSTRACTION_PROMPT,
         Math.min(remainingMs, config.CONSOLIDATION_LLM_TIMEOUT_MS)
       );
+
+      logger.info('Consolidation ABSTRACTION output', {
+        rawLen: result.length,
+        rawPreview: result.slice(0, 500),
+      });
 
       const parsed = this.parseJson<{ memories: AbstractedMemory[] }>(result);
       if (!parsed?.memories) return [];
@@ -390,7 +419,7 @@ class ConsolidationAgentService {
       const result = await llm.completeWithBestProvider(prompt, {
         complexity: 'utility',
         systemPrompt,
-        format: 'json',
+        // Note: format:'json' causes empty responses on qwen3.5:9b — rely on prompt instruction instead
         maxTokens: 2000,
         temperature: 0.2,
         think: false,

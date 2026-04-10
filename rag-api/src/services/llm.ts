@@ -210,9 +210,8 @@ class LLMService {
       },
     };
 
-    if (enableThink) {
-      body.think = true;
-    }
+    // qwen3.5 requires explicit think field on chat endpoint (omitting causes empty response)
+    body.think = enableThink;
     if (options.format === 'json') {
       body.format = 'json';
     }

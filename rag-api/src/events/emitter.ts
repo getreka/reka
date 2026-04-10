@@ -9,6 +9,7 @@ import { eventEmittedTotal } from '../utils/metrics';
 
 // Infrastructure events that stay on plain BullMQ queues
 const EVENT_QUEUE_MAP: Partial<Record<DomainEventType, QueueName>> = {
+  'session:ending': 'session-lifecycle',
   'maintenance:cycle.started': 'maintenance',
   'maintenance:dedup.completed': 'maintenance',
 };
@@ -41,10 +42,7 @@ const ACTOR_ROUTES: Partial<
     actorType: 'session',
     getActorId: (p) => `session:${p.projectName}:${p.sessionId}`,
   },
-  'session:ending': {
-    actorType: 'session',
-    getActorId: (p) => `session:${p.projectName}:${p.sessionId}`,
-  },
+  // session:ending routed to BullMQ worker (not actor) for reliable consolidation + debug logging
   'session:ended': {
     actorType: 'session',
     getActorId: (p) => `session:${p.projectName}:${p.sessionId}`,

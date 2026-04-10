@@ -258,13 +258,19 @@ export async function startServer(): Promise<void> {
     serverAdapter.setBasePath('/admin/queues');
 
     createBullBoard({
-      queues: ['indexing', 'maintenance', 'dead-letter'].map(
+      queues: ['session-lifecycle', 'indexing', 'maintenance', 'dead-letter'].map(
         (name) => new BullMQAdapter(getQueue(name as Parameters<typeof getQueue>[0]))
       ),
       serverAdapter,
     });
 
     app.use('/admin/queues', serverAdapter.getRouter());
+
+    // Start session-lifecycle worker (consolidation, stale detection, WM cleanup)
+    const { startSessionLifecycleWorker } =
+      await import('./events/workers/session-lifecycle.worker');
+    startSessionLifecycleWorker();
+
     logger.info('BullMQ event queues initialized with Bull Board at /admin/queues');
 
     // Start Actor System
