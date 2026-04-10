@@ -83,6 +83,8 @@ services:
     container_name: reka-api
     ports:
       - "127.0.0.1:3100:3100"
+    volumes:
+      - api_data:/app/data
     environment:
       - QDRANT_URL=http://qdrant:6333
       - OLLAMA_URL=http://ollama:11434
@@ -240,12 +242,14 @@ services:
     restart: unless-stopped
 
 volumes:
+  api_data:
+    name: reka_api_data # API keys (data/keys.json) persist across rebuilds
   qdrant_data:
-    name: shared_qdrant_data # reuse — collections will be recreated with new vector size
+    name: shared_qdrant_data
   ollama_data:
-    name: shared_ollama_data # reuse — keep existing models
+    name: shared_ollama_data
   redis_data:
-    name: shared_redis_data # reuse — ephemeral data
+    name: shared_redis_data
   prometheus_data:
     name: reka_prometheus_data
   grafana_data:
