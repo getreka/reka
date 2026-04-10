@@ -382,6 +382,80 @@ class GraphStoreService {
       throw error;
     }
   }
+
+  /**
+   * Store memory → file cross-links in the graph.
+   * Each edge: fromFile = "memory:{memoryId}", toFile = referenced file path.
+   * This enables graph-aware recall: "which memories reference files in my blast radius?"
+   */
+  async indexMemoryEdges(
+    projectName: string,
+    memoryId: string,
+    memoryType: string,
+    files: string[]
+  ): Promise<number> {
+    if (files.length === 0) return 0;
+
+    const collection = this.getCollectionName(projectName);
+    const dummy = zeroVector();
+    const memoryRef = `memory:${memoryId}`;
+
+    const points: VectorPoint[] = files.map((file) => {
+      graphEdgesTotal.inc({ project: projectName, edge_type: 'memory_references' });
+      return {
+        id: uuidv4(),
+        vector: dummy,
+        payload: {
+          fromFile: memoryRef,
+          fromSymbol: memoryType,
+          toFile: file,
+          toSymbol: '',
+          edgeType: 'memory_references',
+          confidence: 'consolidation',
+          project: projectName,
+        },
+      };
+    });
+
+    try {
+      await vectorStore.ensureCollection(collection);
+      await vectorStore.upsert(collection, points);
+      logger.debug(`Indexed ${points.length} memory→file edges`, {
+        memoryId,
+        project: projectName,
+      });
+      return points.length;
+    } catch (error: any) {
+      logger.debug('Failed to index memory edges', { error: error.message });
+      return 0;
+    }
+  }
+
+  /**
+   * Find memories that reference files in a given set (or their graph neighbors).
+   * Returns memory IDs from graph edges of type 'memory_references'.
+   */
+  async getMemoriesForFiles(projectName: string, files: string[]): Promise<string[]> {
+    const collection = this.getCollectionName(projectName);
+    const memoryIds = new Set<string>();
+
+    try {
+      for (const file of files.slice(0, 20)) {
+        const edges = await this.getEdges(collection, 'toFile', file);
+        for (const edge of edges) {
+          if (edge.edgeType === 'memory_references' && edge.fromFile.startsWith('memory:')) {
+            memoryIds.add(edge.fromFile.replace('memory:', ''));
+          }
+        }
+      }
+    } catch (error: any) {
+      if (error.status !== 404) {
+        logger.debug('getMemoriesForFiles failed', { error: error.message });
+      }
+    }
+
+    return [...memoryIds];
+  }
 }
 
 export const graphStore = new GraphStoreService();

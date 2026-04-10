@@ -28,6 +28,7 @@ import {
 import { relationshipClassifier, type ClassifiedRelation } from './relationship-classifier';
 import { vectorStore } from './vector-store';
 import { embeddingService } from './embedding';
+import { graphStore } from './graph-store';
 import { logger } from '../utils/logger';
 import config from '../config';
 import type { MemoryRelation } from './memory';
@@ -168,6 +169,9 @@ class ConsolidationAgentService {
           const anchors = this.extractAnchors(mem.content, mem.files);
           result.anchors.push(...anchors);
 
+          // File paths from anchors for graph cross-linking
+          const anchorFiles = anchors.filter((a) => a.type === 'file').map((a) => a.path);
+
           if (mem.isEpisodic) {
             // Store as episodic
             const stored = await memoryLtm.storeEpisodic({
@@ -179,6 +183,9 @@ class ConsolidationAgentService {
               anchors,
             });
             result.episodic.push({ id: stored.id, content: stored.content });
+
+            // Cross-link memory → files in graph
+            await graphStore.indexMemoryEdges(projectName, stored.id, 'episodic', anchorFiles);
           } else {
             // Step 5 & 6: Classify relationships with existing semantic memories
             let relationships: MemoryRelation[] = [];
@@ -212,6 +219,9 @@ class ConsolidationAgentService {
               source: 'consolidation',
             });
             result.semantic.push({ id: stored.id, content: stored.content, subtype: mem.subtype });
+
+            // Cross-link memory → files in graph
+            await graphStore.indexMemoryEdges(projectName, stored.id, mem.subtype, anchorFiles);
           }
         } catch (error: any) {
           logger.debug('Failed to store consolidated memory', { error: error.message });

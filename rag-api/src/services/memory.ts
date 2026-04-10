@@ -638,6 +638,59 @@ class MemoryService {
       }
     }
 
+    // Code graph → memory cross-links: find memories referencing files mentioned in results
+    if (config.GRAPH_RECALL_ENABLED && graphRecall && mappedResults.length > 0) {
+      try {
+        const { graphStore } = await import('./graph-store');
+        const filesInResults = mappedResults
+          .flatMap((r) => {
+            const files = (r.memory.metadata as any)?.files || [];
+            return Array.isArray(files) ? files : [];
+          })
+          .filter(Boolean)
+          .slice(0, 10);
+
+        if (filesInResults.length > 0) {
+          const memoryIds = await graphStore.getMemoriesForFiles(projectName, filesInResults);
+          const existingIds = new Set(mappedResults.map((r) => r.memory.id));
+          const newIds = memoryIds.filter((id) => !existingIds.has(id));
+
+          if (newIds.length > 0) {
+            // Fetch these memories from LTM
+            const { memoryLtm } = await import('./memory-ltm');
+            const graphMemories = await memoryLtm.getByIds(projectName, newIds.slice(0, 5));
+            for (const gm of graphMemories) {
+              mappedResults.push({
+                memory: {
+                  id: gm.id,
+                  type: 'note' as MemoryType,
+                  content: gm.content,
+                  tags: gm.tags || [],
+                  relatedTo: undefined,
+                  createdAt: gm.createdAt || '',
+                  updatedAt: '',
+                  metadata: { graphLinked: true, source: 'code_graph' },
+                  status: undefined,
+                  statusHistory: undefined,
+                  relationships: undefined,
+                  supersededBy: undefined,
+                  factCategory: undefined,
+                  factEntities: undefined,
+                  factDateTs: undefined,
+                },
+                score: 0.5,
+              });
+            }
+
+            mappedResults.sort((a, b) => b.score - a.score);
+            mappedResults = mappedResults.slice(0, limit);
+          }
+        }
+      } catch (err: any) {
+        logger.debug('Graph memory cross-link failed', { error: err.message });
+      }
+    }
+
     return mappedResults;
   }
 

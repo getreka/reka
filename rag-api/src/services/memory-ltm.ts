@@ -417,6 +417,41 @@ class LongTermMemoryService {
     };
   }
 
+  /**
+   * Retrieve memories by IDs (searches both episodic and semantic collections).
+   */
+  async getByIds(
+    projectName: string,
+    ids: string[]
+  ): Promise<Array<{ id: string; content: string; tags: string[]; createdAt: string }>> {
+    const results: Array<{ id: string; content: string; tags: string[]; createdAt: string }> = [];
+
+    for (const collection of [
+      this.semanticCollection(projectName),
+      this.episodicCollection(projectName),
+    ]) {
+      try {
+        const points = await vectorStore['client'].retrieve(collection, {
+          ids,
+          with_payload: true,
+        });
+        for (const p of points) {
+          const payload = p.payload as Record<string, unknown>;
+          results.push({
+            id: p.id as string,
+            content: (payload.content as string) || '',
+            tags: (payload.tags as string[]) || [],
+            createdAt: (payload.createdAt as string) || '',
+          });
+        }
+      } catch {
+        /* collection may not exist */
+      }
+    }
+
+    return results;
+  }
+
   // ── Helpers ───────────────────────────────────────────────
 
   private pointToMemory(
