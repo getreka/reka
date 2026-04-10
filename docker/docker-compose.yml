@@ -1,15 +1,12 @@
-# Shared AI Infrastructure
-# This infrastructure is shared across all projects
-# Each project uses its own collection/namespace in Qdrant
-
-version: "3.8"
+# Reka Platform — Docker Compose
+# Shared infrastructure for RAG, LLM, and vector search
 
 services:
-  # Vector Database - stores embeddings for all projects
-  # Each project uses a separate collection (e.g., "cypro_codebase", "other_project_codebase")
+  # ── Core Infrastructure (shared) ──────────────────────────
+
   qdrant:
     image: qdrant/qdrant:v1.15.2
-    container_name: shared-qdrant
+    container_name: reka-qdrant
     ports:
       - "127.0.0.1:6333:6333"
       - "127.0.0.1:6334:6334"
@@ -28,18 +25,17 @@ services:
       retries: 3
     restart: unless-stopped
 
-  # Local LLM - Ollama
   ollama:
     image: ollama/ollama:latest
-    container_name: shared-ollama
+    container_name: reka-ollama
     ports:
       - "127.0.0.1:11434:11434"
     volumes:
       - ollama_data:/root/.ollama
     environment:
       - OLLAMA_DEBUG=INFO
-      - OLLAMA_NUM_PARALLEL=1
-      - OLLAMA_MAX_LOADED_MODELS=1
+      - OLLAMA_NUM_PARALLEL=2
+      - OLLAMA_MAX_LOADED_MODELS=2
       - OLLAMA_FLASH_ATTENTION=true
       - OLLAMA_CONTEXT_LENGTH=4096
       - OLLAMA_KEEP_ALIVE=-1
@@ -59,38 +55,11 @@ services:
       retries: 3
     restart: unless-stopped
 
-  # Embedding + Reranker Server (BGE-M3 for legacy embedding, BGE-Reranker-v2-m3 for reranking)
-  bge-m3:
-    build:
-      context: ./bge-m3
-      dockerfile: Dockerfile
-    container_name: shared-bge-m3
-    ports:
-      - "127.0.0.1:8080:8080"
-    environment:
-      - MODEL_NAME=BAAI/bge-m3
-      - RERANKER_MODEL=BAAI/bge-reranker-v2-m3
-      - MAX_LENGTH=8192
-      - USE_GPU=false
-    volumes:
-      - bge_m3_cache:/root/.cache
-    deploy:
-      resources:
-        limits:
-          memory: 6G
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8080/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
-    restart: unless-stopped
-
-  # Redis for caching (shared)
   redis:
     image: redis:7-alpine
-    container_name: shared-redis
+    container_name: reka-redis
     ports:
-      - "127.0.0.1:6380:6379" # Different port to avoid conflicts with project-specific Redis
+      - "127.0.0.1:6380:6379"
     volumes:
       - redis_data:/data
     command: redis-server --appendonly yes --maxmemory 512mb --maxmemory-policy noeviction
@@ -105,19 +74,24 @@ services:
       retries: 3
     restart: unless-stopped
 
-  # RAG API Server - serves all projects
+  # ── Reka Platform Services ────────────────────────────────
+
   rag-api:
     build:
       context: ../rag-api
       dockerfile: Dockerfile
-    container_name: shared-rag-api
+    container_name: reka-api
     ports:
       - "127.0.0.1:3100:3100"
     environment:
       - QDRANT_URL=http://qdrant:6333
       - OLLAMA_URL=http://ollama:11434
-      - BGE_M3_URL=http://bge-m3:8080
       - REDIS_URL=redis://redis:6379
+      - EMBEDDING_PROVIDER=ollama
+      - OLLAMA_EMBEDDING_MODEL=qwen3-embedding:4b
+      - VECTOR_SIZE=2560
+      - LLM_PROVIDER=ollama
+      - OLLAMA_MODEL=qwen3.5:9b
       - API_PORT=3100
       - API_HOST=0.0.0.0
       - CORS_ORIGIN=http://localhost:3000,http://dashboard:3000
@@ -135,8 +109,6 @@ services:
         condition: service_healthy
       ollama:
         condition: service_healthy
-      bge-m3:
-        condition: service_healthy
       redis:
         condition: service_healthy
     healthcheck:
@@ -151,12 +123,11 @@ services:
       start_period: 15s
     restart: unless-stopped
 
-  # RAG Dashboard - Vue 3 web UI
   dashboard:
     build:
       context: ../dashboard
       dockerfile: Dockerfile
-    container_name: shared-dashboard
+    container_name: reka-dashboard
     ports:
       - "127.0.0.1:3001:3000"
     deploy:
@@ -174,12 +145,11 @@ services:
       start_period: 10s
     restart: unless-stopped
 
-  # Landing page - Astro static site
   landing:
     build:
       context: ../landing
       dockerfile: Dockerfile
-    container_name: shared-landing
+    container_name: reka-landing
     ports:
       - "127.0.0.1:4001:4000"
     deploy:
@@ -194,12 +164,12 @@ services:
       start_period: 10s
     restart: unless-stopped
 
-  # --- Monitoring (profile: monitoring) ---
-  # Usage: docker-compose --profile monitoring up -d
+  # ── Monitoring (profile: monitoring) ──────────────────────
+  # Usage: docker compose --profile monitoring up -d
 
   prometheus:
     image: prom/prometheus:v2.51.0
-    container_name: shared-prometheus
+    container_name: reka-prometheus
     profiles: ["monitoring"]
     ports:
       - "127.0.0.1:9090:9090"
@@ -223,11 +193,11 @@ services:
 
   jaeger:
     image: jaegertracing/all-in-one:1.55
-    container_name: shared-jaeger
+    container_name: reka-jaeger
     profiles: ["monitoring"]
     ports:
-      - "127.0.0.1:16686:16686" # Jaeger UI
-      - "127.0.0.1:4318:4318" # OTLP HTTP receiver
+      - "127.0.0.1:16686:16686"
+      - "127.0.0.1:4318:4318"
     environment:
       - COLLECTOR_OTLP_ENABLED=true
     deploy:
@@ -243,7 +213,7 @@ services:
 
   grafana:
     image: grafana/grafana:10.4.1
-    container_name: shared-grafana
+    container_name: reka-grafana
     profiles: ["monitoring"]
     ports:
       - "127.0.0.1:3200:3000"
@@ -271,18 +241,16 @@ services:
 
 volumes:
   qdrant_data:
-    name: shared_qdrant_data
+    name: shared_qdrant_data # reuse — collections will be recreated with new vector size
   ollama_data:
-    name: shared_ollama_data
-  bge_m3_cache:
-    name: shared_bge_m3_cache
+    name: shared_ollama_data # reuse — keep existing models
   redis_data:
-    name: shared_redis_data
+    name: shared_redis_data # reuse — ephemeral data
   prometheus_data:
-    name: shared_prometheus_data
+    name: reka_prometheus_data
   grafana_data:
-    name: shared_grafana_data
+    name: reka_grafana_data
 
 networks:
   default:
-    name: shared-ai-network
+    name: reka-network
