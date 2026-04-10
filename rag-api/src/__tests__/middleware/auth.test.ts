@@ -30,9 +30,26 @@ describe('authMiddleware', () => {
     vi.clearAllMocks();
   });
 
-  it('skips auth when API_KEY is not configured', () => {
+  it('denies access when no API keys configured (deny-by-default)', () => {
     const original = config.API_KEY;
     (config as any).API_KEY = undefined;
+    delete process.env.ALLOW_ANONYMOUS;
+    resetKeys();
+
+    const { req, res, next } = createMocks();
+    authMiddleware(req, res, next);
+
+    expect(next).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(401);
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code: 'AUTH_NOT_CONFIGURED' }));
+
+    (config as any).API_KEY = original;
+  });
+
+  it('allows anonymous access when ALLOW_ANONYMOUS=true', () => {
+    const original = config.API_KEY;
+    (config as any).API_KEY = undefined;
+    process.env.ALLOW_ANONYMOUS = 'true';
     resetKeys();
 
     const { req, res, next } = createMocks();
@@ -42,6 +59,7 @@ describe('authMiddleware', () => {
     expect(res.status).not.toHaveBeenCalled();
 
     (config as any).API_KEY = original;
+    delete process.env.ALLOW_ANONYMOUS;
   });
 
   it('skips auth for /health endpoint', () => {
@@ -54,14 +72,15 @@ describe('authMiddleware', () => {
     expect(next).toHaveBeenCalledTimes(1);
   });
 
-  it('skips auth for /metrics endpoint', () => {
+  it('requires auth for /metrics endpoint', () => {
     (config as any).API_KEY = 'test-key';
     resetKeys();
 
     const { req, res, next } = createMocks({ path: '/metrics' });
     authMiddleware(req, res, next);
 
-    expect(next).toHaveBeenCalledTimes(1);
+    expect(next).not.toHaveBeenCalled();
+    expect(res.status).toHaveBeenCalledWith(401);
   });
 
   it('accepts valid Bearer token', () => {
