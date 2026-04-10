@@ -40,7 +40,7 @@ export interface StoredApiKey {
   label?: string;
 }
 
-const SKIP_AUTH_PATHS = ['/health', '/metrics', '/api/health'];
+const SKIP_AUTH_PATHS = ['/health', '/api/health'];
 const KEYS_FILE = path.join(process.cwd(), 'data', 'keys.json');
 
 let keyStore: StoredApiKey[] = [];
@@ -108,11 +108,20 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction) 
     return next();
   }
 
-  // No keys configured — open access, project from header
+  // No keys configured — deny by default unless explicitly allowed
   if (keyStore.length === 0) {
-    const projectName = (req.headers['x-project-name'] as string) || 'default';
-    req.authContext = { keyName: 'anonymous', projectName, authenticated: false };
-    return next();
+    if (process.env.ALLOW_ANONYMOUS === 'true') {
+      const projectName = (req.headers['x-project-name'] as string) || 'default';
+      req.authContext = { keyName: 'anonymous', projectName, authenticated: false };
+      return next();
+    }
+    logger.warn(
+      `Auth denied: no API keys configured and ALLOW_ANONYMOUS not set for ${req.method} ${req.path}`
+    );
+    return res.status(401).json({
+      error: 'No API keys configured. Set ALLOW_ANONYMOUS=true for open access.',
+      code: 'AUTH_NOT_CONFIGURED',
+    });
   }
 
   const providedKey = extractApiKey(req);

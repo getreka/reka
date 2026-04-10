@@ -69,11 +69,13 @@ const SALIENCE_MAP: Record<string, number> = {
   context_briefing: 0.5,
   smart_dispatch: 0.5,
 
-  // Memory operations
-  remember: 0.4,
+  // Memory write operations (contain valuable content — decisions, investigations, fixes)
+  remember: 0.7,
+  batch_remember: 0.7,
+  promote_memory: 0.6,
+
+  // Memory read operations
   recall: 0.4,
-  batch_remember: 0.4,
-  promote_memory: 0.4,
 
   // Low salience
   list_memories: 0.2,
