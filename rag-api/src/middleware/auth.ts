@@ -94,8 +94,14 @@ function extractApiKey(req: Request): string | undefined {
 }
 
 function findMatchingKey(provided: string): StoredApiKey | undefined {
+  const providedHash = hashKey(provided);
   for (const stored of keyStore) {
-    if (safeCompare(provided, stored.key)) {
+    // Primary: compare hashes (new keys have empty key field)
+    if (stored.keyHash && providedHash === stored.keyHash) {
+      return stored;
+    }
+    // Fallback: direct comparison for legacy keys with plaintext key field
+    if (stored.key && safeCompare(provided, stored.key)) {
       return stored;
     }
   }
@@ -154,14 +160,14 @@ export function authMiddleware(req: Request, res: Response, next: NextFunction) 
 
 // --- Key Management (self-hosted) ---
 
-export function generateKey(projectName: string, label?: string): StoredApiKey {
+export function generateKey(projectName: string, label?: string): StoredApiKey & { key: string } {
   const id = randomBytes(8).toString('hex');
   const secret = randomBytes(12).toString('hex');
   const key = `rk_${projectName}_${secret}`;
 
   const entry: StoredApiKey = {
     id,
-    key,
+    key: '', // never store plaintext — only hash
     keyHash: hashKey(key),
     projectName,
     createdAt: new Date().toISOString(),
@@ -171,7 +177,8 @@ export function generateKey(projectName: string, label?: string): StoredApiKey {
   keyStore.push(entry);
   saveKeys();
 
-  return entry;
+  // Return full key to caller (shown once, never stored)
+  return { ...entry, key };
 }
 
 export function listKeys(): Array<Omit<StoredApiKey, 'key'> & { keyPrefix: string }> {

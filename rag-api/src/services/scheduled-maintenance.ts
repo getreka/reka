@@ -92,11 +92,20 @@ class ScheduledMaintenance {
         }
       }
 
+      // Snapshot all project collections (keep max 3 per collection)
+      let totalSnapshots = 0;
+      try {
+        totalSnapshots = await this.snapshotAllProjects(projects);
+      } catch (err: any) {
+        logger.warn('Snapshot cycle failed', { error: err.message });
+      }
+
       const durationMs = Date.now() - startTime;
       logger.info('Maintenance cycle complete', {
         projects: projects.length,
         totalMerged,
         totalDeleted,
+        totalSnapshots,
         durationMs,
       });
 
@@ -170,6 +179,46 @@ class ScheduledMaintenance {
       logger.debug('Delete superseded failed', { error: err.message?.slice(0, 80) });
       return 0;
     }
+  }
+
+  private async snapshotAllProjects(projects: string[]): Promise<number> {
+    const MAX_SNAPSHOTS = 3;
+    let total = 0;
+
+    const collections = await vectorStore.listCollections();
+
+    for (const project of projects) {
+      const projectCollections = collections.filter(
+        (c: string) =>
+          c.startsWith(`${project}_`) && !c.includes('_tool_usage') && !c.includes('_llm_usage')
+      );
+
+      for (const collection of projectCollections) {
+        try {
+          await vectorStore.createSnapshot(collection);
+          total++;
+
+          // Prune old snapshots (keep MAX_SNAPSHOTS)
+          const snapshots = await vectorStore.listSnapshots(collection);
+          if (snapshots.length > MAX_SNAPSHOTS) {
+            const sorted = snapshots.sort(
+              (a: any, b: any) =>
+                new Date(a.creation_time).getTime() - new Date(b.creation_time).getTime()
+            );
+            for (const old of sorted.slice(0, sorted.length - MAX_SNAPSHOTS)) {
+              await vectorStore.deleteSnapshot(collection, old.name);
+            }
+          }
+        } catch (err: any) {
+          logger.debug(`Snapshot failed for ${collection}`, { error: err.message?.slice(0, 80) });
+        }
+      }
+    }
+
+    if (total > 0) {
+      logger.info(`Snapshots created: ${total} collections`);
+    }
+    return total;
   }
 
   private async getActiveProjects(): Promise<string[]> {
