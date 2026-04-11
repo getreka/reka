@@ -40,7 +40,7 @@ export interface StoredApiKey {
   label?: string;
 }
 
-const SKIP_AUTH_PATHS = ['/health', '/api/health'];
+const SKIP_AUTH_PATHS = ['/health', '/api/health', '/internal/metrics'];
 const KEYS_FILE = path.join(process.cwd(), 'data', 'keys.json');
 
 let keyStore: StoredApiKey[] = [];

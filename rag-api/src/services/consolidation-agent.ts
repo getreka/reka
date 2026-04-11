@@ -262,7 +262,7 @@ class ConsolidationAgentService {
     ].join('\n');
 
     try {
-      logger.info('Consolidation REPLAY input', {
+      logger.debug('Consolidation REPLAY input', {
         wmSlots: wmSlots.length,
         events: events.length,
         eventSummaryLen: eventSummary.length,
@@ -275,7 +275,7 @@ class ConsolidationAgentService {
         Math.min(remainingMs, config.CONSOLIDATION_LLM_TIMEOUT_MS)
       );
 
-      logger.info('Consolidation PATTERN_DETECTION output', {
+      logger.debug('Consolidation PATTERN_DETECTION output', {
         rawLen: result.length,
         rawPreview: result.slice(0, 500),
       });
@@ -306,7 +306,7 @@ class ConsolidationAgentService {
         .map((s) => `[${s.toolName}] ${s.content} (files: ${s.files.join(', ')})`),
     ].join('\n');
 
-    logger.info('Consolidation ABSTRACTION input', {
+    logger.debug('Consolidation ABSTRACTION input', {
       patternsCount: patterns.length,
       wmSlotsAboveThreshold: wmSlots.filter((s) => s.salience >= 0.5).length,
       observationsLen: observations.length,
@@ -314,7 +314,7 @@ class ConsolidationAgentService {
     });
 
     if (!observations.trim()) {
-      logger.warn('Consolidation ABSTRACTION: empty observations, skipping LLM call');
+      logger.debug('Consolidation ABSTRACTION: empty observations, skipping LLM call');
       return [];
     }
 
@@ -325,7 +325,7 @@ class ConsolidationAgentService {
         Math.min(remainingMs, config.CONSOLIDATION_LLM_TIMEOUT_MS)
       );
 
-      logger.info('Consolidation ABSTRACTION output', {
+      logger.debug('Consolidation ABSTRACTION output', {
         rawLen: result.length,
         rawPreview: result.slice(0, 500),
       });

@@ -145,11 +145,13 @@ app.get('/health', async (req: Request, res: Response) => {
   });
 });
 
-// Prometheus metrics endpoint
-app.get('/metrics', async (req: Request, res: Response) => {
+// Prometheus metrics endpoint (auth required for /metrics, internal path for Prometheus scraper)
+const metricsHandler = async (req: Request, res: Response) => {
   res.set('Content-Type', getMetricsContentType());
   res.end(await getMetrics());
-});
+};
+app.get('/metrics', metricsHandler);
+app.get('/internal/metrics', metricsHandler);
 
 // /api/health — public health check (no auth required)
 app.get('/api/health', (req: Request, res: Response) => {

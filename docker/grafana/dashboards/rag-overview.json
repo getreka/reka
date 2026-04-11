@@ -8,21 +8,19 @@
     {
       "title": "Request Rate",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 0 },
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 0 },
       "targets": [
         {
           "expr": "sum(rate(http_requests_total[5m])) by (path)",
           "legendFormat": "{{path}}"
         }
       ],
-      "fieldConfig": {
-        "defaults": { "unit": "reqps" }
-      }
+      "fieldConfig": { "defaults": { "unit": "reqps" } }
     },
     {
       "title": "Request Latency (p50/p95/p99)",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 0 },
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 0 },
       "targets": [
         {
           "expr": "histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket[5m])) by (le))",
@@ -37,264 +35,37 @@
           "legendFormat": "p99"
         }
       ],
-      "fieldConfig": {
-        "defaults": { "unit": "s" }
-      }
+      "fieldConfig": { "defaults": { "unit": "s" } }
     },
     {
-      "title": "Error Rate",
+      "title": "Active Sessions / Projects",
       "type": "stat",
-      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 0 },
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 0 },
       "targets": [
-        {
-          "expr": "sum(rate(http_requests_total{status=~\"5..\"}[5m])) / sum(rate(http_requests_total[5m])) * 100",
-          "legendFormat": "Error %"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percent",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "green", "value": null },
-              { "color": "yellow", "value": 1 },
-              { "color": "red", "value": 5 }
-            ]
-          }
-        }
-      }
+        { "expr": "platform_active_sessions", "legendFormat": "Sessions" },
+        { "expr": "platform_active_projects", "legendFormat": "Projects" }
+      ]
     },
     {
       "title": "Embedding Latency",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 8 },
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 7 },
       "targets": [
         {
-          "expr": "histogram_quantile(0.50, sum(rate(embedding_duration_seconds_bucket[5m])) by (le, provider))",
-          "legendFormat": "p50 {{provider}}"
-        },
-        {
-          "expr": "histogram_quantile(0.95, sum(rate(embedding_duration_seconds_bucket[5m])) by (le, provider))",
-          "legendFormat": "p95 {{provider}}"
+          "expr": "histogram_quantile(0.95, sum(rate(embedding_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p95"
         }
       ],
-      "fieldConfig": {
-        "defaults": { "unit": "s" }
-      }
+      "fieldConfig": { "defaults": { "unit": "s" } }
     },
     {
       "title": "Embedding Cache Hit Rate",
       "type": "gauge",
-      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 8 },
+      "gridPos": { "h": 7, "w": 4, "x": 8, "y": 7 },
       "targets": [
         {
-          "expr": "sum(rate(embedding_cache_hits_total[5m])) / (sum(rate(embedding_cache_hits_total[5m])) + sum(rate(embedding_cache_misses_total[5m]))) * 100",
-          "legendFormat": "Hit Rate"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "unit": "percent",
-          "min": 0,
-          "max": 100,
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              { "color": "red", "value": null },
-              { "color": "yellow", "value": 50 },
-              { "color": "green", "value": 80 }
-            ]
-          }
-        }
-      }
-    },
-    {
-      "title": "Embedding Requests",
-      "type": "timeseries",
-      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 8 },
-      "targets": [
-        {
-          "expr": "sum(rate(embedding_requests_total[5m])) by (provider, status)",
-          "legendFormat": "{{provider}} {{status}}"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": { "unit": "reqps" }
-      }
-    },
-    {
-      "title": "LLM Latency by Provider",
-      "type": "timeseries",
-      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 16 },
-      "targets": [
-        {
-          "expr": "histogram_quantile(0.50, sum(rate(llm_duration_seconds_bucket[5m])) by (le, provider))",
-          "legendFormat": "p50 {{provider}}"
-        },
-        {
-          "expr": "histogram_quantile(0.95, sum(rate(llm_duration_seconds_bucket[5m])) by (le, provider))",
-          "legendFormat": "p95 {{provider}}"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": { "unit": "s" }
-      }
-    },
-    {
-      "title": "LLM Tokens Used",
-      "type": "timeseries",
-      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 16 },
-      "targets": [
-        {
-          "expr": "sum(rate(llm_tokens_total[5m])) by (provider, type)",
-          "legendFormat": "{{provider}} {{type}}"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": { "unit": "short" }
-      }
-    },
-    {
-      "title": "LLM Requests by Status",
-      "type": "timeseries",
-      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 16 },
-      "targets": [
-        {
-          "expr": "sum(rate(llm_requests_total[5m])) by (provider, status)",
-          "legendFormat": "{{provider}} {{status}}"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": { "unit": "reqps" }
-      }
-    },
-    {
-      "title": "Search Latency",
-      "type": "timeseries",
-      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 24 },
-      "targets": [
-        {
-          "expr": "histogram_quantile(0.50, sum(rate(search_duration_seconds_bucket[5m])) by (le))",
-          "legendFormat": "p50"
-        },
-        {
-          "expr": "histogram_quantile(0.95, sum(rate(search_duration_seconds_bucket[5m])) by (le))",
-          "legendFormat": "p95"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": { "unit": "s" }
-      }
-    },
-    {
-      "title": "Search Results Distribution",
-      "type": "histogram",
-      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 24 },
-      "targets": [
-        {
-          "expr": "sum(rate(search_results_count_bucket[5m])) by (le)",
-          "legendFormat": "{{le}}"
-        }
-      ]
-    },
-    {
-      "title": "Search Rate",
-      "type": "timeseries",
-      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 24 },
-      "targets": [
-        {
-          "expr": "sum(rate(search_requests_total[5m])) by (collection, status)",
-          "legendFormat": "{{collection}} {{status}}"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": { "unit": "reqps" }
-      }
-    },
-    {
-      "title": "Agent Runs",
-      "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 32 },
-      "targets": [
-        {
-          "expr": "sum(rate(agent_runs_total[5m])) by (agent_type, status)",
-          "legendFormat": "{{agent_type}} {{status}}"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": { "unit": "reqps" }
-      }
-    },
-    {
-      "title": "Agent Duration",
-      "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 32 },
-      "targets": [
-        {
-          "expr": "histogram_quantile(0.50, sum(rate(agent_duration_seconds_bucket[5m])) by (le, agent_type))",
-          "legendFormat": "p50 {{agent_type}}"
-        },
-        {
-          "expr": "histogram_quantile(0.95, sum(rate(agent_duration_seconds_bucket[5m])) by (le, agent_type))",
-          "legendFormat": "p95 {{agent_type}}"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": { "unit": "s" }
-      }
-    },
-    {
-      "title": "Memory Operations",
-      "type": "timeseries",
-      "gridPos": { "h": 8, "w": 8, "x": 0, "y": 40 },
-      "targets": [
-        {
-          "expr": "sum(rate(memory_operations_total[5m])) by (operation, type)",
-          "legendFormat": "{{operation}} {{type}}"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": { "unit": "reqps" }
-      }
-    },
-    {
-      "title": "Circuit Breakers",
-      "type": "stat",
-      "gridPos": { "h": 8, "w": 8, "x": 8, "y": 40 },
-      "targets": [
-        {
-          "expr": "circuit_breaker_state",
-          "legendFormat": "{{name}}"
-        }
-      ],
-      "fieldConfig": {
-        "defaults": {
-          "mappings": [
-            {
-              "type": "value",
-              "options": { "0": { "text": "CLOSED", "color": "green" } }
-            },
-            {
-              "type": "value",
-              "options": { "1": { "text": "HALF-OPEN", "color": "yellow" } }
-            },
-            {
-              "type": "value",
-              "options": { "2": { "text": "OPEN", "color": "red" } }
-            }
-          ]
-        }
-      }
-    },
-    {
-      "title": "Indexing Progress",
-      "type": "gauge",
-      "gridPos": { "h": 8, "w": 8, "x": 16, "y": 40 },
-      "targets": [
-        {
-          "expr": "indexing_progress",
-          "legendFormat": "{{project}}"
+          "expr": "rate(embedding_cache_hits_total[5m]) / (rate(embedding_cache_hits_total[5m]) + rate(embedding_cache_misses_total[5m]))",
+          "legendFormat": "hit rate"
         }
       ],
       "fieldConfig": {
@@ -303,57 +74,160 @@
           "min": 0,
           "max": 1,
           "thresholds": {
-            "mode": "absolute",
             "steps": [
-              { "color": "blue", "value": null },
-              { "color": "green", "value": 1 }
+              { "value": 0, "color": "red" },
+              { "value": 0.5, "color": "yellow" },
+              { "value": 0.8, "color": "green" }
             ]
           }
         }
       }
     },
     {
-      "title": "Node.js Memory",
+      "title": "LLM Latency (p95)",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 0, "y": 48 },
+      "gridPos": { "h": 7, "w": 6, "x": 12, "y": 7 },
       "targets": [
         {
-          "expr": "process_resident_memory_bytes{job=\"rag-api\"}",
-          "legendFormat": "RSS"
-        },
-        {
-          "expr": "nodejs_heap_size_used_bytes{job=\"rag-api\"}",
-          "legendFormat": "Heap Used"
-        },
-        {
-          "expr": "nodejs_heap_size_total_bytes{job=\"rag-api\"}",
-          "legendFormat": "Heap Total"
+          "expr": "histogram_quantile(0.95, sum(rate(llm_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p95"
         }
       ],
+      "fieldConfig": { "defaults": { "unit": "s" } }
+    },
+    {
+      "title": "Circuit Breaker",
+      "type": "stat",
+      "gridPos": { "h": 7, "w": 6, "x": 18, "y": 7 },
+      "targets": [
+        { "expr": "circuit_breaker_state", "legendFormat": "{{name}}" }
+      ],
       "fieldConfig": {
-        "defaults": { "unit": "bytes" }
+        "defaults": {
+          "mappings": [
+            {
+              "type": "value",
+              "options": {
+                "0": { "text": "CLOSED", "color": "green" },
+                "1": { "text": "HALF-OPEN", "color": "yellow" },
+                "2": { "text": "OPEN", "color": "red" }
+              }
+            }
+          ]
+        }
       }
     },
     {
-      "title": "Node.js Event Loop Lag",
+      "title": "Memory Operations",
       "type": "timeseries",
-      "gridPos": { "h": 8, "w": 12, "x": 12, "y": 48 },
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 14 },
       "targets": [
         {
-          "expr": "nodejs_eventloop_lag_seconds{job=\"rag-api\"}",
-          "legendFormat": "Event Loop Lag"
+          "expr": "rate(memory_operations_total[5m])",
+          "legendFormat": "{{operation}}"
         }
       ],
-      "fieldConfig": {
-        "defaults": { "unit": "s" }
-      }
+      "fieldConfig": { "defaults": { "unit": "ops" } }
+    },
+    {
+      "title": "Memory Governance",
+      "type": "timeseries",
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 14 },
+      "targets": [
+        {
+          "expr": "rate(memory_governance_total[5m])",
+          "legendFormat": "{{action}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ops" } }
+    },
+    {
+      "title": "Search Latency",
+      "type": "timeseries",
+      "gridPos": { "h": 7, "w": 8, "x": 0, "y": 21 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(search_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "p95"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s" } }
+    },
+    {
+      "title": "Search Results Count",
+      "type": "timeseries",
+      "gridPos": { "h": 7, "w": 8, "x": 8, "y": 21 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.50, sum(rate(search_results_count_bucket[5m])) by (le))",
+          "legendFormat": "median results"
+        }
+      ]
+    },
+    {
+      "title": "Graph Edges / Expansion",
+      "type": "timeseries",
+      "gridPos": { "h": 7, "w": 8, "x": 16, "y": 21 },
+      "targets": [
+        { "expr": "rate(graph_edges_total[5m])", "legendFormat": "edges/s" },
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(graph_expansion_duration_seconds_bucket[5m])) by (le))",
+          "legendFormat": "expansion p95"
+        }
+      ]
+    },
+    {
+      "title": "Consolidation Duration",
+      "type": "timeseries",
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 28 },
+      "targets": [
+        {
+          "expr": "histogram_quantile(0.95, sum(rate(rag_event_processing_duration_seconds_bucket{event_type=~\"session:ending\"}[5m])) by (le))",
+          "legendFormat": "consolidation p95"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "s" } }
+    },
+    {
+      "title": "Event Processing",
+      "type": "timeseries",
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 28 },
+      "targets": [
+        {
+          "expr": "rate(rag_event_emitted_total[5m])",
+          "legendFormat": "emitted {{event_type}}"
+        },
+        {
+          "expr": "rate(rag_event_processed_total[5m])",
+          "legendFormat": "processed {{event_type}}"
+        }
+      ],
+      "fieldConfig": { "defaults": { "unit": "ops" } }
+    },
+    {
+      "title": "Actor Mailbox Depth",
+      "type": "timeseries",
+      "gridPos": { "h": 7, "w": 12, "x": 0, "y": 35 },
+      "targets": [
+        { "expr": "rag_actor_mailbox_depth", "legendFormat": "{{actor_type}}" }
+      ]
+    },
+    {
+      "title": "Node.js Memory",
+      "type": "timeseries",
+      "gridPos": { "h": 7, "w": 12, "x": 12, "y": 35 },
+      "targets": [
+        { "expr": "nodejs_heap_size_used_bytes", "legendFormat": "heap used" },
+        { "expr": "process_resident_memory_bytes", "legendFormat": "RSS" }
+      ],
+      "fieldConfig": { "defaults": { "unit": "bytes" } }
     }
   ],
-  "refresh": "10s",
+  "refresh": "30s",
   "schemaVersion": 39,
-  "tags": ["rag", "infrastructure"],
+  "tags": ["reka", "rag"],
   "templating": { "list": [] },
-  "time": { "from": "now-1h", "to": "now" },
-  "title": "RAG Infrastructure Overview",
-  "uid": "rag-overview"
+  "time": { "from": "now-6h", "to": "now" },
+  "title": "Reka RAG Platform",
+  "uid": "reka-rag-overview"
 }
