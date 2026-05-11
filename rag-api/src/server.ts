@@ -15,6 +15,7 @@ import { logger, createRequestLogger } from './utils/logger';
 import { recordHttpRequest, getMetrics, getMetricsContentType } from './utils/metrics';
 import { vectorStore } from './services/vector-store';
 import { cacheService } from './services/cache';
+import { embeddingService } from './services/embedding';
 import { errorHandler } from './middleware/error-handler';
 import { authMiddleware, generateKey, listKeys, revokeKey } from './middleware/auth';
 import { rateLimitMiddleware } from './middleware/rate-limit';
@@ -44,6 +45,37 @@ declare global {
 }
 
 const app: Express = express();
+
+// Measured at startup via verifyEmbeddingDim(). Surfaced through /health so
+// operators can confirm the running provider matches VECTOR_SIZE.
+let actualEmbeddingDim: number | null = null;
+
+async function verifyEmbeddingDim(): Promise<void> {
+  try {
+    const probe = await embeddingService.embed('reka embedding dim probe');
+    actualEmbeddingDim = probe.length;
+    if (probe.length !== config.VECTOR_SIZE) {
+      const msg = `Embedding dim mismatch: provider returned ${probe.length}, VECTOR_SIZE=${config.VECTOR_SIZE}`;
+      if (config.EMBEDDING_STARTUP_DIM_CHECK) {
+        logger.error(
+          msg + ' — refusing to start (set EMBEDDING_STARTUP_DIM_CHECK=false to bypass)'
+        );
+        process.exit(1);
+      }
+      logger.warn(msg);
+    } else {
+      logger.info(
+        `Embedding dim probe ok: ${probe.length}d (provider: ${config.EMBEDDING_PROVIDER})`
+      );
+    }
+  } catch (err: any) {
+    // Provider unreachable at boot — log + continue. The first real request will surface the error.
+    logger.warn('Embedding dim probe failed (provider may be unreachable)', {
+      error: err?.message || String(err),
+      provider: config.EMBEDDING_PROVIDER,
+    });
+  }
+}
 
 // Middleware
 const corsOrigins = process.env.CORS_ORIGIN
@@ -140,6 +172,7 @@ app.get('/health', async (req: Request, res: Response) => {
       embeddingProvider: config.EMBEDDING_PROVIDER,
       llmProvider: config.LLM_PROVIDER,
       vectorSize: config.VECTOR_SIZE,
+      embeddingDim: actualEmbeddingDim,
     },
     cache: cacheStats,
   });
@@ -241,6 +274,10 @@ export async function startServer(): Promise<void> {
     // Initialize vector store
     logger.info('Initializing vector store...');
     await vectorStore.initialize();
+
+    // Probe embedding provider so we fail fast on dim mismatch and surface
+    // the actual dim through /health.
+    await verifyEmbeddingDim();
 
     // Start heartbeat monitor
     const { heartbeatMonitor } = await import('./services/heartbeat');
