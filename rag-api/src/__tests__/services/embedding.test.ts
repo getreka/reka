@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import axios from 'axios';
 import { mockEmbedding } from '../helpers/fixtures';
 
@@ -205,8 +205,8 @@ describe('EmbeddingService', () => {
       expect(sent.text.length).toBeLessThanOrEqual(24_000);
     });
 
-    it('embedBatch: short vector at any slot fails the batch', async () => {
-      // BGE batch path — provider returns one valid + one short vector.
+    it('embedBatch (BGE): short vector at any slot fails the batch', async () => {
+      // BGE batch path — no per-slot recovery; provider returns one valid + one short vector.
       mockedCache.getEmbedding.mockResolvedValue(null);
       mockedAxios.post.mockResolvedValue({
         data: { embeddings: [fakeVector, mockEmbedding(100)] },
@@ -215,6 +215,62 @@ describe('EmbeddingService', () => {
       await expect(embeddingService.embedBatch(['a', 'b'])).rejects.toThrow(
         /smaller than VECTOR_SIZE/
       );
+    });
+  });
+
+  describe('embedBatchOllama (per-slot recovery)', () => {
+    let originalProvider: string;
+
+    beforeEach(() => {
+      // Singleton reads provider in constructor — patch for these tests only.
+      originalProvider = (embeddingService as any).provider;
+      (embeddingService as any).provider = 'ollama';
+    });
+
+    afterEach(() => {
+      (embeddingService as any).provider = originalProvider;
+    });
+
+    it('falls back to per-text embed when one batch slot is empty', async () => {
+      mockedCache.getEmbedding.mockResolvedValue(null);
+
+      // 1st call: batch returns 2 valid + 1 empty (poisoned slot 1)
+      // 2nd call: per-text fallback for slot 1 returns a valid vector
+      mockedAxios.post
+        .mockResolvedValueOnce({
+          data: { embeddings: [fakeVector, [], fakeVector] },
+        })
+        .mockResolvedValueOnce({
+          data: { embeddings: [fakeVector] },
+        });
+
+      const result = await embeddingService.embedBatch(['ok', 'poisoned', 'ok']);
+
+      expect(result).toHaveLength(3);
+      expect(result[0]).toEqual(fakeVector);
+      expect(result[1]).toEqual(fakeVector); // recovered via fallback
+      expect(result[2]).toEqual(fakeVector);
+      // Two HTTP calls: one batch + one fallback for slot 1
+      expect(mockedAxios.post).toHaveBeenCalledTimes(2);
+    });
+
+    it('parks empty placeholder when fallback also fails (does not kill the batch)', async () => {
+      mockedCache.getEmbedding.mockResolvedValue(null);
+
+      // 1st call: batch returns one empty slot
+      // 2nd call: per-text fallback ALSO fails (network error → circuit retries → still fails)
+      mockedAxios.post
+        .mockResolvedValueOnce({
+          data: { embeddings: [fakeVector, []] },
+        })
+        .mockRejectedValue(new Error('ECONNREFUSED'));
+
+      const result = await embeddingService.embedBatch(['ok', 'permanently-poisoned']);
+
+      expect(result).toHaveLength(2);
+      expect(result[0]).toEqual(fakeVector);
+      // Slot 1 placeholder — indexer's filterValidDensePoints will drop it
+      expect(result[1]).toEqual([]);
     });
   });
 });

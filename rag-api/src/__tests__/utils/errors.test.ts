@@ -8,6 +8,7 @@ import {
   TimeoutError,
   CircuitOpenError,
   ConfigurationError,
+  EmbeddingError,
   isRetryableError,
   wrapError,
 } from '../../utils/errors';
@@ -96,6 +97,21 @@ describe('ConfigurationError', () => {
     const err = new ConfigurationError('missing key');
     expect(err.statusCode).toBe(500);
     expect(err.code).toBe('CONFIGURATION_ERROR');
+  });
+});
+
+describe('EmbeddingError', () => {
+  it('has statusCode 502 and is non-retryable', () => {
+    const err = new EmbeddingError('empty input', { callsite: 'embedWithOllama' });
+    expect(err.statusCode).toBe(502);
+    expect(err.code).toBe('EMBEDDING_ERROR');
+    expect(err.retryable).toBe(false);
+    expect(err.message).toBe('Embedding failed: empty input');
+    expect(err.details).toEqual({ callsite: 'embedWithOllama' });
+  });
+
+  it('is not flagged as retryable by isRetryableError', () => {
+    expect(isRetryableError(new EmbeddingError('boom'))).toBe(false);
   });
 });
 

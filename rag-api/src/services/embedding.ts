@@ -505,7 +505,21 @@ class EmbeddingService {
         }
         if (!vec) {
           // Per-text fallback (also goes through circuit breaker + retry + validation).
-          vec = await this.computeEmbedding(batch[j]);
+          // If the fallback ALSO fails (e.g. provider regression that hits the same
+          // input again), we MUST NOT throw out of this loop — that would kill the
+          // remaining 31 valid embeddings. Park an empty placeholder; the indexer's
+          // filterValidDensePoints will drop it before upsert and bump stats.errors.
+          try {
+            vec = await this.computeEmbedding(batch[j]);
+          } catch (fallbackErr) {
+            logger.warn('Ollama per-slot fallback failed, slot will be skipped at upsert', {
+              slot: idx,
+              inputLen: batch[j].length,
+              reason: fallbackErr instanceof Error ? fallbackErr.message : String(fallbackErr),
+            });
+            embeddings[idx] = [];
+            continue; // do not cache an empty vector
+          }
         }
         embeddings[idx] = vec;
 
