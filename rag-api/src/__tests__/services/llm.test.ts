@@ -381,7 +381,9 @@ describe('LLMService', () => {
 
       expect(mocks.post).toHaveBeenCalled();
       const body = mocks.post.mock.calls[0][1];
-      expect(body.think).toBeUndefined(); // think: false means no think field
+      // qwen3.5 chat endpoint requires explicit think field — omitting causes
+      // empty response. Utility complexity sends think:false explicitly.
+      expect(body.think).toBe(false);
       expect(result.text).toBe('utility response');
     });
 

@@ -1,7 +1,17 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import { Request, Response, NextFunction } from 'express';
 import { authMiddleware, resetKeys } from '../../middleware/auth';
 import config from '../../config';
+
+// resetKeys() re-reads data/keys.json from process.cwd(). When tests run in
+// a workspace that has real keys (e.g. local dev, Docker volume mount), the
+// "no API keys configured" scenarios cannot be reproduced. Mock fs.existsSync
+// to make the keys file appear absent for the duration of these tests.
+const existsSyncMock = vi.hoisted(() => vi.fn(() => false));
+vi.mock('fs', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('fs')>();
+  return { ...actual, existsSync: existsSyncMock };
+});
 
 // Helper to build mock req/res/next
 function createMocks(overrides?: {
@@ -28,6 +38,12 @@ function createMocks(overrides?: {
 describe('authMiddleware', () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    // Hide any real keys.json from disk so resetKeys() starts from empty store.
+    existsSyncMock.mockReturnValue(false);
+  });
+
+  afterEach(() => {
+    existsSyncMock.mockReset();
   });
 
   it('denies access when no API keys configured (deny-by-default)', () => {
