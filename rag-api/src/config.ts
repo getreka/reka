@@ -72,6 +72,8 @@ export interface Config {
 
   // Vector
   VECTOR_SIZE: number;
+  EMBEDDING_MAX_INPUT_CHARS: number;
+  EMBEDDING_STARTUP_DIM_CHECK: boolean;
 
   // Redis (caching)
   REDIS_URL?: string;
@@ -231,6 +233,11 @@ const config: Config = {
 
   // Vector size based on embedding provider
   VECTOR_SIZE: parseInt(process.env.VECTOR_SIZE || '1024', 10),
+  // Hard cap on embedding input length (chars). Inputs over this are truncated with a warn.
+  // Default ~24K chars stays well below qwen3-embedding:4b's 32K-token context.
+  EMBEDDING_MAX_INPUT_CHARS: parseInt(process.env.EMBEDDING_MAX_INPUT_CHARS || '24000', 10),
+  // Probe embedding dim at startup; exit on mismatch with VECTOR_SIZE.
+  EMBEDDING_STARTUP_DIM_CHECK: process.env.EMBEDDING_STARTUP_DIM_CHECK !== 'false',
 
   // Ollama Thinking/Reasoning
   OLLAMA_THINK: process.env.OLLAMA_THINK !== 'false',

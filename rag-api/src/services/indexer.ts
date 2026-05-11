@@ -25,6 +25,52 @@ import { buildAnchorString } from './anchor';
 import pLimitModule from 'p-limit';
 const pLimit = (pLimitModule as any).default || pLimitModule;
 
+/**
+ * Filter out points whose dense vector is empty or smaller than VECTOR_SIZE.
+ *
+ * Defense-in-depth against poisoned-batch failures from upstream embedding
+ * providers — even though embeddingService throws on empty/oversize, an
+ * unexpected provider regression should not crash the whole upsert batch.
+ */
+export function filterValidDensePoints(
+  points: VectorPoint[],
+  collection: string
+): { valid: VectorPoint[]; skipped: number } {
+  const valid = points.filter(
+    (p) => Array.isArray(p.vector) && p.vector.length === config.VECTOR_SIZE
+  );
+  const skipped = points.length - valid.length;
+  if (skipped > 0) {
+    logger.warn('Skipping points with invalid dense vectors before upsert', {
+      collection,
+      skipped,
+      kept: valid.length,
+      expectedDim: config.VECTOR_SIZE,
+    });
+  }
+  return { valid, skipped };
+}
+
+export function filterValidSparsePoints(
+  points: SparseVectorPoint[],
+  collection: string
+): { valid: SparseVectorPoint[]; skipped: number } {
+  const valid = points.filter(
+    (p) =>
+      Array.isArray(p.vectors?.dense) && (p.vectors.dense as number[]).length === config.VECTOR_SIZE
+  );
+  const skipped = points.length - valid.length;
+  if (skipped > 0) {
+    logger.warn('Skipping sparse points with invalid dense vectors before upsert', {
+      collection,
+      skipped,
+      kept: valid.length,
+      expectedDim: config.VECTOR_SIZE,
+    });
+  }
+  return { valid, skipped };
+}
+
 export interface IndexOptions {
   projectName: string;
   projectPath: string;
@@ -761,12 +807,16 @@ export async function indexProject(options: IndexOptions): Promise<IndexStats> {
         if (config.SPARSE_VECTORS_ENABLED && sparsePoints.length > 0) {
           // Sparse-enabled collection uses named vectors
           if (config.LEGACY_CODEBASE_COLLECTION) {
-            await vectorStore.upsertSparse(collectionName, sparsePoints);
+            const { valid, skipped } = filterValidSparsePoints(sparsePoints, collectionName);
+            stats.errors += skipped;
+            if (valid.length > 0) await vectorStore.upsertSparse(collectionName, valid);
           }
         } else if (points.length > 0) {
           // Dense-only path (legacy)
           if (config.LEGACY_CODEBASE_COLLECTION) {
-            await vectorStore.upsert(collectionName, points);
+            const { valid, skipped } = filterValidDensePoints(points, collectionName);
+            stats.errors += skipped;
+            if (valid.length > 0) await vectorStore.upsert(collectionName, valid);
           }
         }
 
@@ -782,7 +832,8 @@ export async function indexProject(options: IndexOptions): Promise<IndexStats> {
           }
           for (const [type, pts] of Object.entries(typeMap)) {
             const typedCollection = `${projectName}_${type}`;
-            await vectorStore.upsert(typedCollection, pts);
+            const { valid } = filterValidDensePoints(pts, typedCollection);
+            if (valid.length > 0) await vectorStore.upsert(typedCollection, valid);
           }
         }
       }
@@ -1153,11 +1204,15 @@ export async function indexFiles(options: IndexFilesOptions): Promise<IndexStats
         // Upsert to legacy collection
         if (config.SPARSE_VECTORS_ENABLED && sparsePoints.length > 0) {
           if (config.LEGACY_CODEBASE_COLLECTION) {
-            await vectorStore.upsertSparse(collectionName, sparsePoints);
+            const { valid, skipped } = filterValidSparsePoints(sparsePoints, collectionName);
+            stats.errors += skipped;
+            if (valid.length > 0) await vectorStore.upsertSparse(collectionName, valid);
           }
         } else if (points.length > 0) {
           if (config.LEGACY_CODEBASE_COLLECTION) {
-            await vectorStore.upsert(collectionName, points);
+            const { valid, skipped } = filterValidDensePoints(points, collectionName);
+            stats.errors += skipped;
+            if (valid.length > 0) await vectorStore.upsert(collectionName, valid);
           }
         }
 
@@ -1173,7 +1228,8 @@ export async function indexFiles(options: IndexFilesOptions): Promise<IndexStats
           }
           for (const [type, pts] of Object.entries(typeMap)) {
             const typedCollection = `${projectName}_${type}`;
-            await vectorStore.upsert(typedCollection, pts);
+            const { valid } = filterValidDensePoints(pts, typedCollection);
+            if (valid.length > 0) await vectorStore.upsert(typedCollection, valid);
           }
         }
       }
@@ -1532,9 +1588,13 @@ export async function reindexWithZeroDowntime(options: ReindexOptions): Promise<
 
         // Upsert to NEW collection
         if (config.SPARSE_VECTORS_ENABLED && sparsePoints.length > 0) {
-          await vectorStore.upsertSparse(newCollectionName, sparsePoints);
+          const { valid, skipped } = filterValidSparsePoints(sparsePoints, newCollectionName);
+          stats.errors += skipped;
+          if (valid.length > 0) await vectorStore.upsertSparse(newCollectionName, valid);
         } else if (points.length > 0) {
-          await vectorStore.upsert(newCollectionName, points);
+          const { valid, skipped } = filterValidDensePoints(points, newCollectionName);
+          stats.errors += skipped;
+          if (valid.length > 0) await vectorStore.upsert(newCollectionName, valid);
         }
 
         // Route to typed collections (dense-only)
@@ -1549,7 +1609,8 @@ export async function reindexWithZeroDowntime(options: ReindexOptions): Promise<
           }
           for (const [type, pts] of Object.entries(typeMap)) {
             const typedCollection = `${projectName}_${type}`;
-            await vectorStore.upsert(typedCollection, pts);
+            const { valid } = filterValidDensePoints(pts, typedCollection);
+            if (valid.length > 0) await vectorStore.upsert(typedCollection, valid);
           }
         }
       }

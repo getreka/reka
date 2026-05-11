@@ -21,6 +21,7 @@ vi.mock('../../services/cache', () => ({
 
 import { cacheService } from '../../services/cache';
 import { embeddingService } from '../../services/embedding';
+import { embeddingCircuit } from '../../utils/circuit-breaker';
 
 const mockedAxios = vi.mocked(axios);
 const mockedCache = vi.mocked(cacheService);
@@ -30,6 +31,9 @@ describe('EmbeddingService', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // Circuit breaker state is module-level singleton — reset between tests
+    // so earlier failures don't poison later ones.
+    embeddingCircuit.reset();
   });
 
   describe('embed (basic caching)', () => {
@@ -51,7 +55,8 @@ describe('EmbeddingService', () => {
 
       const result = await embeddingService.embed('hello');
 
-      expect(result).toBe(fakeVector);
+      // validateOutput slices to VECTOR_SIZE, so we deep-equal instead of identity.
+      expect(result).toEqual(fakeVector);
       expect(mockedAxios.post).toHaveBeenCalledWith(expect.stringContaining('/embed'), {
         text: 'hello',
       });
@@ -117,8 +122,9 @@ describe('EmbeddingService', () => {
       const result = await embeddingService.embedBatch(['cached', 'uncached']);
 
       expect(result).toHaveLength(2);
+      // Cached value passes through as-is; computed value is sliced (new array).
       expect(result[0]).toBe(vec1);
-      expect(result[1]).toBe(vec2);
+      expect(result[1]).toEqual(vec2);
       expect(mockedAxios.post).toHaveBeenCalledWith(expect.stringContaining('/embed/batch'), {
         texts: ['uncached'],
       });
@@ -148,7 +154,7 @@ describe('EmbeddingService', () => {
 
       const result = await embeddingService.embedFull('test text');
 
-      expect(result.dense).toBe(dense);
+      expect(result.dense).toEqual(dense);
       expect(result.sparse).toEqual(sparse);
       expect(mockedAxios.post).toHaveBeenCalledWith(expect.stringContaining('/embed/full'), {
         text: 'test text',
@@ -162,6 +168,53 @@ describe('EmbeddingService', () => {
       mockedAxios.post.mockRejectedValue(new Error('ECONNREFUSED'));
 
       await expect(embeddingService.embed('fail')).rejects.toThrow('ECONNREFUSED');
+    });
+  });
+
+  describe('input/output guards', () => {
+    it('rejects empty input', async () => {
+      mockedCache.getEmbedding.mockResolvedValue(null);
+
+      await expect(embeddingService.embed('')).rejects.toThrow(/empty input/);
+      await expect(embeddingService.embed('   \n\t')).rejects.toThrow(/empty input/);
+      expect(mockedAxios.post).not.toHaveBeenCalled();
+    });
+
+    it('throws EmbeddingError when provider returns empty vector', async () => {
+      mockedCache.getEmbedding.mockResolvedValue(null);
+      mockedAxios.post.mockResolvedValue({ data: { embedding: [] } });
+
+      await expect(embeddingService.embed('hi')).rejects.toThrow(/empty vector/);
+    });
+
+    it('throws EmbeddingError when provider returns short vector', async () => {
+      mockedCache.getEmbedding.mockResolvedValue(null);
+      mockedAxios.post.mockResolvedValue({ data: { embedding: mockEmbedding(512) } });
+
+      await expect(embeddingService.embed('hi')).rejects.toThrow(/smaller than VECTOR_SIZE/);
+    });
+
+    it('truncates oversize input before sending to provider', async () => {
+      mockedCache.getEmbedding.mockResolvedValue(null);
+      mockedAxios.post.mockResolvedValue({ data: { embedding: fakeVector } });
+
+      const huge = 'a'.repeat(50_000);
+      await embeddingService.embed(huge);
+
+      const sent = mockedAxios.post.mock.calls[0][1] as { text: string };
+      expect(sent.text.length).toBeLessThanOrEqual(24_000);
+    });
+
+    it('embedBatch: short vector at any slot fails the batch', async () => {
+      // BGE batch path — provider returns one valid + one short vector.
+      mockedCache.getEmbedding.mockResolvedValue(null);
+      mockedAxios.post.mockResolvedValue({
+        data: { embeddings: [fakeVector, mockEmbedding(100)] },
+      });
+
+      await expect(embeddingService.embedBatch(['a', 'b'])).rejects.toThrow(
+        /smaller than VECTOR_SIZE/
+      );
     });
   });
 });

@@ -14,6 +14,7 @@ import { logger } from '../utils/logger';
 import { cacheService, SessionCacheOptions, CacheStats } from './cache';
 import { withRetry } from '../utils/retry';
 import { embeddingCircuit } from '../utils/circuit-breaker';
+import { EmbeddingError } from '../utils/errors';
 
 export interface EmbeddingResult {
   embedding: number[];
@@ -41,6 +42,48 @@ class EmbeddingService {
 
   constructor() {
     this.provider = config.EMBEDDING_PROVIDER;
+  }
+
+  /**
+   * Trim input and enforce hard char cap. Throws on empty input; truncates oversize.
+   */
+  private sanitizeInput(text: string, callsite: string): string {
+    const trimmed = (text ?? '').trim();
+    if (!trimmed) {
+      throw new EmbeddingError('empty input', { callsite });
+    }
+    if (trimmed.length > config.EMBEDDING_MAX_INPUT_CHARS) {
+      logger.warn('Truncating oversize embedding input', {
+        callsite,
+        len: trimmed.length,
+        limit: config.EMBEDDING_MAX_INPUT_CHARS,
+      });
+      return trimmed.slice(0, config.EMBEDDING_MAX_INPUT_CHARS);
+    }
+    return trimmed;
+  }
+
+  /**
+   * Validate provider output. Throws on empty / undersized vectors.
+   * Returns the vector truncated to VECTOR_SIZE (MRL truncation for Qwen3 etc.).
+   */
+  private validateOutput(vec: unknown, callsite: string, inputLen: number): number[] {
+    if (!Array.isArray(vec) || vec.length === 0) {
+      throw new EmbeddingError('provider returned empty vector', {
+        callsite,
+        inputLen,
+        provider: this.provider,
+      });
+    }
+    if (vec.length < config.VECTOR_SIZE) {
+      throw new EmbeddingError('provider returned vector smaller than VECTOR_SIZE', {
+        callsite,
+        got: vec.length,
+        expected: config.VECTOR_SIZE,
+        provider: this.provider,
+      });
+    }
+    return (vec as number[]).slice(0, config.VECTOR_SIZE);
   }
 
   /**
@@ -186,37 +229,45 @@ class EmbeddingService {
   }
 
   private async embedFullWithBGE(text: string): Promise<FullEmbeddingResult> {
+    const safe = this.sanitizeInput(text, 'embedFullWithBGE');
     try {
       const response = await embeddingCircuit.execute(() =>
         withRetry(
-          () => axios.post(`${config.BGE_M3_URL}/embed/full`, { text }),
+          () => axios.post(`${config.BGE_M3_URL}/embed/full`, { text: safe }),
           { maxAttempts: 3, baseDelayMs: 300, maxDelayMs: 5000, timeoutMs: 15000 },
           'embedding.bge-m3.full'
         )
       );
+      const dense = this.validateOutput(response.data.dense, 'embedFullWithBGE', safe.length);
       return {
-        dense: response.data.dense,
-        sparse: response.data.sparse,
+        dense,
+        sparse: response.data.sparse ?? { indices: [], values: [] },
       };
     } catch (error: any) {
+      if (error instanceof EmbeddingError) throw error;
       logger.error('BGE-M3 full embedding failed', { error: error.message });
       throw error;
     }
   }
 
   private async embedBatchFullWithBGE(texts: string[]): Promise<FullEmbeddingResult[]> {
+    const safeTexts = texts.map((t, i) => this.sanitizeInput(t, `embedBatchFullWithBGE[${i}]`));
     try {
       const response = await embeddingCircuit.execute(() =>
         withRetry(
-          () => axios.post(`${config.BGE_M3_URL}/embed/batch/full`, { texts }),
+          () => axios.post(`${config.BGE_M3_URL}/embed/batch/full`, { texts: safeTexts }),
           { maxAttempts: 3, baseDelayMs: 500, maxDelayMs: 10000, timeoutMs: 30000 },
           'embedding.bge-m3.batchFull'
         )
       );
-      const dense: number[][] = response.data.dense;
-      const sparse: SparseVector[] = response.data.sparse;
-      return dense.map((d, i) => ({ dense: d, sparse: sparse[i] }));
+      const dense: unknown[] = response.data.dense ?? [];
+      const sparse: SparseVector[] = response.data.sparse ?? [];
+      return dense.map((d, i) => ({
+        dense: this.validateOutput(d, `embedBatchFullWithBGE[${i}]`, safeTexts[i].length),
+        sparse: sparse[i] ?? { indices: [], values: [] },
+      }));
     } catch (error: any) {
+      if (error instanceof EmbeddingError) throw error;
       logger.error('BGE-M3 batch full embedding failed', { error: error.message });
       throw error;
     }
@@ -247,12 +298,14 @@ class EmbeddingService {
   }
 
   private async embedWithBGE(text: string): Promise<number[]> {
+    const safe = this.sanitizeInput(text, 'embedWithBGE');
     try {
       const response = await axios.post(`${config.BGE_M3_URL}/embed`, {
-        text,
+        text: safe,
       });
-      return response.data.embedding;
+      return this.validateOutput(response.data.embedding, 'embedWithBGE', safe.length);
     } catch (error: any) {
+      if (error instanceof EmbeddingError) throw error;
       logger.error('BGE-M3 embedding failed', { error: error.message });
       throw error;
     }
@@ -263,10 +316,13 @@ class EmbeddingService {
     const uncachedIndices: number[] = [];
     const uncachedTexts: string[] = [];
 
+    // Sanitize all inputs upfront so cache lookups also use the cleaned key.
+    const safeTexts = texts.map((t, i) => this.sanitizeInput(t, `embedBatchWithBGE[${i}]`));
+
     // Check cache for each text
     if (options?.sessionId && options?.projectName) {
-      for (let i = 0; i < texts.length; i++) {
-        const { embedding, level } = await cacheService.getSessionEmbedding(texts[i], {
+      for (let i = 0; i < safeTexts.length; i++) {
+        const { embedding } = await cacheService.getSessionEmbedding(safeTexts[i], {
           sessionId: options.sessionId,
           projectName: options.projectName,
         });
@@ -274,18 +330,18 @@ class EmbeddingService {
           embeddings[i] = embedding;
         } else {
           uncachedIndices.push(i);
-          uncachedTexts.push(texts[i]);
+          uncachedTexts.push(safeTexts[i]);
         }
       }
     } else {
       // Basic cache check
-      for (let i = 0; i < texts.length; i++) {
-        const cached = await cacheService.getEmbedding(texts[i]);
+      for (let i = 0; i < safeTexts.length; i++) {
+        const cached = await cacheService.getEmbedding(safeTexts[i]);
         if (cached) {
           embeddings[i] = cached;
         } else {
           uncachedIndices.push(i);
-          uncachedTexts.push(texts[i]);
+          uncachedTexts.push(safeTexts[i]);
         }
       }
     }
@@ -305,21 +361,26 @@ class EmbeddingService {
           'embedding.bge-m3.batch'
         )
       );
-      const computed = response.data.embeddings;
+      const computed: unknown[] = response.data.embeddings ?? [];
 
       // Store in cache and fill results
       for (let i = 0; i < uncachedIndices.length; i++) {
         const originalIndex = uncachedIndices[i];
-        embeddings[originalIndex] = computed[i];
+        const validated = this.validateOutput(
+          computed[i],
+          `embedBatchWithBGE[${originalIndex}]`,
+          uncachedTexts[i].length
+        );
+        embeddings[originalIndex] = validated;
 
         // Cache the result
         if (options?.sessionId && options?.projectName) {
-          await cacheService.setSessionEmbedding(uncachedTexts[i], computed[i], {
+          await cacheService.setSessionEmbedding(uncachedTexts[i], validated, {
             sessionId: options.sessionId,
             projectName: options.projectName,
           });
         } else {
-          await cacheService.setEmbedding(uncachedTexts[i], computed[i]);
+          await cacheService.setEmbedding(uncachedTexts[i], validated);
         }
       }
 
@@ -331,6 +392,7 @@ class EmbeddingService {
 
       return embeddings;
     } catch (error: any) {
+      if (error instanceof EmbeddingError) throw error;
       logger.error('BGE-M3 batch embedding failed', { error: error.message });
       throw error;
     }
@@ -370,28 +432,34 @@ class EmbeddingService {
 
   /**
    * Batch embed documents via Ollama /api/embed (array input).
+   *
+   * Each batch element is sanitized; per-element validation lets us recover
+   * a single bad chunk by falling back to sequential without poisoning the batch.
    */
   async embedBatchOllama(texts: string[], options?: EmbedOptions): Promise<number[][]> {
     const embeddings: number[][] = new Array(texts.length);
     const uncachedIndices: number[] = [];
     const uncachedTexts: string[] = [];
 
+    // Sanitize upfront so cache lookups use the cleaned key.
+    const safeTexts = texts.map((t, i) => this.sanitizeInput(t, `embedBatchOllama[${i}]`));
+
     // Check cache first
-    for (let i = 0; i < texts.length; i++) {
+    for (let i = 0; i < safeTexts.length; i++) {
       const cached =
         options?.sessionId && options?.projectName
           ? (
-              await cacheService.getSessionEmbedding(texts[i], {
+              await cacheService.getSessionEmbedding(safeTexts[i], {
                 sessionId: options.sessionId,
                 projectName: options.projectName,
               })
             ).embedding
-          : await cacheService.getEmbedding(texts[i]);
+          : await cacheService.getEmbedding(safeTexts[i]);
       if (cached) {
         embeddings[i] = cached;
       } else {
         uncachedIndices.push(i);
-        uncachedTexts.push(texts[i]);
+        uncachedTexts.push(safeTexts[i]);
       }
     }
 
@@ -401,6 +469,7 @@ class EmbeddingService {
     const BATCH_SIZE = 32;
     for (let b = 0; b < uncachedTexts.length; b += BATCH_SIZE) {
       const batch = uncachedTexts.slice(b, b + BATCH_SIZE);
+      let computed: unknown[] | null = null;
       try {
         const response = await axios.post(
           `${config.OLLAMA_URL}/api/embed`,
@@ -410,32 +479,43 @@ class EmbeddingService {
           },
           { timeout: 60000 }
         );
-
-        const computed: number[][] = response.data.embeddings;
-        for (let j = 0; j < computed.length; j++) {
-          const idx = uncachedIndices[b + j];
-          // MRL truncation to VECTOR_SIZE
-          embeddings[idx] = computed[j].slice(0, config.VECTOR_SIZE);
-
-          // Cache
-          if (options?.sessionId && options?.projectName) {
-            await cacheService.setSessionEmbedding(uncachedTexts[b + j], embeddings[idx], {
-              sessionId: options.sessionId,
-              projectName: options.projectName,
-            });
-          } else {
-            await cacheService.setEmbedding(uncachedTexts[b + j], embeddings[idx]);
-          }
-        }
+        computed = response.data?.embeddings ?? null;
       } catch (error: any) {
         logger.error('Ollama batch embedding failed', {
           error: error.message,
           batchSize: batch.length,
         });
-        // Fallback: embed one by one
-        for (let j = 0; j < batch.length; j++) {
-          const idx = uncachedIndices[b + j];
-          embeddings[idx] = await this.computeEmbedding(batch[j]);
+      }
+
+      for (let j = 0; j < batch.length; j++) {
+        const idx = uncachedIndices[b + j];
+        const candidate = computed?.[j];
+        let vec: number[] | null = null;
+        if (candidate !== undefined) {
+          try {
+            vec = this.validateOutput(candidate, `embedBatchOllama[${idx}]`, batch[j].length);
+          } catch (err) {
+            // Bad embedding for this slot — fall through to sequential fallback.
+            logger.warn('Ollama returned invalid embedding for batch slot, falling back', {
+              slot: idx,
+              inputLen: batch[j].length,
+              reason: err instanceof Error ? err.message : String(err),
+            });
+          }
+        }
+        if (!vec) {
+          // Per-text fallback (also goes through circuit breaker + retry + validation).
+          vec = await this.computeEmbedding(batch[j]);
+        }
+        embeddings[idx] = vec;
+
+        if (options?.sessionId && options?.projectName) {
+          await cacheService.setSessionEmbedding(batch[j], vec, {
+            sessionId: options.sessionId,
+            projectName: options.projectName,
+          });
+        } else {
+          await cacheService.setEmbedding(batch[j], vec);
         }
       }
     }
@@ -450,31 +530,33 @@ class EmbeddingService {
   }
 
   private async embedWithOllama(text: string): Promise<number[]> {
+    const safe = this.sanitizeInput(text, 'embedWithOllama');
     try {
       const response = await axios.post(
         `${config.OLLAMA_URL}/api/embed`,
         {
           model: config.OLLAMA_EMBEDDING_MODEL,
-          input: text,
+          input: safe,
         },
         { timeout: 30000 }
       );
-      const embedding: number[] = response.data.embeddings[0];
-      // MRL truncation: Qwen3 outputs up to 2560d, truncate to VECTOR_SIZE
-      return embedding.slice(0, config.VECTOR_SIZE);
+      // validateOutput slices to VECTOR_SIZE (Qwen3 MRL emits up to 2560d).
+      return this.validateOutput(response.data?.embeddings?.[0], 'embedWithOllama', safe.length);
     } catch (error: any) {
+      if (error instanceof EmbeddingError) throw error;
       logger.error('Ollama embedding failed', { error: error.message });
       throw error;
     }
   }
 
   private async embedWithOpenAI(text: string): Promise<number[]> {
+    const safe = this.sanitizeInput(text, 'embedWithOpenAI');
     try {
       const response = await axios.post(
         'https://api.openai.com/v1/embeddings',
         {
           model: 'text-embedding-3-small',
-          input: text,
+          input: safe,
         },
         {
           headers: {
@@ -483,8 +565,13 @@ class EmbeddingService {
           },
         }
       );
-      return response.data.data[0].embedding;
+      return this.validateOutput(
+        response.data?.data?.[0]?.embedding,
+        'embedWithOpenAI',
+        safe.length
+      );
     } catch (error: any) {
+      if (error instanceof EmbeddingError) throw error;
       logger.error('OpenAI embedding failed', { error: error.message });
       throw error;
     }

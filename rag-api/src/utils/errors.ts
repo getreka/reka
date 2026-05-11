@@ -106,6 +106,16 @@ export class ConfigurationError extends AppError {
 }
 
 /**
+ * Embedding error (502) — provider returned empty/invalid vector or input was invalid.
+ * Not retryable: same input will produce the same failure.
+ */
+export class EmbeddingError extends AppError {
+  constructor(reason: string, details?: Record<string, unknown>) {
+    super(`Embedding failed: ${reason}`, 'EMBEDDING_ERROR', 502, false, details);
+  }
+}
+
+/**
  * Check if error is retryable
  */
 export function isRetryableError(error: unknown): boolean {

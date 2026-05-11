@@ -98,6 +98,27 @@ describe('VectorStoreService', () => {
       expect(points[0].id).toBeDefined();
       expect(typeof points[0].id).toBe('string');
     });
+
+    it('wraps Qdrant 400 with ExternalServiceError carrying the qdrant message', async () => {
+      mockQdrantClient.getCollections.mockResolvedValue({
+        collections: [{ name: 'col' }],
+      });
+      // Mimic the Qdrant client's error envelope.
+      mockQdrantClient.upsert.mockRejectedValueOnce(
+        Object.assign(new Error('Bad Request'), {
+          status: 400,
+          data: { status: { error: 'Wrong vector size: expected 1024, got 0' } },
+        })
+      );
+
+      await expect(
+        vectorStore.upsert('col', [{ vector: [0.1], payload: {} }])
+      ).rejects.toMatchObject({
+        code: 'EXTERNAL_SERVICE_ERROR',
+        message: expect.stringContaining('Wrong vector size'),
+        details: expect.objectContaining({ collection: 'col', status: 400 }),
+      });
+    });
   });
 
   describe('search', () => {

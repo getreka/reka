@@ -6,6 +6,34 @@ import { QdrantClient } from '@qdrant/js-client-rest';
 import { v4 as uuidv4 } from 'uuid';
 import config from '../config';
 import { logger } from '../utils/logger';
+import { ExternalServiceError } from '../utils/errors';
+
+/**
+ * Extract a useful error message from a Qdrant client failure.
+ * The Qdrant client wraps server errors in an opaque envelope; the actual
+ * detail lives at err.data.status.error or err.response.data.status.error.
+ */
+function extractQdrantError(err: any): string {
+  return (
+    err?.data?.status?.error ||
+    err?.response?.data?.status?.error ||
+    err?.data?.error ||
+    err?.message ||
+    'unknown qdrant error'
+  );
+}
+
+function wrapQdrantError(err: any, op: string, collection: string, batchSize: number): never {
+  if (err instanceof ExternalServiceError) throw err;
+  const msg = extractQdrantError(err);
+  const status = err?.status || err?.response?.status;
+  logger.error(`Qdrant ${op} failed`, { collection, batchSize, status, error: msg });
+  throw new ExternalServiceError('qdrant', `${op}: ${msg}`, {
+    collection,
+    batchSize,
+    status,
+  });
+}
 
 export interface VectorPoint {
   id?: string;
@@ -327,10 +355,14 @@ class VectorStoreService {
     const BATCH_SIZE = 100;
     for (let i = 0; i < formattedPoints.length; i += BATCH_SIZE) {
       const batch = formattedPoints.slice(i, i + BATCH_SIZE);
-      await this.client.upsert(collection, {
-        wait: true,
-        points: batch,
-      });
+      try {
+        await this.client.upsert(collection, {
+          wait: true,
+          points: batch,
+        });
+      } catch (err) {
+        wrapQdrantError(err, 'upsert', collection, batch.length);
+      }
     }
 
     logger.debug(`Upserted ${points.length} points to ${collection}`);
@@ -393,10 +425,14 @@ class VectorStoreService {
     const BATCH_SIZE = 50;
     for (let i = 0; i < formattedPoints.length; i += BATCH_SIZE) {
       const batch = formattedPoints.slice(i, i + BATCH_SIZE);
-      await this.client.upsert(collection, {
-        wait: true,
-        points: batch,
-      });
+      try {
+        await this.client.upsert(collection, {
+          wait: true,
+          points: batch,
+        });
+      } catch (err) {
+        wrapQdrantError(err, 'upsertSparse', collection, batch.length);
+      }
     }
 
     logger.debug(`Upserted ${points.length} sparse points to ${collection}`);
@@ -468,10 +504,14 @@ class VectorStoreService {
     const BATCH_SIZE = 100;
     for (let i = 0; i < formattedPoints.length; i += BATCH_SIZE) {
       const batch = formattedPoints.slice(i, i + BATCH_SIZE);
-      await this.client.upsert(collection, {
-        wait: true,
-        points: batch,
-      });
+      try {
+        await this.client.upsert(collection, {
+          wait: true,
+          points: batch,
+        });
+      } catch (err) {
+        wrapQdrantError(err, 'upsertWithBM25', collection, batch.length);
+      }
     }
 
     logger.debug(`Upserted ${points.length} BM25 points to ${collection}`);
