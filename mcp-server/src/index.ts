@@ -182,8 +182,9 @@ const CORE_TOOLS = new Set([
   "get_table_info",
   "check_db_schema",
   "get_db_rules",
-  // Agents (1)
+  // Agents (2)
   "run_agent",
+  "tribunal_debate",
 ]);
 
 // LITE PROFILE (~6 tools): the highest-frequency tools registered eagerly.
