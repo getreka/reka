@@ -124,7 +124,7 @@ Connect project `/home/ake/myapp` to the shared RAG infrastructure at `/home/ake
         "PROJECT_NAME": "rag",
         "PROJECT_PATH": "/home/ake/shared-ai-infra",
         "RAG_API_URL": "https://rag.akeryuu.com",
-        "RAG_API_KEY": "e699194c-53b3-4c8a-8833-5b82083bfeb1"
+        "RAG_API_KEY": "<REDACTED-ROTATE-THIS-KEY>"
       }
     }
   }

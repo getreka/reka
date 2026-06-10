@@ -19,6 +19,8 @@ import { embeddingService } from './services/embedding';
 import { errorHandler } from './middleware/error-handler';
 import { authMiddleware, generateKey, listKeys, revokeKey } from './middleware/auth';
 import { rateLimitMiddleware } from './middleware/rate-limit';
+import { enforceProjectScope } from './middleware/project-scope';
+import { projectNameSchema } from './utils/validation';
 import demoAuthRoutes from './routes/demo-auth';
 import searchRoutes from './routes/search';
 import indexRoutes from './routes/index';
@@ -45,6 +47,19 @@ declare global {
 }
 
 const app: Express = express();
+
+// Trust proxy controls how req.ip is derived from X-Forwarded-For. Secure default:
+// trust NOTHING (req.ip = direct socket, XFF ignored) so clients cannot spoof their IP.
+// Behind a reverse proxy (e.g. nginx), set TRUST_PROXY to the hop count (e.g. "1") or
+// a comma-separated subnet list so req.ip reflects the real client. Rate limiting and
+// audit logging depend on this being correct.
+const trustProxyEnv = process.env.TRUST_PROXY;
+if (trustProxyEnv && trustProxyEnv !== 'false') {
+  const asInt = Number(trustProxyEnv);
+  app.set('trust proxy', Number.isInteger(asInt) ? asInt : trustProxyEnv);
+} else {
+  app.set('trust proxy', false);
+}
 
 // Measured at startup via verifyEmbeddingDim(). Surfaced through /health so
 // operators can confirm the running provider matches VECTOR_SIZE.
@@ -128,6 +143,10 @@ app.use((req: Request, res: Response, next: NextFunction) => {
   next();
 });
 
+// Rate limiting BEFORE everything else (including the public auth/waitlist routes) so
+// brute-force and abuse are throttled even on unauthenticated endpoints.
+app.use(rateLimitMiddleware);
+
 // Demo auth routes (public, before API key auth)
 app.use('/api/auth', demoAuthRoutes);
 
@@ -155,9 +174,6 @@ app.post('/api/waitlist', async (req: Request, res: Response) => {
     res.json({ ok: true }); // fail silently — don't block the user
   }
 });
-
-// Rate limiting BEFORE auth — blocks brute-force before auth processing
-app.use(rateLimitMiddleware);
 
 // API key authentication (skips /health and /metrics)
 app.use(authMiddleware);
@@ -195,21 +211,45 @@ app.get('/api/health', (req: Request, res: Response) => {
   });
 });
 
-// Key management (self-hosted, before auth)
-app.post('/api/keys', (req: Request, res: Response) => {
-  const { projectName, label } = req.body;
-  if (!projectName || typeof projectName !== 'string') {
-    return res.status(400).json({ error: 'projectName is required' });
+// Key management — administrative. These mint/list/revoke keys for ARBITRARY projects,
+// so they are gated to admins only: a request from loopback (self-hosted localhost
+// operator) or one carrying a valid X-Admin-Key matching ADMIN_API_KEY. Without this
+// gate any authenticated key could escalate to provision/revoke keys for other tenants.
+function requireAdmin(req: Request, res: Response): boolean {
+  const adminKey = process.env.ADMIN_API_KEY;
+  const provided = req.headers['x-admin-key'];
+  if (adminKey && typeof provided === 'string' && provided === adminKey) {
+    return true;
   }
-  const entry = generateKey(projectName, label);
+  // Loopback check uses the raw socket address, NOT req.ip — req.ip is derived from
+  // X-Forwarded-For once trust proxy is on, so a misconfigured edge could let a remote
+  // attacker spoof "127.0.0.1". The socket address can't be forged by the client.
+  const socketIp = req.socket.remoteAddress || '';
+  if (socketIp === '127.0.0.1' || socketIp === '::1' || socketIp === '::ffff:127.0.0.1') {
+    return true;
+  }
+  res.status(403).json({ error: 'Admin access required', code: 'ADMIN_REQUIRED' });
+  return false;
+}
+
+app.post('/api/keys', (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
+  const { projectName, label } = req.body || {};
+  const parsed = projectNameSchema.safeParse(projectName);
+  if (!parsed.success) {
+    return res.status(400).json({ error: 'Valid projectName is required', code: 'VALIDATION' });
+  }
+  const entry = generateKey(parsed.data, typeof label === 'string' ? label : undefined);
   res.json({ key: entry.key, projectName: entry.projectName, id: entry.id });
 });
 
-app.get('/api/keys', (_req: Request, res: Response) => {
+app.get('/api/keys', (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
   res.json(listKeys());
 });
 
 app.delete('/api/keys/:id', (req: Request, res: Response) => {
+  if (!requireAdmin(req, res)) return;
   const revoked = revokeKey(req.params.id);
   if (!revoked) return res.status(404).json({ error: 'Key not found' });
   res.json({ revoked: true });
@@ -223,6 +263,11 @@ app.get('/api/whoami', (req: Request, res: Response) => {
   }
   res.json({ projectName: ctx.projectName, keyName: ctx.keyName });
 });
+
+// Enforce per-key project isolation on every data route: a request may only target
+// its own project's collections / projectName. Mounted AFTER /api/keys and /api/whoami
+// (which legitimately reference other projects) and BEFORE all data routes.
+app.use('/api', enforceProjectScope);
 
 // API routes
 app.use('/api', searchRoutes);
@@ -241,6 +286,17 @@ app.use('/api/admin', adminRoutes);
 
 // Legacy routes for backward compatibility with cypro-rag MCP
 app.use('/api/dev/codebase', (req, res, next) => {
+  // This route hardcodes the 'cypro' project, so it must not be reachable by keys
+  // scoped to a different project (it would otherwise bypass enforceProjectScope and
+  // expose cypro's data). Anonymous/legacy callers are allowed (single trust domain).
+  const ctx = req.authContext;
+  if (ctx?.authenticated && ctx.projectName !== 'cypro') {
+    return res.status(403).json({
+      error: 'Legacy cypro route not available for this project',
+      code: 'PROJECT_SCOPE_VIOLATION',
+    });
+  }
+
   // Map old endpoints to new ones
   const projectName = 'cypro';
   req.headers['x-project-name'] = projectName;
@@ -326,6 +382,28 @@ export async function startServer(): Promise<void> {
 
     logger.info('Actor system started', { actors: ['memory', 'session', 'maintenance', 'index'] });
 
+    // Incremental file-watcher re-index (off by default). When enabled, watches
+    // the configured project's working tree and incrementally re-indexes files
+    // as they change — closing the "stale index" gap. Guarded so a watcher
+    // failure can never abort server startup.
+    if (process.env.FILE_WATCHER_ENABLED === 'true') {
+      try {
+        const watchPath = process.env.WATCH_PATH || process.env.PROJECT_PATH;
+        const watchProject = process.env.WATCH_PROJECT || process.env.PROJECT_NAME;
+        if (watchPath && watchProject) {
+          const { fileWatcher } = await import('./services/file-watcher');
+          fileWatcher.start(watchProject, watchPath);
+          logger.info('File watcher enabled', { project: watchProject, path: watchPath });
+        } else {
+          logger.warn(
+            'FILE_WATCHER_ENABLED=true but WATCH_PROJECT/PROJECT_NAME or WATCH_PATH/PROJECT_PATH is unset — skipping watcher'
+          );
+        }
+      } catch (err: any) {
+        logger.warn('Failed to initialize file watcher', { error: err?.message || String(err) });
+      }
+    }
+
     // Phase 5: Unix domain socket support via API_SOCKET_PATH
     const socketPath = process.env.API_SOCKET_PATH;
     if (socketPath) {
@@ -361,6 +439,15 @@ process.on('SIGTERM', async () => {
   logger.info('SIGTERM received, shutting down...');
   const { heartbeatMonitor } = await import('./services/heartbeat');
   heartbeatMonitor.stop();
+  // Tear down file watchers (no-op if none were started).
+  if (process.env.FILE_WATCHER_ENABLED === 'true') {
+    try {
+      const { fileWatcher } = await import('./services/file-watcher');
+      await fileWatcher.stopAll();
+    } catch {
+      /* watcher may not have started */
+    }
+  }
   const { llmUsageLogger } = await import('./services/llm-usage-logger');
   await llmUsageLogger.shutdown();
   const { actorSystem } = await import('./actors/actor-system');

@@ -25,6 +25,7 @@ import { embeddingService } from '../services/embedding';
 import { graphStore } from '../services/graph-store';
 import { logger } from '../utils/logger';
 import { asyncHandler } from '../middleware/async-handler';
+import { scopeCollectionParam, scopeProjectParam } from '../middleware/project-scope';
 import {
   validate,
   validateProjectName,
@@ -37,6 +38,15 @@ import {
 } from '../utils/validation';
 
 const router = Router();
+
+// Per-key tenant isolation on route params. router.param() fires for every route on
+// this router that uses the named param, before the handler — so an authenticated key
+// cannot read/delete another project's collection via :name/:collection, nor read
+// another project's data via :project. (req.params is only populated at route-match
+// time, which is why these are guarded here and not in the app-level enforceProjectScope.)
+router.param('name', scopeCollectionParam);
+router.param('collection', scopeCollectionParam);
+router.param('project', scopeProjectParam);
 
 // ============================================
 // Eager Collection Creation
