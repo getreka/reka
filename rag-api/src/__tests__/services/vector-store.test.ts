@@ -24,7 +24,9 @@ const mockQdrantClient = vi.hoisted(() => ({
 }));
 
 vi.mock('@qdrant/js-client-rest', () => ({
-  QdrantClient: vi.fn().mockImplementation(() => mockQdrantClient),
+  QdrantClient: vi.fn().mockImplementation(function () {
+    return mockQdrantClient;
+  }),
 }));
 
 import { vectorStore } from '../../services/vector-store';

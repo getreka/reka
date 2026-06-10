@@ -22,13 +22,18 @@ const mockRedisDisconnect = vi.hoisted(() => vi.fn());
 let capturedProcessor: ((job: any) => Promise<any>) | null = null;
 
 vi.mock('bullmq', () => ({
-  Queue: vi.fn().mockImplementation((name: string) => ({
-    name,
-    add: mockQueueAdd,
-    close: mockQueueClose,
-    getJobCounts: mockQueueGetJobCounts,
-  })),
-  Worker: vi.fn().mockImplementation((_name: string, processor: (job: any) => Promise<any>) => {
+  Queue: vi.fn().mockImplementation(function (name: string) {
+    return {
+      name,
+      add: mockQueueAdd,
+      close: mockQueueClose,
+      getJobCounts: mockQueueGetJobCounts,
+    };
+  }),
+  Worker: vi.fn().mockImplementation(function (
+    _name: string,
+    processor: (job: any) => Promise<any>
+  ) {
     capturedProcessor = processor;
     return {
       close: mockWorkerClose,
@@ -39,12 +44,14 @@ vi.mock('bullmq', () => ({
 }));
 
 vi.mock('ioredis', () => ({
-  default: vi.fn().mockImplementation(() => ({
-    get: mockRedisGet,
-    set: mockRedisSet,
-    del: mockRedisDel,
-    disconnect: mockRedisDisconnect,
-  })),
+  default: vi.fn().mockImplementation(function () {
+    return {
+      get: mockRedisGet,
+      set: mockRedisSet,
+      del: mockRedisDel,
+      disconnect: mockRedisDisconnect,
+    };
+  }),
 }));
 
 // Mock metrics so Prometheus counters/histograms don't crash in test env
