@@ -1,1 +1,24 @@
-{"eval_id":4,"eval_name":"research-memory-governance","prompt":"Як працює система memory governance? Де знаходиться логіка quarantine та promotion?","assertions":[{"type":"tool","text":"Uses at least 3 different RAG search tools"},{"type":"tool","text":"Reads at least 2 source files to verify findings"},{"type":"outcome","text":"Explains the quarantine-to-promotion flow with specific file:line references"},{"type":"outcome","text":"Identifies at least 2 files involved in memory governance"},{"type":"outcome","text":"Answer distinguishes between auto-memories (quarantine) and manual memories (durable)"}]}
+{
+  "eval_id": 4,
+  "eval_name": "research-memory-governance",
+  "prompt": "Як працює система memory governance? Де знаходиться логіка quarantine та promotion?",
+  "assertions": [
+    { "type": "tool", "text": "Uses at least 3 different RAG search tools" },
+    {
+      "type": "tool",
+      "text": "Reads at least 2 source files to verify findings"
+    },
+    {
+      "type": "outcome",
+      "text": "Explains the quarantine-to-promotion flow with specific file:line references"
+    },
+    {
+      "type": "outcome",
+      "text": "Identifies at least 2 files involved in memory governance"
+    },
+    {
+      "type": "outcome",
+      "text": "Answer distinguishes between auto-memories (quarantine) and manual memories (durable)"
+    }
+  ]
+}

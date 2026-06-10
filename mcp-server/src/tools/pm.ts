@@ -17,11 +17,21 @@ export function createPmTools(projectName: string): ToolSpec[] {
       name: "search_requirements",
       description: `Search technical requirements and product documentation for ${projectName}. Finds relevant requirements, user stories, and specifications from Confluence.`,
       schema: z.object({
-        query: z.string().describe("Search query for requirements (e.g., 'video inspection flow', 'payment integration')"),
-        limit: z.coerce.number().optional().describe("Max results (default: 5)"),
+        query: z
+          .string()
+          .describe(
+            "Search query for requirements (e.g., 'video inspection flow', 'payment integration')",
+          ),
+        limit: z.coerce
+          .number()
+          .optional()
+          .describe("Max results (default: 5)"),
       }),
       annotations: TOOL_ANNOTATIONS["search_requirements"],
-      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
+      handler: async (
+        args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
         const { query, limit = 5 } = args as { query: string; limit?: number };
         const response = await ctx.api.post("/api/search", {
           collection: `${ctx.collectionPrefix}confluence`,
@@ -40,7 +50,7 @@ export function createPmTools(projectName: string): ToolSpec[] {
                 `### ${i + 1}. ${r.title || "Requirement"}\n` +
                 `**Relevance:** ${pct(r.score)}\n` +
                 `**Source:** ${r.url || "Confluence"}\n\n` +
-                truncate(r.content, 800)
+                truncate(r.content, 800),
             )
             .join("\n\n---\n\n")
         );
@@ -50,11 +60,21 @@ export function createPmTools(projectName: string): ToolSpec[] {
       name: "analyze_requirements",
       description: `Analyze technical requirements and compare with existing implementation in ${projectName}. Identifies gaps, missing features, and implementation status.`,
       schema: z.object({
-        feature: z.string().describe("Feature or requirement to analyze (e.g., 'video inspection', 'notifications')"),
-        detailed: z.boolean().optional().describe("Include detailed code references (default: false)"),
+        feature: z
+          .string()
+          .describe(
+            "Feature or requirement to analyze (e.g., 'video inspection', 'notifications')",
+          ),
+        detailed: z
+          .boolean()
+          .optional()
+          .describe("Include detailed code references (default: false)"),
       }),
       annotations: TOOL_ANNOTATIONS["analyze_requirements"],
-      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
+      handler: async (
+        args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
         const { feature, detailed = false } = args as {
           feature: string;
           detailed?: boolean;
@@ -124,10 +144,16 @@ export function createPmTools(projectName: string): ToolSpec[] {
       description: `Estimate development effort for a feature based on requirements and codebase analysis. Returns complexity assessment, affected files, and risk factors.`,
       schema: z.object({
         feature: z.string().describe("Feature description to estimate"),
-        includeSubtasks: z.boolean().optional().describe("Break down into subtasks (default: true)"),
+        includeSubtasks: z
+          .boolean()
+          .optional()
+          .describe("Break down into subtasks (default: true)"),
       }),
       annotations: TOOL_ANNOTATIONS["estimate_feature"],
-      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
+      handler: async (
+        args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
         const { feature, includeSubtasks = true } = args as {
           feature: string;
           includeSubtasks?: boolean;
@@ -167,7 +193,7 @@ export function createPmTools(projectName: string): ToolSpec[] {
           result += `## Affected Files\n`;
           d.affectedFiles.slice(0, 15).forEach((f: string) => {
             const hasTest = d.testFiles.some((t: string) =>
-              t.includes(f.replace(/\.(ts|js|py|go)$/, ""))
+              t.includes(f.replace(/\.(ts|js|py|go)$/, "")),
             );
             result += `- ${f} ${hasTest ? "(tested)" : "(no tests)"}\n`;
           });
@@ -212,7 +238,10 @@ export function createPmTools(projectName: string): ToolSpec[] {
         feature: z.string().describe("Feature name to check status"),
       }),
       annotations: TOOL_ANNOTATIONS["get_feature_status"],
-      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
+      handler: async (
+        args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
         const { feature } = args as { feature: string };
 
         const reqResponse = await ctx.api.post("/api/search", {
@@ -272,13 +301,29 @@ export function createPmTools(projectName: string): ToolSpec[] {
       name: "list_requirements",
       description: `List all documented requirements/features for ${projectName} from Confluence. Groups by category or status.`,
       schema: z.object({
-        category: z.string().optional().describe("Filter by category (optional)"),
-        limit: z.coerce.number().optional().describe("Max results (default: 20)"),
-        offset: z.coerce.number().optional().describe("Pagination offset (default: 0)"),
+        category: z
+          .string()
+          .optional()
+          .describe("Filter by category (optional)"),
+        limit: z.coerce
+          .number()
+          .optional()
+          .describe("Max results (default: 20)"),
+        offset: z.coerce
+          .number()
+          .optional()
+          .describe("Pagination offset (default: 0)"),
       }),
       annotations: TOOL_ANNOTATIONS["list_requirements"],
-      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
-        const { category, limit = 20, offset = 0 } = args as {
+      handler: async (
+        args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
+        const {
+          category,
+          limit = 20,
+          offset = 0,
+        } = args as {
           category?: string;
           limit?: number;
           offset?: number;
@@ -321,10 +366,17 @@ export function createPmTools(projectName: string): ToolSpec[] {
       name: "ask_pm",
       description: `Ask product management questions about ${projectName}. Answers questions about requirements, features, priorities, and project status using both documentation and codebase.`,
       schema: z.object({
-        question: z.string().describe("PM question (e.g., 'What features are planned for video inspection?', 'What\\'s the status of notifications?')"),
+        question: z
+          .string()
+          .describe(
+            "PM question (e.g., 'What features are planned for video inspection?', 'What\\'s the status of notifications?')",
+          ),
       }),
       annotations: TOOL_ANNOTATIONS["ask_pm"],
-      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
+      handler: async (
+        args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
         const { question } = args as { question: string };
 
         // Search both requirements and codebase for context
@@ -390,10 +442,16 @@ export function createPmTools(projectName: string): ToolSpec[] {
       description: `Generate technical specification from requirements. Creates a structured spec document based on Confluence requirements and existing codebase patterns.`,
       schema: z.object({
         feature: z.string().describe("Feature to generate spec for"),
-        format: z.enum(["markdown", "jira", "brief"]).optional().describe("Output format (default: markdown)"),
+        format: z
+          .enum(["markdown", "jira", "brief"])
+          .optional()
+          .describe("Output format (default: markdown)"),
       }),
       annotations: TOOL_ANNOTATIONS["generate_spec"],
-      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
+      handler: async (
+        args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
         const { feature, format = "markdown" } = args as {
           feature: string;
           format?: string;
@@ -425,10 +483,7 @@ export function createPmTools(projectName: string): ToolSpec[] {
         const codeContext =
           code.length > 0
             ? code
-                .map(
-                  (c: any) =>
-                    `File: ${c.file}\n${truncate(c.content, 300)}`
-                )
+                .map((c: any) => `File: ${c.file}\n${truncate(c.content, 300)}`)
                 .join("\n---\n")
             : "No existing implementation found.";
 

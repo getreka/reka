@@ -26,7 +26,7 @@ jobs:
         working-directory: rag-api
       - run: npm test
         working-directory: rag-api
-      - run: npm audit --audit-level=high || true
+      - run: npm audit --audit-level=high
         working-directory: rag-api
         name: Security audit
 
@@ -49,7 +49,7 @@ jobs:
         working-directory: mcp-server
       - run: npm test
         working-directory: mcp-server
-      - run: npm audit --audit-level=high || true
+      - run: npm audit --audit-level=high
         working-directory: mcp-server
         name: Security audit
 

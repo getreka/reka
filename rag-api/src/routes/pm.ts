@@ -14,17 +14,21 @@ const router = Router();
  * Estimate development effort for a feature
  * POST /api/estimate-feature
  */
-router.post('/estimate-feature', validate(estimateFeatureSchema), asyncHandler(async (req: Request, res: Response) => {
-  const projectName = req.headers['x-project-name'] as string || req.body.projectName;
-  const { feature, includeSubtasks } = req.body;
+router.post(
+  '/estimate-feature',
+  validate(estimateFeatureSchema),
+  asyncHandler(async (req: Request, res: Response) => {
+    const projectName = (req.headers['x-project-name'] as string) || req.body.projectName;
+    const { feature, includeSubtasks } = req.body;
 
-  const result = await estimateFeature({
-    projectName,
-    feature,
-    includeSubtasks,
-  });
+    const result = await estimateFeature({
+      projectName,
+      feature,
+      includeSubtasks,
+    });
 
-  res.json(result);
-}));
+    res.json(result);
+  })
+);
 
 export default router;

@@ -1,14 +1,17 @@
 # Debug Recall Empty - Investigation Transcript (without skill)
 
 ## Task
+
 "recall returns empty array even when memories exist in collection. No errors in logs."
 
 ## Investigation Steps
 
 ### 1. Identify the Recall Flow
+
 Read files to trace the complete recall path from MCP tool to Qdrant:
 
 **Files read:**
+
 - `/home/ake/shared-ai-infra/mcp-server/src/tools/memory.ts` - MCP tool definition for `recall`
 - `/home/ake/shared-ai-infra/rag-api/src/routes/memory.ts` - Express route handler for `/api/memory/recall`
 - `/home/ake/shared-ai-infra/rag-api/src/services/memory.ts` - MemoryService.recall() method
@@ -17,6 +20,7 @@ Read files to trace the complete recall path from MCP tool to Qdrant:
 - `/home/ake/shared-ai-infra/rag-api/src/utils/validation.ts` - Zod schemas for request validation
 
 **Call chain:**
+
 ```
 MCP recall tool (memory.ts:80-99)
   -> POST /api/memory/recall (routes/memory.ts:62-74)
@@ -36,11 +40,13 @@ MCP recall tool (memory.ts:80-99)
 ```
 
 ### 2. Searched for Collection Name Mismatches
+
 Used Grep to check all references to `agent_memory` and `_memory` across the codebase.
 
 **Result:** All paths consistently use `${projectName}_agent_memory` via `getCollectionName()`. No mismatch found.
 
 ### 3. Analyzed Vector Store Search Method
+
 The `search()` method (vector-store.ts:495-540) has a two-step search strategy:
 
 ```typescript
@@ -69,9 +75,11 @@ try {
 ```
 
 ### 4. Analyzed Qdrant JS Client Error Handling
+
 Read the Qdrant JS client source (`@qdrant/js-client-rest@^1.16.2`):
 
 **Files read:**
+
 - `node_modules/@qdrant/js-client-rest/dist/cjs/errors.js`
 - `node_modules/@qdrant/js-client-rest/dist/cjs/api-client.js`
 - `node_modules/@qdrant/js-client-rest/dist/cjs/qdrant-client.js`
@@ -81,14 +89,18 @@ Read the Qdrant JS client source (`@qdrant/js-client-rest@^1.16.2`):
 **Key finding:** The error thrown by the Qdrant client for HTTP 400 responses is an `ApiError` which HAS a `.status` property (set from `response.status`). The fallback check `error.status === 400` should correctly trigger for anonymous vector collections.
 
 ### 5. Analyzed Collection Creation Path
+
 The `_agent_memory` collection is created by:
+
 - `ensureCollection()` via `upsert()` during `remember()` calls
 - `ensure-collections` endpoint during MCP auto-session start
 
 Both use `ensureCollection()` which creates collections with **anonymous vectors** (not named vectors).
 
 ### 6. Checked Middleware Chain
+
 Read middleware files:
+
 - `mcp-server/src/tool-middleware.ts` - MCP tool wrapper with timeout and error handling
 - `mcp-server/src/tool-registry.ts` - Tool dispatch
 - `mcp-server/src/context-enrichment.ts` - Auto-enrichment before tool calls
@@ -98,25 +110,30 @@ Read middleware files:
 - `rag-api/src/middleware/auth.ts` - API key auth
 
 ### 7. Checked Embedding Service
+
 Read `rag-api/src/services/embedding.ts` and `rag-api/src/config.ts` to verify vector dimensions match.
 
 ### 8. Checked API Route Mounting
+
 Read `rag-api/src/server.ts` to verify routes are mounted correctly at `/api` prefix.
 
 ### 9. Analyzed Validation Schema Interactions
+
 Checked `recallMemorySchema` and `validateProjectName` middleware interaction. Verified that `projectName` is correctly propagated from header to body to service layer.
 
 ### 10. Checked Test Coverage
+
 Read `rag-api/src/__tests__/services/memory.test.ts`. Tests exist for recall but use mocked vectorStore, so they don't catch the real Qdrant interaction issues.
 
 ## Root Cause Analysis
 
 ### Finding 1 (HIGH): `search()` returns `[]` silently on 404
+
 **Location:** `/home/ake/shared-ai-infra/rag-api/src/services/vector-store.ts:522-525`
 
 ```typescript
 if (error.status === 404) {
-    return [];
+  return [];
 }
 ```
 
@@ -127,21 +144,25 @@ If the `_agent_memory` collection doesn't exist when `recall()` is called, `sear
 **BUT** the `ensure-collections` endpoint creates `_agent_memory` during MCP auto-session start (fire-and-forget). So the collection should exist. Unless the fire-and-forget call failed or hasn't completed yet.
 
 ### Finding 2 (HIGH): Named vector search may not properly fall back on all Qdrant configurations
+
 **Location:** `/home/ake/shared-ai-infra/rag-api/src/services/vector-store.ts:509-540`
 
 The `search()` method tries named vector `{ name: 'dense', vector }` first. For collections with anonymous vectors (like `_agent_memory`), this should fail with a 400 error and fall back to anonymous vector search.
 
 However, the fallback relies on:
+
 1. `error.status === 400` - which depends on the Qdrant JS client properly propagating the HTTP status
 2. `error.message?.includes('Bad Request')` - which depends on the HTTP response having a "Bad Request" status text
 
 If either check fails (e.g., due to HTTP/2 which doesn't use status text, or Qdrant client version differences), the error is re-thrown instead of falling back. This would cause an error to propagate, NOT a silent empty array.
 
 The only way this causes a silent empty return is if:
+
 - The named vector search **succeeds** (200) but returns 0 results because no vectors match in a non-existent vector space
 - This is theoretically possible if Qdrant silently ignores the vector name and returns empty instead of erroring
 
 ### Finding 3 (MEDIUM): Context enrichment uses wrong response key
+
 **Location:** `/home/ake/shared-ai-infra/mcp-server/src/context-enrichment.ts:227`
 
 ```typescript
@@ -151,6 +172,7 @@ if (memoriesRes?.data?.memories) {  // WRONG - should be .results
 The `/api/memory/recall-durable` endpoint returns `{ results }` (line 196 in routes/memory.ts), but the enrichment code looks for `.memories`. This means auto-enrichment always sees no memories and returns no context prefix. While this doesn't cause `recall` to return empty, it does cause the context enrichment to silently fail.
 
 ### Finding 4 (MEDIUM): `validated` field indexed as `keyword` but stores boolean values
+
 **Location:** `/home/ake/shared-ai-infra/rag-api/src/services/vector-store.ts:58`
 
 ```typescript
@@ -174,6 +196,7 @@ The `validated` field is indexed as `keyword` (string type) in Qdrant, but memor
 ## Recommended Fixes
 
 ### Fix 1: Make the search fallback more robust
+
 ```typescript
 // vector-store.ts search() method
 async search(collection, vector, limit, filter, scoreThreshold) {
@@ -196,6 +219,7 @@ async search(collection, vector, limit, filter, scoreThreshold) {
 ```
 
 ### Fix 2: Add logging to recall for debugging
+
 ```typescript
 // memory.ts recall() method
 async recall(options) {
@@ -215,6 +239,7 @@ async recall(options) {
 ```
 
 ### Fix 3: Fix context enrichment response key
+
 ```typescript
 // context-enrichment.ts line 227
 if (memoriesRes?.data?.results) {  // Fix: use 'results' not 'memories'
@@ -222,6 +247,7 @@ if (memoriesRes?.data?.results) {  // Fix: use 'results' not 'memories'
 ```
 
 ### Fix 4: Fix validated index type
+
 ```typescript
 // vector-store.ts line 58
 { fieldName: 'validated', type: 'bool' },  // Fix: use 'bool' not 'keyword'
@@ -229,39 +255,39 @@ if (memoriesRes?.data?.results) {  // Fix: use 'results' not 'memories'
 
 ## Files Analyzed
 
-| File | Purpose |
-|------|---------|
-| `/home/ake/shared-ai-infra/mcp-server/src/tools/memory.ts` | MCP tool definitions for recall |
-| `/home/ake/shared-ai-infra/mcp-server/src/index.ts` | MCP server registration |
-| `/home/ake/shared-ai-infra/mcp-server/src/api-client.ts` | Axios HTTP client |
-| `/home/ake/shared-ai-infra/mcp-server/src/tool-registry.ts` | Tool dispatch |
-| `/home/ake/shared-ai-infra/mcp-server/src/tool-middleware.ts` | Tool middleware pipeline |
-| `/home/ake/shared-ai-infra/mcp-server/src/context-enrichment.ts` | Auto-enrichment |
-| `/home/ake/shared-ai-infra/rag-api/src/server.ts` | Express server setup |
-| `/home/ake/shared-ai-infra/rag-api/src/routes/memory.ts` | Memory API routes |
-| `/home/ake/shared-ai-infra/rag-api/src/services/memory.ts` | Memory service (recall logic) |
-| `/home/ake/shared-ai-infra/rag-api/src/services/vector-store.ts` | Qdrant vector store client |
-| `/home/ake/shared-ai-infra/rag-api/src/services/memory-governance.ts` | Dual-tier memory governance |
-| `/home/ake/shared-ai-infra/rag-api/src/services/embedding.ts` | Embedding service |
-| `/home/ake/shared-ai-infra/rag-api/src/utils/validation.ts` | Zod validation schemas |
-| `/home/ake/shared-ai-infra/rag-api/src/config.ts` | Configuration |
-| `/home/ake/shared-ai-infra/rag-api/src/middleware/error-handler.ts` | Error handler |
-| `/home/ake/shared-ai-infra/rag-api/src/middleware/async-handler.ts` | Async handler |
-| `/home/ake/shared-ai-infra/rag-api/src/middleware/auth.ts` | Auth middleware |
-| `/home/ake/shared-ai-infra/rag-api/src/__tests__/services/memory.test.ts` | Memory tests |
-| `/home/ake/shared-ai-infra/rag-api/package.json` | Dependencies |
-| `/home/ake/shared-ai-infra/rag-api/node_modules/@qdrant/js-client-rest/dist/cjs/errors.js` | Qdrant error classes |
-| `/home/ake/shared-ai-infra/rag-api/node_modules/@qdrant/js-client-rest/dist/cjs/api-client.js` | Qdrant API client middleware |
-| `/home/ake/shared-ai-infra/rag-api/node_modules/@qdrant/js-client-rest/dist/cjs/qdrant-client.js` | Qdrant client search method |
-| `/home/ake/shared-ai-infra/rag-api/node_modules/@qdrant/openapi-typescript-fetch/dist/cjs/fetcher.js` | OpenAPI fetch wrapper |
-| `/home/ake/shared-ai-infra/rag-api/node_modules/@qdrant/openapi-typescript-fetch/dist/cjs/types.js` | ApiError class |
+| File                                                                                                  | Purpose                         |
+| ----------------------------------------------------------------------------------------------------- | ------------------------------- |
+| `/home/ake/shared-ai-infra/mcp-server/src/tools/memory.ts`                                            | MCP tool definitions for recall |
+| `/home/ake/shared-ai-infra/mcp-server/src/index.ts`                                                   | MCP server registration         |
+| `/home/ake/shared-ai-infra/mcp-server/src/api-client.ts`                                              | Axios HTTP client               |
+| `/home/ake/shared-ai-infra/mcp-server/src/tool-registry.ts`                                           | Tool dispatch                   |
+| `/home/ake/shared-ai-infra/mcp-server/src/tool-middleware.ts`                                         | Tool middleware pipeline        |
+| `/home/ake/shared-ai-infra/mcp-server/src/context-enrichment.ts`                                      | Auto-enrichment                 |
+| `/home/ake/shared-ai-infra/rag-api/src/server.ts`                                                     | Express server setup            |
+| `/home/ake/shared-ai-infra/rag-api/src/routes/memory.ts`                                              | Memory API routes               |
+| `/home/ake/shared-ai-infra/rag-api/src/services/memory.ts`                                            | Memory service (recall logic)   |
+| `/home/ake/shared-ai-infra/rag-api/src/services/vector-store.ts`                                      | Qdrant vector store client      |
+| `/home/ake/shared-ai-infra/rag-api/src/services/memory-governance.ts`                                 | Dual-tier memory governance     |
+| `/home/ake/shared-ai-infra/rag-api/src/services/embedding.ts`                                         | Embedding service               |
+| `/home/ake/shared-ai-infra/rag-api/src/utils/validation.ts`                                           | Zod validation schemas          |
+| `/home/ake/shared-ai-infra/rag-api/src/config.ts`                                                     | Configuration                   |
+| `/home/ake/shared-ai-infra/rag-api/src/middleware/error-handler.ts`                                   | Error handler                   |
+| `/home/ake/shared-ai-infra/rag-api/src/middleware/async-handler.ts`                                   | Async handler                   |
+| `/home/ake/shared-ai-infra/rag-api/src/middleware/auth.ts`                                            | Auth middleware                 |
+| `/home/ake/shared-ai-infra/rag-api/src/__tests__/services/memory.test.ts`                             | Memory tests                    |
+| `/home/ake/shared-ai-infra/rag-api/package.json`                                                      | Dependencies                    |
+| `/home/ake/shared-ai-infra/rag-api/node_modules/@qdrant/js-client-rest/dist/cjs/errors.js`            | Qdrant error classes            |
+| `/home/ake/shared-ai-infra/rag-api/node_modules/@qdrant/js-client-rest/dist/cjs/api-client.js`        | Qdrant API client middleware    |
+| `/home/ake/shared-ai-infra/rag-api/node_modules/@qdrant/js-client-rest/dist/cjs/qdrant-client.js`     | Qdrant client search method     |
+| `/home/ake/shared-ai-infra/rag-api/node_modules/@qdrant/openapi-typescript-fetch/dist/cjs/fetcher.js` | OpenAPI fetch wrapper           |
+| `/home/ake/shared-ai-infra/rag-api/node_modules/@qdrant/openapi-typescript-fetch/dist/cjs/types.js`   | ApiError class                  |
 
 ## Tool Calls Summary
 
-| Tool | Count | Purpose |
-|------|-------|---------|
-| Glob | 4 | Find recall-related files, check directory structure |
-| Grep | 11 | Search for patterns, collection names, error handling |
-| Read | 18 | Read source files, test files, library code |
-| Write | 2 | Output files (transcript.md, metrics.json) |
-| Total | 35 | |
+| Tool  | Count | Purpose                                               |
+| ----- | ----- | ----------------------------------------------------- |
+| Glob  | 4     | Find recall-related files, check directory structure  |
+| Grep  | 11    | Search for patterns, collection names, error handling |
+| Read  | 18    | Read source files, test files, library code           |
+| Write | 2     | Output files (transcript.md, metrics.json)            |
+| Total | 35    |                                                       |

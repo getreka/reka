@@ -44,9 +44,11 @@ describe('QualityGateService', () => {
     it('runs all 3 gates by default', async () => {
       // Setup: tsconfig exists, vitest in deps
       mockFs.existsSync.mockReturnValue(true);
-      mockFs.readFileSync.mockReturnValue(JSON.stringify({
-        devDependencies: { vitest: '^1.0.0' },
-      }));
+      mockFs.readFileSync.mockReturnValue(
+        JSON.stringify({
+          devDependencies: { vitest: '^1.0.0' },
+        })
+      );
       mockExec.mockImplementation((_cmd: string, _opts: any, cb: any) => {
         cb(null, 'success', '');
         return { kill: vi.fn() };
@@ -69,7 +71,9 @@ describe('QualityGateService', () => {
 
     it('skipGates skips specified gates', async () => {
       mockFs.existsSync.mockReturnValue(true);
-      mockFs.readFileSync.mockReturnValue(JSON.stringify({ devDependencies: { vitest: '^1.0.0' } }));
+      mockFs.readFileSync.mockReturnValue(
+        JSON.stringify({ devDependencies: { vitest: '^1.0.0' } })
+      );
       mockExec.mockImplementation((_cmd: string, _opts: any, cb: any) => {
         cb(null, 'ok', '');
         return { kill: vi.fn() };
@@ -81,7 +85,7 @@ describe('QualityGateService', () => {
         skipGates: ['typecheck', 'blast_radius'],
       });
 
-      const gateNames = report.gates.map(g => g.gate);
+      const gateNames = report.gates.map((g) => g.gate);
       expect(gateNames).not.toContain('typecheck');
       expect(gateNames).not.toContain('blast_radius');
       expect(gateNames).toContain('test');
@@ -98,7 +102,7 @@ describe('QualityGateService', () => {
         skipGates: ['test', 'blast_radius'],
       });
 
-      const tc = report.gates.find(g => g.gate === 'typecheck');
+      const tc = report.gates.find((g) => g.gate === 'typecheck');
       expect(tc?.passed).toBe(true);
       expect(tc?.details).toContain('No tsconfig.json found');
     });
@@ -116,7 +120,7 @@ describe('QualityGateService', () => {
         skipGates: ['test', 'blast_radius'],
       });
 
-      const tc = report.gates.find(g => g.gate === 'typecheck');
+      const tc = report.gates.find((g) => g.gate === 'typecheck');
       expect(tc?.passed).toBe(true);
     });
 
@@ -133,7 +137,7 @@ describe('QualityGateService', () => {
         skipGates: ['test', 'blast_radius'],
       });
 
-      const tc = report.gates.find(g => g.gate === 'typecheck');
+      const tc = report.gates.find((g) => g.gate === 'typecheck');
       expect(tc?.passed).toBe(false);
     });
 
@@ -151,7 +155,7 @@ describe('QualityGateService', () => {
         skipGates: ['test', 'blast_radius'],
       });
 
-      const tc = report.gates.find(g => g.gate === 'typecheck');
+      const tc = report.gates.find((g) => g.gate === 'typecheck');
       expect(tc?.details).toContain('src/a.ts');
     });
   });
@@ -160,9 +164,11 @@ describe('QualityGateService', () => {
     it('detects vitest and runs related tests', async () => {
       // First call is typecheck (skip), second is test
       mockFs.existsSync.mockReturnValue(true);
-      mockFs.readFileSync.mockReturnValue(JSON.stringify({
-        devDependencies: { vitest: '^1.0.0' },
-      }));
+      mockFs.readFileSync.mockReturnValue(
+        JSON.stringify({
+          devDependencies: { vitest: '^1.0.0' },
+        })
+      );
       mockExec.mockImplementation((_cmd: string, _opts: any, cb: any) => {
         cb(null, 'Tests passed', '');
         return { kill: vi.fn() };
@@ -174,7 +180,7 @@ describe('QualityGateService', () => {
         skipGates: ['typecheck', 'blast_radius'],
       });
 
-      const testGate = report.gates.find(g => g.gate === 'test');
+      const testGate = report.gates.find((g) => g.gate === 'test');
       expect(testGate?.passed).toBe(true);
     });
 
@@ -190,7 +196,7 @@ describe('QualityGateService', () => {
         skipGates: ['typecheck', 'blast_radius'],
       });
 
-      const testGate = report.gates.find(g => g.gate === 'test');
+      const testGate = report.gates.find((g) => g.gate === 'test');
       expect(testGate?.passed).toBe(true);
       expect(testGate?.details).toContain('No package.json');
     });
@@ -211,7 +217,7 @@ describe('QualityGateService', () => {
         skipGates: ['typecheck', 'test'],
       });
 
-      const br = report.gates.find(g => g.gate === 'blast_radius');
+      const br = report.gates.find((g) => g.gate === 'blast_radius');
       expect(br?.passed).toBe(true);
     });
 
@@ -229,7 +235,7 @@ describe('QualityGateService', () => {
         skipGates: ['typecheck', 'test'],
       });
 
-      const br = report.gates.find(g => g.gate === 'blast_radius');
+      const br = report.gates.find((g) => g.gate === 'blast_radius');
       expect(br?.passed).toBe(false);
     });
 
@@ -243,7 +249,7 @@ describe('QualityGateService', () => {
         skipGates: ['typecheck', 'test'],
       });
 
-      const br = report.gates.find(g => g.gate === 'blast_radius');
+      const br = report.gates.find((g) => g.gate === 'blast_radius');
       expect(br?.passed).toBe(true);
       expect(br?.details).toContain('failed');
     });
@@ -256,7 +262,7 @@ describe('QualityGateService', () => {
         skipGates: ['typecheck', 'test'],
       });
 
-      expect(report.gates.find(g => g.gate === 'blast_radius')).toBeUndefined();
+      expect(report.gates.find((g) => g.gate === 'blast_radius')).toBeUndefined();
     });
   });
 });

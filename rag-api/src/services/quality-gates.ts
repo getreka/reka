@@ -49,8 +49,15 @@ class QualityGateService {
     if (!skipGates.includes('typecheck')) {
       const typeResult = await this.typeCheckGate(projectPath, affectedFiles);
       gates.push(typeResult);
-      qualityGateResults.inc({ gate: 'typecheck', result: typeResult.passed ? 'pass' : 'fail', project: projectName });
-      qualityGateDuration.observe({ gate: 'typecheck', project: projectName }, typeResult.duration / 1000);
+      qualityGateResults.inc({
+        gate: 'typecheck',
+        result: typeResult.passed ? 'pass' : 'fail',
+        project: projectName,
+      });
+      qualityGateDuration.observe(
+        { gate: 'typecheck', project: projectName },
+        typeResult.duration / 1000
+      );
       if (!typeResult.passed) allPassed = false;
     }
 
@@ -58,8 +65,15 @@ class QualityGateService {
     if (!skipGates.includes('test')) {
       const testResult = await this.testGate(projectPath, affectedFiles);
       gates.push(testResult);
-      qualityGateResults.inc({ gate: 'test', result: testResult.passed ? 'pass' : 'fail', project: projectName });
-      qualityGateDuration.observe({ gate: 'test', project: projectName }, testResult.duration / 1000);
+      qualityGateResults.inc({
+        gate: 'test',
+        result: testResult.passed ? 'pass' : 'fail',
+        project: projectName,
+      });
+      qualityGateDuration.observe(
+        { gate: 'test', project: projectName },
+        testResult.duration / 1000
+      );
       if (!testResult.passed) allPassed = false;
     }
 
@@ -68,8 +82,15 @@ class QualityGateService {
     if (!skipGates.includes('blast_radius') && affectedFiles.length > 0) {
       const brResult = await this.blastRadiusGate(projectName, affectedFiles);
       gates.push(brResult);
-      qualityGateResults.inc({ gate: 'blast_radius', result: brResult.passed ? 'pass' : 'warn', project: projectName });
-      qualityGateDuration.observe({ gate: 'blast_radius', project: projectName }, brResult.duration / 1000);
+      qualityGateResults.inc({
+        gate: 'blast_radius',
+        result: brResult.passed ? 'pass' : 'warn',
+        project: projectName,
+      });
+      qualityGateDuration.observe(
+        { gate: 'blast_radius', project: projectName },
+        brResult.duration / 1000
+      );
 
       // Extract blast radius data from details
       try {
@@ -115,8 +136,8 @@ class QualityGateService {
             let relevantErrors = output;
             if (affectedFiles && affectedFiles.length > 0) {
               const lines = output.split('\n');
-              const relevant = lines.filter(line => {
-                return affectedFiles.some(f => line.includes(f));
+              const relevant = lines.filter((line) => {
+                return affectedFiles.some((f) => line.includes(f));
               });
               relevantErrors = relevant.length > 0 ? relevant.join('\n') : output;
             }
@@ -174,14 +195,14 @@ class QualityGateService {
       const devDeps = { ...pkg.dependencies, ...pkg.devDependencies };
 
       if (devDeps['vitest']) {
-        const related = affectedFiles && affectedFiles.length > 0
-          ? `--related ${affectedFiles.join(' ')}`
-          : '';
+        const related =
+          affectedFiles && affectedFiles.length > 0 ? `--related ${affectedFiles.join(' ')}` : '';
         testCommand = `npx vitest run ${related} --reporter=verbose 2>&1`.trim();
       } else if (devDeps['jest']) {
-        const related = affectedFiles && affectedFiles.length > 0
-          ? `--findRelatedTests ${affectedFiles.join(' ')}`
-          : '';
+        const related =
+          affectedFiles && affectedFiles.length > 0
+            ? `--findRelatedTests ${affectedFiles.join(' ')}`
+            : '';
         testCommand = `npx jest ${related} --no-coverage 2>&1`.trim();
       } else if (pkg.scripts?.test) {
         testCommand = 'npm test 2>&1';
@@ -204,30 +225,26 @@ class QualityGateService {
 
     const timeout = 60000;
     return new Promise<GateResult>((resolve) => {
-      const child = exec(
-        testCommand,
-        { cwd: projectPath, timeout },
-        (error, stdout, stderr) => {
-          const output = stdout || stderr || '';
-          const duration = Date.now() - startTime;
+      const child = exec(testCommand, { cwd: projectPath, timeout }, (error, stdout, stderr) => {
+        const output = stdout || stderr || '';
+        const duration = Date.now() - startTime;
 
-          if (error) {
-            resolve({
-              gate: 'test',
-              passed: false,
-              details: output.slice(-2000), // Last 2000 chars of output
-              duration,
-            });
-          } else {
-            resolve({
-              gate: 'test',
-              passed: true,
-              details: `Tests passed. ${output.slice(-500)}`,
-              duration,
-            });
-          }
+        if (error) {
+          resolve({
+            gate: 'test',
+            passed: false,
+            details: output.slice(-2000), // Last 2000 chars of output
+            duration,
+          });
+        } else {
+          resolve({
+            gate: 'test',
+            passed: true,
+            details: `Tests passed. ${output.slice(-500)}`,
+            duration,
+          });
         }
-      );
+      });
 
       // Handle timeout
       setTimeout(() => {
@@ -259,7 +276,9 @@ class QualityGateService {
           affectedFiles: result.affectedFiles,
           depth: result.depth,
           edgeCount: result.edgeCount,
-          warning: !passed ? `High blast radius: ${result.affectedFiles.length} files affected` : undefined,
+          warning: !passed
+            ? `High blast radius: ${result.affectedFiles.length} files affected`
+            : undefined,
         }),
         duration: Date.now() - startTime,
       };

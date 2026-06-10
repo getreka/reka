@@ -76,7 +76,11 @@ interface BenchmarkResult {
 
 // ── HTTP helpers ──────────────────────────────────────────
 
-async function ragPost(endpoint: string, body: Record<string, unknown>, projectName: string): Promise<any> {
+async function ragPost(
+  endpoint: string,
+  body: Record<string, unknown>,
+  projectName: string
+): Promise<any> {
   const res = await fetch(`${RAG_API_URL}${endpoint}`, {
     method: 'POST',
     headers: {
@@ -102,7 +106,9 @@ async function ragGet(endpoint: string, projectName: string): Promise<any> {
 
 // ── Phase 1: Ingest conversations ─────────────────────────
 
-function extractSessions(conv: Conversation['conversation']): Array<{ date: string; turns: DialogTurn[] }> {
+function extractSessions(
+  conv: Conversation['conversation']
+): Array<{ date: string; turns: DialogTurn[] }> {
   const sessions: Array<{ date: string; turns: DialogTurn[] }> = [];
   for (let i = 1; i <= 35; i++) {
     const key = `session_${i}`;
@@ -121,16 +127,21 @@ function extractSessions(conv: Conversation['conversation']): Array<{ date: stri
  * Extract compact facts from a dialog session via LLM.
  * Like Mem0's extraction phase — distills raw conversation into atomic facts.
  */
-async function extractFacts(sessionText: string, date: string, speakers: string): Promise<string[]> {
+async function extractFacts(
+  sessionText: string,
+  date: string,
+  speakers: string
+): Promise<string[]> {
   if (!ANTHROPIC_API_KEY) return []; // can't extract without LLM
 
   const client = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
   const msg = await client.messages.create({
     model: 'claude-sonnet-4-20250514',
     max_tokens: 2000,
-    messages: [{
-      role: 'user',
-      content: `Extract all factual information from this conversation as a list of standalone facts. Each fact should be a single, self-contained statement that includes WHO, WHAT, and WHEN (if mentioned).
+    messages: [
+      {
+        role: 'user',
+        content: `Extract all factual information from this conversation as a list of standalone facts. Each fact should be a single, self-contained statement that includes WHO, WHAT, and WHEN (if mentioned).
 
 Conversation (${date}, between ${speakers}):
 ${sessionText.slice(0, 4000)}
@@ -144,16 +155,24 @@ Rules:
 - Do NOT summarize — list individual atomic facts
 
 Facts:`,
-    }],
+      },
+    ],
   });
 
   const text = msg.content[0].type === 'text' ? msg.content[0].text : '';
-  return text.split('\n').map(l => l.trim()).filter(l => l.length > 10);
+  return text
+    .split('\n')
+    .map((l) => l.trim())
+    .filter((l) => l.length > 10);
 }
 
 type IngestMode = 'session' | 'turn' | 'facts';
 
-async function ingestConversation(convIdx: number, conv: Conversation, ingestMode: IngestMode = 'session'): Promise<void> {
+async function ingestConversation(
+  convIdx: number,
+  conv: Conversation,
+  ingestMode: IngestMode = 'session'
+): Promise<void> {
   const projectName = `${PROJECT_PREFIX}-${convIdx}`;
   const sessions = extractSessions(conv.conversation);
   const speakerA = conv.conversation.speaker_a || 'Speaker A';
@@ -165,7 +184,7 @@ async function ingestConversation(convIdx: number, conv: Conversation, ingestMod
   if (ingestMode === 'session') {
     // Original: whole session as one memory
     const items = sessions.map((session, sIdx) => {
-      const dialogText = session.turns.map(t => `${t.speaker}: ${t.text}`).join('\n');
+      const dialogText = session.turns.map((t) => `${t.speaker}: ${t.text}`).join('\n');
       return {
         content: `[Session ${sIdx + 1}, ${session.date}] Conversation between ${speakers}:\n${dialogText}`,
         type: 'conversation' as const,
@@ -176,12 +195,11 @@ async function ingestConversation(convIdx: number, conv: Conversation, ingestMod
       await ragPost('/api/memory/batch', { items: items.slice(i, i + 5) }, projectName);
     }
     console.log(`  Ingested ${items.length} session memories`);
-
   } else if (ingestMode === 'turn') {
     // Per-turn: each dialog turn as separate memory (with session context)
     let totalTurns = 0;
     for (const [sIdx, session] of sessions.entries()) {
-      const items = session.turns.map(t => ({
+      const items = session.turns.map((t) => ({
         content: `[${session.date}, session ${sIdx + 1}] ${t.speaker}: ${t.text}`,
         type: 'conversation' as const,
         tags: [`session-${sIdx + 1}`, t.speaker.toLowerCase()],
@@ -192,19 +210,23 @@ async function ingestConversation(convIdx: number, conv: Conversation, ingestMod
       totalTurns += items.length;
     }
     console.log(`  Ingested ${totalTurns} turn memories`);
-
   } else if (ingestMode === 'facts') {
     // Fact extraction: LLM extracts atomic facts per session
     let totalFacts = 0;
     for (const [sIdx, session] of sessions.entries()) {
-      const dialogText = session.turns.map(t => `${t.speaker}: ${t.text}`).join('\n');
+      const dialogText = session.turns.map((t) => `${t.speaker}: ${t.text}`).join('\n');
       const facts = await extractFacts(dialogText, session.date, speakers);
 
       if (facts.length > 0) {
-        const items = facts.map(fact => ({
+        const items = facts.map((fact) => ({
           content: `[${session.date}] ${fact}`,
           type: 'insight' as const,
-          tags: [`session-${sIdx + 1}`, speakerA.toLowerCase(), speakerB.toLowerCase(), 'extracted-fact'],
+          tags: [
+            `session-${sIdx + 1}`,
+            speakerA.toLowerCase(),
+            speakerB.toLowerCase(),
+            'extracted-fact',
+          ],
         }));
         for (let i = 0; i < items.length; i += 10) {
           await ragPost('/api/memory/batch', { items: items.slice(i, i + 10) }, projectName);
@@ -219,11 +241,7 @@ async function ingestConversation(convIdx: number, conv: Conversation, ingestMod
 
 // ── Phase 2: Query ────────────────────────────────────────
 
-async function queryMemory(
-  projectName: string,
-  question: string,
-  mode: string
-): Promise<string> {
+async function queryMemory(projectName: string, question: string, mode: string): Promise<string> {
   let endpoint = '/api/memory/recall';
   const body: Record<string, unknown> = {
     query: question,
@@ -257,7 +275,7 @@ async function queryMemory(
 // ── Phase 3: Answer generation ────────────────────────────
 
 async function generateAnswer(question: string, context: string): Promise<string> {
-  if (!context) return 'I don\'t have enough information to answer this question.';
+  if (!context) return "I don't have enough information to answer this question.";
 
   // Use Anthropic Claude for answer generation (we have API key)
   if (ANTHROPIC_API_KEY) {
@@ -265,9 +283,10 @@ async function generateAnswer(question: string, context: string): Promise<string
     const msg = await client.messages.create({
       model: 'claude-sonnet-4-20250514',
       max_tokens: 300,
-      messages: [{
-        role: 'user',
-        content: `Based on the following conversation excerpts, answer the question concisely.
+      messages: [
+        {
+          role: 'user',
+          content: `Based on the following conversation excerpts, answer the question concisely.
 
 Context:
 ${context.slice(0, 3000)}
@@ -275,17 +294,22 @@ ${context.slice(0, 3000)}
 Question: ${question}
 
 Answer concisely (1-2 sentences). If the information is not in the context, say "I don't know."`,
-      }],
+        },
+      ],
     });
     return msg.content[0].type === 'text' ? msg.content[0].text : '';
   }
 
   // Fallback: use RAG API's LLM
   try {
-    const res = await ragPost('/api/ask', {
-      question: `Based on conversation memory, answer: ${question}`,
-      collection: `${PROJECT_PREFIX}-0_agent_memory`,
-    }, `${PROJECT_PREFIX}-0`);
+    const res = await ragPost(
+      '/api/ask',
+      {
+        question: `Based on conversation memory, answer: ${question}`,
+        collection: `${PROJECT_PREFIX}-0_agent_memory`,
+      },
+      `${PROJECT_PREFIX}-0`
+    );
     return res.answer || '';
   } catch {
     return context.slice(0, 200);
@@ -323,7 +347,10 @@ Respond with ONLY "1" if equivalent, or "0" if not.`;
   // Fallback: simple string matching
   const normalizedExpected = expected.toLowerCase().trim();
   const normalizedActual = actual.toLowerCase().trim();
-  return normalizedActual.includes(normalizedExpected) || normalizedExpected.includes(normalizedActual) ? 1 : 0;
+  return normalizedActual.includes(normalizedExpected) ||
+    normalizedExpected.includes(normalizedActual)
+    ? 1
+    : 0;
 }
 
 // ── Main ──────────────────────────────────────────────────
@@ -389,7 +416,9 @@ async function runBenchmark(opts: {
 
       // Progress
       if (totalScored % 20 === 0) {
-        console.log(`  Progress: ${totalScored} questions, running accuracy: ${(totalCorrect / totalScored * 100).toFixed(1)}%`);
+        console.log(
+          `  Progress: ${totalScored} questions, running accuracy: ${((totalCorrect / totalScored) * 100).toFixed(1)}%`
+        );
       }
     }
 
@@ -402,10 +431,11 @@ async function runBenchmark(opts: {
     const overallAccuracy = totalScored > 0 ? totalCorrect / totalScored : 0;
 
     // Weighted accuracy (matching Mem0's methodology)
-    const catAccuracies = Object.values(scores).map(s => s.accuracy);
-    const weightedAccuracy = catAccuracies.length > 0
-      ? catAccuracies.reduce((a, b) => a + b, 0) / catAccuracies.length
-      : 0;
+    const catAccuracies = Object.values(scores).map((s) => s.accuracy);
+    const weightedAccuracy =
+      catAccuracies.length > 0
+        ? catAccuracies.reduce((a, b) => a + b, 0) / catAccuracies.length
+        : 0;
 
     const result: BenchmarkResult = {
       mode: opts.mode,
@@ -422,7 +452,9 @@ async function runBenchmark(opts: {
 
     console.log(`\n  Conv ${idx} Results (mode: ${opts.mode}):`);
     for (const [cat, s] of Object.entries(scores)) {
-      console.log(`    Cat ${cat} (${CATEGORY_NAMES[Number(cat)]}): ${s.correct}/${s.total} = ${(s.accuracy * 100).toFixed(1)}%`);
+      console.log(
+        `    Cat ${cat} (${CATEGORY_NAMES[Number(cat)]}): ${s.correct}/${s.total} = ${(s.accuracy * 100).toFixed(1)}%`
+      );
     }
     console.log(`    Overall: ${(overallAccuracy * 100).toFixed(1)}%`);
     console.log(`    Weighted: ${(weightedAccuracy * 100).toFixed(1)}%`);
@@ -435,9 +467,10 @@ async function runBenchmark(opts: {
 
 async function main() {
   const args = process.argv.slice(2);
-  const mode = args.find(a => a.startsWith('--mode='))?.split('=')[1] || 'durable';
-  const ingestMode = (args.find(a => a.startsWith('--ingest='))?.split('=')[1] || 'session') as IngestMode;
-  const convIdx = args.find(a => a.startsWith('--conv='))?.split('=')[1];
+  const mode = args.find((a) => a.startsWith('--mode='))?.split('=')[1] || 'durable';
+  const ingestMode = (args.find((a) => a.startsWith('--ingest='))?.split('=')[1] ||
+    'session') as IngestMode;
+  const convIdx = args.find((a) => a.startsWith('--conv='))?.split('=')[1];
   const dryRun = args.includes('--dry-run');
   const skipIngest = args.includes('--skip-ingest');
 
@@ -445,7 +478,9 @@ async function main() {
   console.log(`  Mode: ${mode}`);
   console.log(`  Ingest: ${ingestMode}`);
   console.log(`  API: ${RAG_API_URL}`);
-  console.log(`  Judge: ${ANTHROPIC_API_KEY ? 'Claude (Anthropic)' : 'string matching (no API key)'}`);
+  console.log(
+    `  Judge: ${ANTHROPIC_API_KEY ? 'Claude (Anthropic)' : 'string matching (no API key)'}`
+  );
   console.log(`  Conv: ${convIdx !== undefined ? convIdx : 'all 10'}`);
 
   const results = await runBenchmark({
@@ -472,7 +507,8 @@ async function main() {
     console.log(`AGGREGATE RESULTS (mode: ${mode})`);
     console.log(`${'='.repeat(60)}`);
 
-    let totalCorrect = 0, totalQuestions = 0;
+    let totalCorrect = 0,
+      totalQuestions = 0;
     const catAccuracies: number[] = [];
 
     for (const cat of [1, 2, 3, 4]) {
@@ -481,7 +517,9 @@ async function main() {
       catAccuracies.push(acc);
       totalCorrect += s.correct;
       totalQuestions += s.total;
-      console.log(`  Cat ${cat} (${CATEGORY_NAMES[cat]}): ${s.correct}/${s.total} = ${(acc * 100).toFixed(1)}%`);
+      console.log(
+        `  Cat ${cat} (${CATEGORY_NAMES[cat]}): ${s.correct}/${s.total} = ${(acc * 100).toFixed(1)}%`
+      );
     }
 
     const overall = totalQuestions > 0 ? totalCorrect / totalQuestions : 0;
@@ -497,12 +535,15 @@ async function main() {
 
     // Save results
     const outPath = path.join(__dirname, `locomo-results-${mode}.json`);
-    fs.writeFileSync(outPath, JSON.stringify({ mode, results, aggregate: { aggScores, overall, weighted } }, null, 2));
+    fs.writeFileSync(
+      outPath,
+      JSON.stringify({ mode, results, aggregate: { aggScores, overall, weighted } }, null, 2)
+    );
     console.log(`\n  Results saved to ${outPath}`);
   }
 }
 
-main().catch(err => {
+main().catch((err) => {
   console.error('Benchmark failed:', err);
   process.exit(1);
 });

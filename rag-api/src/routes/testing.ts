@@ -15,124 +15,141 @@ const router = Router();
  * Generate tests for code
  * POST /api/generate-tests
  */
-router.post('/generate-tests', validateProjectName, validate(generateTestsSchema), asyncHandler(async (req: Request, res: Response) => {
-  const { projectName, code, filePath, framework, testType, coverage } = req.body;
+router.post(
+  '/generate-tests',
+  validateProjectName,
+  validate(generateTestsSchema),
+  asyncHandler(async (req: Request, res: Response) => {
+    const { projectName, code, filePath, framework, testType, coverage } = req.body;
 
-  const collectionName = `${projectName}_codebase`;
+    const collectionName = `${projectName}_codebase`;
 
-  // 1. Find existing test patterns in codebase
-  let existingTests: Array<{ payload: Record<string, unknown>; score: number; id: string }> = [];
-  const testQuery = `test spec ${framework} ${filePath || ''}`;
-  const testEmbedding = await embeddingService.embed(testQuery);
-  existingTests = await vectorStore.search(
-    collectionName,
-    testEmbedding,
-    5,
-    { must: [{ key: 'file', match: { text: '.test.' } }] }
-  );
+    // 1. Find existing test patterns in codebase
+    let existingTests: Array<{ payload: Record<string, unknown>; score: number; id: string }> = [];
+    const testQuery = `test spec ${framework} ${filePath || ''}`;
+    const testEmbedding = await embeddingService.embed(testQuery);
+    existingTests = await vectorStore.search(collectionName, testEmbedding, 5, {
+      must: [{ key: 'file', match: { text: '.test.' } }],
+    });
 
-  // 2. Analyze code structure
-  const codeAnalysis = analyzeCodeStructure(code);
+    // 2. Analyze code structure
+    const codeAnalysis = analyzeCodeStructure(code);
 
-  // 3. Build test generation prompt
-  const existingTestContext = existingTests.length > 0
-    ? `\n\nExisting test patterns in this project:\n${existingTests.map(t => `\`\`\`\n${(t.payload.content as string).slice(0, 500)}\n\`\`\``).join('\n')}`
-    : '';
+    // 3. Build test generation prompt
+    const existingTestContext =
+      existingTests.length > 0
+        ? `\n\nExisting test patterns in this project:\n${existingTests.map((t) => `\`\`\`\n${(t.payload.content as string).slice(0, 500)}\n\`\`\``).join('\n')}`
+        : '';
 
-  const prompt = buildTestPrompt(code, filePath, framework, testType, coverage, codeAnalysis, existingTestContext);
+    const prompt = buildTestPrompt(
+      code,
+      filePath,
+      framework,
+      testType,
+      coverage,
+      codeAnalysis,
+      existingTestContext
+    );
 
-  // 4. Generate tests
-  const result = await llm.complete(prompt, {
-    systemPrompt: getTestSystemPrompt(framework),
-    maxTokens: 4000,
-    temperature: 0.3,
-  });
+    // 4. Generate tests
+    const result = await llm.complete(prompt, {
+      systemPrompt: getTestSystemPrompt(framework),
+      maxTokens: 4000,
+      temperature: 0.3,
+    });
 
-  const tests = extractTestCode(result.text);
+    const tests = extractTestCode(result.text);
 
-  res.json({
-    tests,
-    framework,
-    testType,
-    analysis: codeAnalysis,
-    existingPatternsFound: existingTests.length,
-  });
-}));
+    res.json({
+      tests,
+      framework,
+      testType,
+      analysis: codeAnalysis,
+      existingPatternsFound: existingTests.length,
+    });
+  })
+);
 
 /**
  * Generate test cases without full implementation
  * POST /api/generate-test-cases
  */
-router.post('/generate-test-cases', asyncHandler(async (req: Request, res: Response) => {
-  const { code, requirements } = req.body;
+router.post(
+  '/generate-test-cases',
+  asyncHandler(async (req: Request, res: Response) => {
+    const { code, requirements } = req.body;
 
-  if (!code && !requirements) {
-    return res.status(400).json({ error: 'code or requirements is required' });
-  }
+    if (!code && !requirements) {
+      return res.status(400).json({ error: 'code or requirements is required' });
+    }
 
-  const prompt = code
-    ? `Generate test cases for this code:\n\n\`\`\`\n${code}\n\`\`\``
-    : `Generate test cases for these requirements:\n\n${requirements}`;
+    const prompt = code
+      ? `Generate test cases for this code:\n\n\`\`\`\n${code}\n\`\`\``
+      : `Generate test cases for these requirements:\n\n${requirements}`;
 
-  const result = await llm.complete(prompt, {
-    systemPrompt: TEST_CASES_SYSTEM_PROMPT,
-    maxTokens: 2000,
-    temperature: 0.3,
-    format: 'json',
-  });
+    const result = await llm.complete(prompt, {
+      systemPrompt: TEST_CASES_SYSTEM_PROMPT,
+      maxTokens: 2000,
+      temperature: 0.3,
+      format: 'json',
+    });
 
-  let testCases;
-  try {
-    testCases = JSON.parse(result.text);
-  } catch {
-    testCases = {
-      testCases: [],
-      summary: result.text,
-    };
-  }
+    let testCases;
+    try {
+      testCases = JSON.parse(result.text);
+    } catch {
+      testCases = {
+        testCases: [],
+        summary: result.text,
+      };
+    }
 
-  res.json(testCases);
-}));
+    res.json(testCases);
+  })
+);
 
 /**
  * Analyze existing tests
  * POST /api/analyze-tests
  */
-router.post('/analyze-tests', asyncHandler(async (req: Request, res: Response) => {
-  const { testCode, sourceCode } = req.body;
+router.post(
+  '/analyze-tests',
+  asyncHandler(async (req: Request, res: Response) => {
+    const { testCode, sourceCode } = req.body;
 
-  if (!testCode) {
-    return res.status(400).json({ error: 'testCode is required' });
-  }
-
-  const sourceContext = sourceCode
-    ? `\n\nSource code being tested:\n\`\`\`\n${sourceCode}\n\`\`\``
-    : '';
-
-  const result = await llm.complete(
-    `Analyze these tests for coverage and quality:\n\n\`\`\`\n${testCode}\n\`\`\`${sourceContext}`,
-    {
-      systemPrompt: TEST_ANALYSIS_SYSTEM_PROMPT,
-      maxTokens: 2000,
-      temperature: 0.3,
-      format: 'json',
+    if (!testCode) {
+      return res.status(400).json({ error: 'testCode is required' });
     }
-  );
 
-  let analysis;
-  try {
-    analysis = JSON.parse(result.text);
-  } catch {
-    analysis = {
-      quality: 'unknown',
-      coverage: {},
-      suggestions: [],
-      summary: result.text,
-    };
-  }
+    const sourceContext = sourceCode
+      ? `\n\nSource code being tested:\n\`\`\`\n${sourceCode}\n\`\`\``
+      : '';
 
-  res.json({ analysis });
-}));
+    const result = await llm.complete(
+      `Analyze these tests for coverage and quality:\n\n\`\`\`\n${testCode}\n\`\`\`${sourceContext}`,
+      {
+        systemPrompt: TEST_ANALYSIS_SYSTEM_PROMPT,
+        maxTokens: 2000,
+        temperature: 0.3,
+        format: 'json',
+      }
+    );
+
+    let analysis;
+    try {
+      analysis = JSON.parse(result.text);
+    } catch {
+      analysis = {
+        quality: 'unknown',
+        coverage: {},
+        suggestions: [],
+        summary: result.text,
+      };
+    }
+
+    res.json({ analysis });
+  })
+);
 
 // ============================================
 // System Prompts
@@ -221,9 +238,11 @@ interface CodeAnalysis {
 }
 
 function analyzeCodeStructure(code: string): CodeAnalysis {
-  const functionMatches = code.match(/(?:function|const|let|var)\s+(\w+)\s*(?:=\s*(?:async\s*)?\(|[(<])/g) || [];
+  const functionMatches =
+    code.match(/(?:function|const|let|var)\s+(\w+)\s*(?:=\s*(?:async\s*)?\(|[(<])/g) || [];
   const classMatches = code.match(/class\s+(\w+)/g) || [];
-  const exportMatches = code.match(/export\s+(?:default\s+)?(?:function|const|class|let|var|async)?\s*(\w+)/g) || [];
+  const exportMatches =
+    code.match(/export\s+(?:default\s+)?(?:function|const|class|let|var|async)?\s*(\w+)/g) || [];
   const importMatches = code.match(/import\s+.*from\s+['"](.+)['"]/g) || [];
 
   const lines = code.split('\n').length;
@@ -232,8 +251,10 @@ function analyzeCodeStructure(code: string): CodeAnalysis {
   if (lines > 300) complexity = 'high';
 
   return {
-    functions: functionMatches.map(m => m.replace(/(?:function|const|let|var|async|\s|=|\(|<)/g, '')).filter(Boolean),
-    classes: classMatches.map(m => m.replace(/class\s+/, '')),
+    functions: functionMatches
+      .map((m) => m.replace(/(?:function|const|let|var|async|\s|=|\(|<)/g, ''))
+      .filter(Boolean),
+    classes: classMatches.map((m) => m.replace(/class\s+/, '')),
     exports: exportMatches,
     imports: importMatches,
     estimatedComplexity: complexity,
@@ -271,7 +292,9 @@ Generate complete, runnable test code.`;
 }
 
 function extractTestCode(response: string): string {
-  const codeBlockMatch = response.match(/```(?:typescript|javascript|python|ts|js|py)?\n([\s\S]*?)```/);
+  const codeBlockMatch = response.match(
+    /```(?:typescript|javascript|python|ts|js|py)?\n([\s\S]*?)```/
+  );
   if (codeBlockMatch) {
     return codeBlockMatch[1].trim();
   }

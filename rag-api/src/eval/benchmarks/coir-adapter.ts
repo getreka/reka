@@ -172,7 +172,9 @@ async function fetchHfSplitRows<T>(
 
     let res: Response | null = null;
     for (let attempt = 0; attempt < 5; attempt++) {
-      res = await fetch(url, { headers: { 'User-Agent': 'rag-eval-coir/1.0' } });
+      const headers: Record<string, string> = { 'User-Agent': 'rag-eval-coir/1.0' };
+      if (process.env.HF_TOKEN) headers['Authorization'] = `Bearer ${process.env.HF_TOKEN}`;
+      res = await fetch(url, { headers });
       if (res.ok) break;
       if (res.status === 429 && attempt < 4) {
         const wait = 3000 * (attempt + 1);

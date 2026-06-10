@@ -42,12 +42,18 @@ describe('Agent Routes', () => {
   describe('POST /api/agent/run', () => {
     it('runs an agent', async () => {
       mocks.run.mockResolvedValue({
-        id: 'task-1', type: 'research', status: 'completed',
-        result: 'answer', steps: [], usage: { totalTokens: 100, iterations: 2, toolCalls: 1, durationMs: 500 },
+        id: 'task-1',
+        type: 'research',
+        status: 'completed',
+        result: 'answer',
+        steps: [],
+        usage: { totalTokens: 100, iterations: 2, toolCalls: 1, durationMs: 500 },
       });
 
-      const res = await withProject(request(app).post('/api/agent/run'))
-        .send({ agentType: 'research', task: 'find auth code' });
+      const res = await withProject(request(app).post('/api/agent/run')).send({
+        agentType: 'research',
+        task: 'find auth code',
+      });
 
       expect(res.status).toBe(200);
       expect(res.body.status).toBe('completed');
@@ -55,20 +61,33 @@ describe('Agent Routes', () => {
     });
 
     it('returns 400 when projectName is missing', async () => {
-      const res = await request(app).post('/api/agent/run')
+      const res = await request(app)
+        .post('/api/agent/run')
         .send({ agentType: 'research', task: 'find auth' });
       expect(res.status).toBe(400);
     });
 
     it('strips thinking from steps when not requested', async () => {
       mocks.run.mockResolvedValue({
-        id: 'task-1', type: 'research', status: 'completed',
-        result: 'done', usage: { totalTokens: 0, iterations: 1, toolCalls: 0, durationMs: 100 },
-        steps: [{ iteration: 1, thought: 'hmm', thinking: 'secret reasoning', timestamp: new Date().toISOString() }],
+        id: 'task-1',
+        type: 'research',
+        status: 'completed',
+        result: 'done',
+        usage: { totalTokens: 0, iterations: 1, toolCalls: 0, durationMs: 100 },
+        steps: [
+          {
+            iteration: 1,
+            thought: 'hmm',
+            thinking: 'secret reasoning',
+            timestamp: new Date().toISOString(),
+          },
+        ],
       });
 
-      const res = await withProject(request(app).post('/api/agent/run'))
-        .send({ agentType: 'research', task: 'test' });
+      const res = await withProject(request(app).post('/api/agent/run')).send({
+        agentType: 'research',
+        task: 'test',
+      });
 
       expect(res.status).toBe(200);
       expect(res.body.steps[0].thinking).toBeUndefined();
@@ -78,9 +97,7 @@ describe('Agent Routes', () => {
 
   describe('GET /api/agent/types', () => {
     it('returns both agent types and autonomous types', async () => {
-      mocks.getAgentTypes.mockReturnValue([
-        { name: 'research', description: 'Research agent' },
-      ]);
+      mocks.getAgentTypes.mockReturnValue([{ name: 'research', description: 'Research agent' }]);
       mocks.claudeGetTypes.mockReturnValue([
         { type: 'research', description: 'Autonomous research', defaultBudget: 1.0 },
       ]);
@@ -110,12 +127,11 @@ describe('Agent Routes', () => {
         durationMs: 5000,
       });
 
-      const res = await withProject(request(app).post('/api/agent/autonomous'))
-        .send({
-          type: 'research',
-          task: 'find auth code',
-          projectPath: '/home/user/project',
-        });
+      const res = await withProject(request(app).post('/api/agent/autonomous')).send({
+        type: 'research',
+        task: 'find auth code',
+        projectPath: '/home/user/project',
+      });
 
       expect(res.status).toBe(200);
       expect(res.body.status).toBe('completed');
@@ -124,35 +140,43 @@ describe('Agent Routes', () => {
     });
 
     it('returns 400 when projectPath is missing', async () => {
-      const res = await withProject(request(app).post('/api/agent/autonomous'))
-        .send({ type: 'research', task: 'test' });
+      const res = await withProject(request(app).post('/api/agent/autonomous')).send({
+        type: 'research',
+        task: 'test',
+      });
 
       expect(res.status).toBe(400);
     });
 
     it('returns 400 for invalid agent type', async () => {
-      const res = await withProject(request(app).post('/api/agent/autonomous'))
-        .send({ type: 'invalid', task: 'test', projectPath: '/tmp' });
+      const res = await withProject(request(app).post('/api/agent/autonomous')).send({
+        type: 'invalid',
+        task: 'test',
+        projectPath: '/tmp',
+      });
 
       expect(res.status).toBe(400);
     });
 
     it('passes optional parameters', async () => {
       mocks.claudeRun.mockResolvedValue({
-        id: 'auto-2', type: 'implement', task: 'add feature',
-        projectName: 'test', status: 'completed', result: 'Done',
+        id: 'auto-2',
+        type: 'implement',
+        task: 'add feature',
+        projectName: 'test',
+        status: 'completed',
+        result: 'Done',
       });
 
-      await withProject(request(app).post('/api/agent/autonomous'))
-        .send({
-          type: 'implement',
-          task: 'add feature',
-          projectPath: '/tmp',
-          maxTurns: 10,
-          maxBudgetUsd: 2.0,
-          model: 'claude-opus-4-6',
-          effort: 'max',
-        });
+      await withProject(request(app).post('/api/agent/autonomous')).send({
+        type: 'implement',
+        task: 'add feature',
+        projectPath: '/tmp',
+        maxTurns: 10,
+        maxBudgetUsd: 2.0,
+        model: 'claude-opus-4-6',
+        effort: 'max',
+      });
 
       expect(mocks.claudeRun).toHaveBeenCalledWith(
         expect.objectContaining({
@@ -169,7 +193,8 @@ describe('Agent Routes', () => {
     it('stops a running agent', async () => {
       mocks.claudeStop.mockReturnValue(true);
 
-      const res = await request(app).post('/api/agent/autonomous/stop')
+      const res = await request(app)
+        .post('/api/agent/autonomous/stop')
         .send({ agentId: '550e8400-e29b-41d4-a716-446655440000' });
 
       expect(res.status).toBe(200);
@@ -179,7 +204,8 @@ describe('Agent Routes', () => {
     it('returns false for unknown agent', async () => {
       mocks.claudeStop.mockReturnValue(false);
 
-      const res = await request(app).post('/api/agent/autonomous/stop')
+      const res = await request(app)
+        .post('/api/agent/autonomous/stop')
         .send({ agentId: '550e8400-e29b-41d4-a716-446655440000' });
 
       expect(res.status).toBe(200);
@@ -187,7 +213,8 @@ describe('Agent Routes', () => {
     });
 
     it('returns 400 for invalid agentId', async () => {
-      const res = await request(app).post('/api/agent/autonomous/stop')
+      const res = await request(app)
+        .post('/api/agent/autonomous/stop')
         .send({ agentId: 'not-a-uuid' });
 
       expect(res.status).toBe(400);
@@ -231,7 +258,11 @@ describe('Agent Routes', () => {
 
   describe('POST /api/project-profile/refresh', () => {
     it('refreshes profile', async () => {
-      mocks.refreshProfile.mockResolvedValue({ name: 'test', language: 'typescript', refreshedAt: 'now' });
+      mocks.refreshProfile.mockResolvedValue({
+        name: 'test',
+        language: 'typescript',
+        refreshedAt: 'now',
+      });
 
       const res = await withProject(request(app).post('/api/project-profile/refresh'));
       expect(res.status).toBe(200);

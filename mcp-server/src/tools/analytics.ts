@@ -20,7 +20,7 @@ export function createAnalyticsTools(projectName: string): ToolSpec[] {
       annotations: TOOL_ANNOTATIONS["get_tool_analytics"],
       handler: async (
         _args: Record<string, unknown>,
-        ctx: ToolContext
+        ctx: ToolContext,
       ): Promise<string> => {
         const response = await ctx.api.get("/api/tool-analytics");
         const data = response.data;
@@ -34,7 +34,8 @@ export function createAnalyticsTools(projectName: string): ToolSpec[] {
           result += `### Top Tools\n`;
           for (const t of data.topTools) {
             result += `- **${t.tool || t.name}**: ${t.count ?? t.calls} calls`;
-            if (t.avgDurationMs || t.avgDuration) result += ` (avg ${t.avgDurationMs || t.avgDuration}ms)`;
+            if (t.avgDurationMs || t.avgDuration)
+              result += ` (avg ${t.avgDurationMs || t.avgDuration}ms)`;
             result += "\n";
           }
           result += "\n";
@@ -57,7 +58,7 @@ export function createAnalyticsTools(projectName: string): ToolSpec[] {
       annotations: TOOL_ANNOTATIONS["get_knowledge_gaps"],
       handler: async (
         _args: Record<string, unknown>,
-        ctx: ToolContext
+        ctx: ToolContext,
       ): Promise<string> => {
         const response = await ctx.api.get("/api/knowledge-gaps");
         const data = response.data;
@@ -72,7 +73,8 @@ export function createAnalyticsTools(projectName: string): ToolSpec[] {
         for (const q of Array.isArray(queries) ? queries : []) {
           result += `- **"${q.query}"**`;
           if (q.count) result += ` (${q.count} times)`;
-          if (q.avgResultCount !== undefined) result += ` - avg results: ${q.avgResultCount}`;
+          if (q.avgResultCount !== undefined)
+            result += ` - avg results: ${q.avgResultCount}`;
           if (q.toolName) result += ` [${q.toolName}]`;
           result += "\n";
         }
@@ -84,12 +86,16 @@ export function createAnalyticsTools(projectName: string): ToolSpec[] {
       name: "get_analytics",
       description: `Get detailed analytics for a ${projectName} collection. Shows vectors, storage, language breakdown, and more.`,
       schema: z.object({
-        collectionName: z.string().describe("Collection name to get analytics for (e.g., 'codebase', 'docs', 'memory')"),
+        collectionName: z
+          .string()
+          .describe(
+            "Collection name to get analytics for (e.g., 'codebase', 'docs', 'memory')",
+          ),
       }),
       annotations: TOOL_ANNOTATIONS["get_analytics"],
       handler: async (
         args: Record<string, unknown>,
-        ctx: ToolContext
+        ctx: ToolContext,
       ): Promise<string> => {
         const { collectionName } = args as { collectionName: string };
         const fullName = collectionName.startsWith(ctx.collectionPrefix)
@@ -128,14 +134,14 @@ export function createAnalyticsTools(projectName: string): ToolSpec[] {
       annotations: TOOL_ANNOTATIONS["backup_collection"],
       handler: async (
         args: Record<string, unknown>,
-        ctx: ToolContext
+        ctx: ToolContext,
       ): Promise<string> => {
         const { collectionName } = args as { collectionName: string };
         const fullName = collectionName.startsWith(ctx.collectionPrefix)
           ? collectionName
           : `${ctx.collectionPrefix}${collectionName}`;
         const response = await ctx.api.post(
-          `/api/collections/${fullName}/snapshots`
+          `/api/collections/${fullName}/snapshots`,
         );
         const data = response.data;
 
@@ -151,19 +157,21 @@ export function createAnalyticsTools(projectName: string): ToolSpec[] {
       name: "list_backups",
       description: `List backup snapshots for a ${projectName} collection.`,
       schema: z.object({
-        collectionName: z.string().describe("Collection name to list backups for"),
+        collectionName: z
+          .string()
+          .describe("Collection name to list backups for"),
       }),
       annotations: TOOL_ANNOTATIONS["list_backups"],
       handler: async (
         args: Record<string, unknown>,
-        ctx: ToolContext
+        ctx: ToolContext,
       ): Promise<string> => {
         const { collectionName } = args as { collectionName: string };
         const fullName = collectionName.startsWith(ctx.collectionPrefix)
           ? collectionName
           : `${ctx.collectionPrefix}${collectionName}`;
         const response = await ctx.api.get(
-          `/api/collections/${fullName}/snapshots`
+          `/api/collections/${fullName}/snapshots`,
         );
         const snapshots = response.data.snapshots || response.data;
 
@@ -175,7 +183,8 @@ export function createAnalyticsTools(projectName: string): ToolSpec[] {
         for (const s of snapshots) {
           const sizeMB = s.size ? (s.size / (1024 * 1024)).toFixed(2) : "?";
           result += `- **${s.name}** - ${sizeMB} MB`;
-          if (s.createdAt) result += ` (${new Date(s.createdAt).toLocaleString()})`;
+          if (s.createdAt)
+            result += ` (${new Date(s.createdAt).toLocaleString()})`;
           result += "\n";
         }
 
@@ -186,13 +195,18 @@ export function createAnalyticsTools(projectName: string): ToolSpec[] {
       name: "enable_quantization",
       description: `Enable scalar quantization on a ${projectName} collection to reduce memory usage.`,
       schema: z.object({
-        collectionName: z.string().describe("Collection name to enable quantization on"),
-        quantile: z.coerce.number().optional().describe("Quantile for quantization (0-1, default: 0.99)"),
+        collectionName: z
+          .string()
+          .describe("Collection name to enable quantization on"),
+        quantile: z.coerce
+          .number()
+          .optional()
+          .describe("Quantile for quantization (0-1, default: 0.99)"),
       }),
       annotations: TOOL_ANNOTATIONS["enable_quantization"],
       handler: async (
         args: Record<string, unknown>,
-        ctx: ToolContext
+        ctx: ToolContext,
       ): Promise<string> => {
         const { collectionName, quantile = 0.99 } = args as {
           collectionName: string;
@@ -203,7 +217,7 @@ export function createAnalyticsTools(projectName: string): ToolSpec[] {
           : `${ctx.collectionPrefix}${collectionName}`;
         const response = await ctx.api.post(
           `/api/collections/${fullName}/quantization`,
-          { quantile }
+          { quantile },
         );
         const data = response.data;
 
@@ -222,7 +236,7 @@ export function createAnalyticsTools(projectName: string): ToolSpec[] {
       annotations: TOOL_ANNOTATIONS["get_platform_stats"],
       handler: async (
         _args: Record<string, unknown>,
-        ctx: ToolContext
+        ctx: ToolContext,
       ): Promise<string> => {
         const response = await ctx.api.get("/api/platform/stats");
         const data = response.data;
@@ -245,12 +259,17 @@ export function createAnalyticsTools(projectName: string): ToolSpec[] {
       name: "get_prediction_stats",
       description: `Get predictive loader stats for ${projectName}. Shows prediction accuracy, hit rates, and strategy breakdown.`,
       schema: z.object({
-        sessionId: z.string().optional().describe("Session ID to get stats for. If omitted, returns aggregate stats."),
+        sessionId: z
+          .string()
+          .optional()
+          .describe(
+            "Session ID to get stats for. If omitted, returns aggregate stats.",
+          ),
       }),
       annotations: TOOL_ANNOTATIONS["get_prediction_stats"],
       handler: async (
         args: Record<string, unknown>,
-        ctx: ToolContext
+        ctx: ToolContext,
       ): Promise<string> => {
         const { sessionId } = args as { sessionId?: string };
         const params = sessionId ? `?sessionId=${sessionId}` : "";
@@ -265,7 +284,10 @@ export function createAnalyticsTools(projectName: string): ToolSpec[] {
 
         if (data.byStrategy && Object.keys(data.byStrategy).length > 0) {
           result += `### By Strategy\n`;
-          for (const [strategy, stats] of Object.entries(data.byStrategy) as [string, any][]) {
+          for (const [strategy, stats] of Object.entries(data.byStrategy) as [
+            string,
+            any,
+          ][]) {
             result += `- **${strategy}**: ${stats.predictions} predictions, ${stats.hits} hits (${pct(stats.hitRate)})\n`;
           }
         }

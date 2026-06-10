@@ -16,9 +16,9 @@
  * Location: rag-api/src/middleware/rate-limiter.ts
  */
 
-import { Request, Response, NextFunction } from 'express';
-import config from '../config';
-import { logger } from '../utils/logger';
+import { Request, Response, NextFunction } from "express";
+import config from "../config";
+import { logger } from "../utils/logger";
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -26,7 +26,7 @@ import { logger } from '../utils/logger';
 
 const MAX_REQUESTS = config.RATE_LIMIT_MAX ?? 100;
 const WINDOW_MS = config.RATE_LIMIT_WINDOW_MS ?? 60_000; // 1 minute
-const SKIP_PATHS = ['/health', '/metrics'];
+const SKIP_PATHS = ["/health", "/metrics"];
 const CLEANUP_INTERVAL_MS = 60_000; // Run cleanup every 60s
 
 // ---------------------------------------------------------------------------
@@ -62,7 +62,9 @@ function startCleanup(): void {
     }
 
     if (removed > 0) {
-      logger.debug(`Rate limiter cleanup: removed ${removed} stale entries, ${clients.size} active`);
+      logger.debug(
+        `Rate limiter cleanup: removed ${removed} stale entries, ${clients.size} active`,
+      );
     }
   }, CLEANUP_INTERVAL_MS);
 
@@ -76,14 +78,14 @@ function startCleanup(): void {
 
 function getClientIp(req: Request): string {
   // Trust X-Forwarded-For when behind a reverse proxy (nginx, docker)
-  const forwarded = req.headers['x-forwarded-for'];
-  if (typeof forwarded === 'string') {
+  const forwarded = req.headers["x-forwarded-for"];
+  if (typeof forwarded === "string") {
     // X-Forwarded-For can contain multiple IPs: client, proxy1, proxy2
-    return forwarded.split(',')[0].trim();
+    return forwarded.split(",")[0].trim();
   }
 
   // Fall back to remote address
-  return req.socket.remoteAddress || req.ip || '127.0.0.1';
+  return req.socket.remoteAddress || req.ip || "127.0.0.1";
 }
 
 // ---------------------------------------------------------------------------
@@ -96,7 +98,11 @@ function getClientIp(req: Request): string {
  * Responds with 429 Too Many Requests when the limit is exceeded,
  * including standard rate limit headers on every response.
  */
-export function rateLimiterMiddleware(req: Request, res: Response, next: NextFunction): void {
+export function rateLimiterMiddleware(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): void {
   // Skip rate limiting for monitoring endpoints
   if (SKIP_PATHS.includes(req.path)) {
     return next();
@@ -129,20 +135,23 @@ export function rateLimiterMiddleware(req: Request, res: Response, next: NextFun
   const remaining = Math.max(0, MAX_REQUESTS - currentCount);
 
   // Calculate when the window resets (oldest timestamp + window duration)
-  const resetTime = bucket.timestamps.length > 0
-    ? Math.ceil((bucket.timestamps[0] + WINDOW_MS) / 1000)
-    : Math.ceil((now + WINDOW_MS) / 1000);
+  const resetTime =
+    bucket.timestamps.length > 0
+      ? Math.ceil((bucket.timestamps[0] + WINDOW_MS) / 1000)
+      : Math.ceil((now + WINDOW_MS) / 1000);
 
   // Set standard rate limit headers on every response
-  res.setHeader('RateLimit-Limit', MAX_REQUESTS);
-  res.setHeader('RateLimit-Remaining', remaining);
-  res.setHeader('RateLimit-Reset', resetTime);
+  res.setHeader("RateLimit-Limit", MAX_REQUESTS);
+  res.setHeader("RateLimit-Remaining", remaining);
+  res.setHeader("RateLimit-Reset", resetTime);
 
   // Check if limit is exceeded
   if (currentCount >= MAX_REQUESTS) {
-    const retryAfterSeconds = Math.ceil((bucket.timestamps[0] + WINDOW_MS - now) / 1000);
+    const retryAfterSeconds = Math.ceil(
+      (bucket.timestamps[0] + WINDOW_MS - now) / 1000,
+    );
 
-    res.setHeader('Retry-After', Math.max(1, retryAfterSeconds));
+    res.setHeader("Retry-After", Math.max(1, retryAfterSeconds));
 
     logger.warn(`Rate limit exceeded for ${clientIp}`, {
       ip: clientIp,
@@ -154,8 +163,8 @@ export function rateLimiterMiddleware(req: Request, res: Response, next: NextFun
     });
 
     res.status(429).json({
-      error: 'Too many requests',
-      code: 'RATE_LIMIT',
+      error: "Too many requests",
+      code: "RATE_LIMIT",
       details: {
         limit: MAX_REQUESTS,
         windowMs: WINDOW_MS,

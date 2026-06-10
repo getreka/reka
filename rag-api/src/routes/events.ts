@@ -43,12 +43,24 @@ router.get('/events/work', (req: Request, res: Response) => {
     writeSSE(res, event);
   };
 
-  for (const type of ['work:registered', 'work:updated', 'work:completed', 'work:failed', 'work:cancelled'] as const) {
+  for (const type of [
+    'work:registered',
+    'work:updated',
+    'work:completed',
+    'work:failed',
+    'work:cancelled',
+  ] as const) {
     eventBus.on(type, listener);
   }
 
   req.on('close', () => {
-    for (const type of ['work:registered', 'work:updated', 'work:completed', 'work:failed', 'work:cancelled'] as const) {
+    for (const type of [
+      'work:registered',
+      'work:updated',
+      'work:completed',
+      'work:failed',
+      'work:cancelled',
+    ] as const) {
       eventBus.off(type, listener);
     }
   });
@@ -58,7 +70,7 @@ function setupSSE(res: Response): void {
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
     'Cache-Control': 'no-cache',
-    'Connection': 'keep-alive',
+    Connection: 'keep-alive',
     'X-Accel-Buffering': 'no', // Disable nginx buffering
   });
 

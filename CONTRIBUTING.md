@@ -152,14 +152,14 @@ cd rag-api && npm run lint:fix
 
 ### Naming Conventions
 
-| Thing | Convention | Example |
-|-------|-----------|---------|
-| Files | `kebab-case.ts` | `memory-governance.ts` |
-| Classes | `PascalCase` | `MemoryGovernance` |
-| Functions | `camelCase` | `consolidateMemories()` |
-| Constants | `UPPER_SNAKE_CASE` | `MAX_BATCH_SIZE` |
-| Interfaces | `PascalCase` | `MemoryEntry` |
-| MCP tools | `snake_case` | `search_codebase` |
+| Thing      | Convention         | Example                 |
+| ---------- | ------------------ | ----------------------- |
+| Files      | `kebab-case.ts`    | `memory-governance.ts`  |
+| Classes    | `PascalCase`       | `MemoryGovernance`      |
+| Functions  | `camelCase`        | `consolidateMemories()` |
+| Constants  | `UPPER_SNAKE_CASE` | `MAX_BATCH_SIZE`        |
+| Interfaces | `PascalCase`       | `MemoryEntry`           |
+| MCP tools  | `snake_case`       | `search_codebase`       |
 
 ### Commit Messages
 
@@ -244,6 +244,7 @@ docs: add self-hosting guide for ARM64
 ### Bug Reports
 
 Use the **Bug Report** template. Include:
+
 - Steps to reproduce
 - Expected vs actual behavior
 - Reka version, OS, Docker version
@@ -252,25 +253,26 @@ Use the **Bug Report** template. Include:
 ### Feature Requests
 
 Use the **Feature Request** template. Include:
+
 - Problem statement (what are you trying to do?)
 - Proposed solution
 - Alternatives you considered
 
 ### Issue Labels
 
-| Label | Meaning |
-|-------|---------|
-| `good first issue` | Scoped, well-documented, good for newcomers |
-| `help wanted` | Maintainers want community help |
-| `bug` | Something is broken |
-| `enhancement` | New feature or improvement |
-| `documentation` | Docs improvements |
-| `performance` | Performance-related |
-| `memory` | Memory system (governance, consolidation, LTM) |
-| `search` | Search and retrieval |
-| `mcp` | MCP server and tools |
-| `indexing` | Code indexing and parsing |
-| `infrastructure` | Docker, CI/CD, deployment |
+| Label              | Meaning                                        |
+| ------------------ | ---------------------------------------------- |
+| `good first issue` | Scoped, well-documented, good for newcomers    |
+| `help wanted`      | Maintainers want community help                |
+| `bug`              | Something is broken                            |
+| `enhancement`      | New feature or improvement                     |
+| `documentation`    | Docs improvements                              |
+| `performance`      | Performance-related                            |
+| `memory`           | Memory system (governance, consolidation, LTM) |
+| `search`           | Search and retrieval                           |
+| `mcp`              | MCP server and tools                           |
+| `indexing`         | Code indexing and parsing                      |
+| `infrastructure`   | Docker, CI/CD, deployment                      |
 
 ---
 
@@ -285,6 +287,7 @@ We maintain a curated list of good first issues. These are:
 Look for the [`good first issue`](https://github.com/AKE-REKA/reka/labels/good%20first%20issue) label.
 
 Examples of good first issues:
+
 - Add a new file parser (e.g., `.vue`, `.svelte`)
 - Add a new MCP tool that wraps an existing API endpoint
 - Improve error messages for common configuration mistakes

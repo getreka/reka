@@ -17,11 +17,7 @@ import { memoryService } from './memory';
 import { graphStore } from './graph-store';
 import { logger } from '../utils/logger';
 import config from '../config';
-import {
-  contextPackDuration,
-  contextPackTokens,
-  rerankDuration,
-} from '../utils/metrics';
+import { contextPackDuration, contextPackTokens, rerankDuration } from '../utils/metrics';
 
 export interface ContextPackOptions {
   projectName: string;
@@ -99,8 +95,10 @@ class ContextPackBuilder {
 
       // Parallel facet retrieval
       const facetResults = await Promise.allSettled(
-        facets.map(facet => this.retrieveFacet(facet, embedding, query, semanticWeight, sparseEmbedding)
-          .then(results => ({ facet, results }))
+        facets.map((facet) =>
+          this.retrieveFacet(facet, embedding, query, semanticWeight, sparseEmbedding).then(
+            (results) => ({ facet, results })
+          )
         )
       );
 
@@ -124,19 +122,16 @@ class ContextPackBuilder {
 
       // Step 3: Graph expansion (add connected files)
       if (graphExpand && allChunks.length > 0) {
-        const seedFiles = [...new Set(allChunks.map(c => c.file).filter(Boolean))];
+        const seedFiles = [...new Set(allChunks.map((c) => c.file).filter(Boolean))];
         try {
           const expandedFiles = await graphStore.expand(projectName, seedFiles.slice(0, 5), 1);
-          const newFiles = expandedFiles.filter(f => !seedFiles.includes(f)).slice(0, 5);
+          const newFiles = expandedFiles.filter((f) => !seedFiles.includes(f)).slice(0, 5);
 
           for (const file of newFiles) {
             try {
-              const results = await vectorStore.search(
-                `${projectName}_codebase`,
-                embedding,
-                1,
-                { must: [{ key: 'file', match: { value: file } }] }
-              );
+              const results = await vectorStore.search(`${projectName}_codebase`, embedding, 1, {
+                must: [{ key: 'file', match: { value: file } }],
+              });
               for (const r of results) {
                 allChunks.push({
                   file: (r.payload.file as string) || file,
@@ -195,7 +190,7 @@ class ContextPackBuilder {
       return {
         facets: Array.from(facetGroups.entries()).map(([name, chunks]) => ({
           name,
-          chunks: chunks.map(c => ({ file: c.file, content: c.content, score: c.score })),
+          chunks: chunks.map((c) => ({ file: c.file, content: c.content, score: c.score })),
         })),
         totalTokens,
         guardrails,
@@ -267,24 +262,37 @@ class ContextPackBuilder {
   ): Promise<SearchResult[]> {
     // Use native hybrid search if sparse vectors available
     if (config.SPARSE_VECTORS_ENABLED && sparseEmbedding) {
-      return vectorStore.searchHybridNative(facet.collection, embedding, sparseEmbedding, facet.limit);
+      return vectorStore.searchHybridNative(
+        facet.collection,
+        embedding,
+        sparseEmbedding,
+        facet.limit
+      );
     }
 
     // Fallback: semantic + text-match fusion
     const semanticResults = await vectorStore.search(facet.collection, embedding, facet.limit * 2);
 
-    const keywords = query.toLowerCase().split(/\s+/).filter(w => w.length > 2);
+    const keywords = query
+      .toLowerCase()
+      .split(/\s+/)
+      .filter((w) => w.length > 2);
     let keywordResults: SearchResult[] = [];
 
     if (keywords.length > 0 && semanticWeight < 1) {
       try {
         const keywordFilter = {
-          should: keywords.map(kw => ({
+          should: keywords.map((kw) => ({
             key: 'content',
             match: { text: kw },
           })),
         };
-        keywordResults = await vectorStore.search(facet.collection, embedding, facet.limit * 2, keywordFilter);
+        keywordResults = await vectorStore.search(
+          facet.collection,
+          embedding,
+          facet.limit * 2,
+          keywordFilter
+        );
       } catch {
         // Keyword search may fail on some collections
       }
@@ -302,7 +310,10 @@ class ContextPackBuilder {
     weight: number,
     limit: number
   ): SearchResult[] {
-    const resultMap = new Map<string, { result: SearchResult; semanticScore: number; keywordScore: number }>();
+    const resultMap = new Map<
+      string,
+      { result: SearchResult; semanticScore: number; keywordScore: number }
+    >();
 
     for (const r of semantic) {
       resultMap.set(r.id, { result: r, semanticScore: r.score, keywordScore: 0 });
@@ -332,9 +343,7 @@ class ContextPackBuilder {
     const startTime = Date.now();
 
     // Prepare candidates for reranking (top 20 by score)
-    const candidates = chunks
-      .sort((a, b) => b.score - a.score)
-      .slice(0, 20);
+    const candidates = chunks.sort((a, b) => b.score - a.score).slice(0, 20);
 
     const candidateList = candidates
       .map((c, i) => `[${i}] ${c.file}: ${c.content.slice(0, 200)}`)
@@ -344,7 +353,8 @@ class ContextPackBuilder {
       const result = await llm.complete(
         `Given the query: "${query}"\n\nRank these code snippets by relevance (most relevant first). Return ONLY a JSON array of indices, e.g. [3, 0, 7, 1, ...].\n\nSnippets:\n${candidateList}`,
         {
-          systemPrompt: 'You are a code relevance ranker. Return only a JSON array of snippet indices ordered by relevance.',
+          systemPrompt:
+            'You are a code relevance ranker. Return only a JSON array of snippet indices ordered by relevance.',
           maxTokens: 256,
           temperature: 0,
           think: false,
@@ -378,7 +388,7 @@ class ContextPackBuilder {
         }
 
         // Add remaining chunks not in candidates
-        const candidateFiles = new Set(candidates.map(c => c.file + c.content.slice(0, 50)));
+        const candidateFiles = new Set(candidates.map((c) => c.file + c.content.slice(0, 50)));
         for (const chunk of chunks) {
           if (!candidateFiles.has(chunk.file + chunk.content.slice(0, 50))) {
             reranked.push(chunk);
@@ -451,8 +461,8 @@ class ContextPackBuilder {
           limit: 3,
         });
         guardrails.relatedADRs = adrs
-          .filter(a => a.score >= 0.5)
-          .map(a => a.memory.content.slice(0, 200));
+          .filter((a) => a.score >= 0.5)
+          .map((a) => a.memory.content.slice(0, 200));
       } catch {
         // Non-critical
       }
@@ -467,8 +477,8 @@ class ContextPackBuilder {
           limit: 3,
         });
         guardrails.testCommands = tests
-          .filter(t => t.score >= 0.5)
-          .map(t => t.memory.content.slice(0, 200));
+          .filter((t) => t.score >= 0.5)
+          .map((t) => t.memory.content.slice(0, 200));
       } catch {
         // Non-critical
       }

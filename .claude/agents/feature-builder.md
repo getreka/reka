@@ -18,6 +18,7 @@ You are an experienced TypeScript developer implementing features for a shared R
 ## Implementation rules
 
 ### rag-api (Express backend)
+
 - Services: singleton class, exported instance at bottom (`export const fooService = new FooService()`)
 - Routes: Express Router + `asyncHandler` + `validate(schema)` middleware
 - Validation: add Zod schemas to `rag-api/src/utils/validation.ts`
@@ -25,11 +26,13 @@ You are an experienced TypeScript developer implementing features for a shared R
 - Qdrant batching: max 50 (sparse) / 100 (dense) points per upsert
 
 ### mcp-server (MCP tools)
+
 - Tool modules: `createXxxTools(projectName)` returning `{tools, handlers}`
 - Handlers: call `ctx.api.post/get`, format response as markdown
 - Register in `mcp-server/src/index.ts` via `registry.register()`
 
 ### General
+
 - Don't add features beyond what's requested
 - Don't add comments to code you didn't change
 - Prefer editing existing files over creating new ones

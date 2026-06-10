@@ -6,10 +6,20 @@
 import { v4 as uuidv4 } from 'uuid';
 import { vectorStore, VectorPoint } from './vector-store';
 import { embeddingService } from './embedding';
-import { memoryService, Memory, MemoryType, MemorySource, CreateMemoryOptions, SearchMemoryOptions, MemorySearchResult } from './memory';
+import {
+  memoryService,
+  Memory,
+  MemoryType,
+  MemorySource,
+  CreateMemoryOptions,
+  SearchMemoryOptions,
+  MemorySearchResult,
+} from './memory';
 import { memoryLtm, type SemanticSubtype } from './memory-ltm';
 import { qualityGates } from './quality-gates';
 import { feedbackService } from './feedback';
+import { cacheService } from './cache';
+import { memoryVersions } from './memory-versions';
 import { logger } from '../utils/logger';
 import { memoryGovernanceTotal, maintenanceDuration } from '../utils/metrics';
 import config from '../config';
@@ -35,10 +45,49 @@ class MemoryGovernanceService {
     return `${projectName}_agent_memory`;
   }
 
+  private promotedCounterKey(projectName: string): string {
+    return `governance:${projectName}:promoted`;
+  }
+
+  private rejectedCounterKey(projectName: string): string {
+    return `governance:${projectName}:rejected`;
+  }
+
   /**
-   * Compute adaptive confidence threshold from promotion/rejection history.
-   * High success rate → lower threshold (accept more). High rejection → raise threshold.
-   * Range: [0.4, 0.8], default 0.5.
+   * Atomically bump a governance outcome counter (promote/reject).
+   * Best-effort: a missing Redis client just means the threshold stays at default.
+   */
+  private async incrCounter(key: string): Promise<void> {
+    try {
+      await cacheService.increment(key, 1);
+      // A counter changed → invalidate cached thresholds so the next ingest re-reads.
+      this.thresholdCache.clear();
+    } catch (err: any) {
+      logger.debug('Governance counter increment failed', { key, error: err.message });
+    }
+  }
+
+  private async readCounter(key: string): Promise<number> {
+    try {
+      const raw = await cacheService.getClient()?.get(key);
+      const n = raw ? parseInt(raw, 10) : 0;
+      return Number.isFinite(n) ? n : 0;
+    } catch {
+      return 0;
+    }
+  }
+
+  /**
+   * Compute adaptive confidence threshold from explicit promote/reject COUNTERS.
+   *
+   * Previously this counted the whole quarantine collection as "pending" and
+   * derived successRate = promoted / (promoted + pending). That meant a normal
+   * unreviewed backlog (lots of pending, zero reviews) drove the threshold to
+   * 0.8 and silently dropped new auto-memories. We now use durable review
+   * outcomes only: successRate = promoted / (promoted + rejected).
+   *
+   * High success rate → lower threshold (accept more). High rejection → raise it.
+   * Range: [0.4, 0.8], default 0.5 until at least 5 reviews exist.
    */
   async getAdaptiveThreshold(projectName: string): Promise<number> {
     const cached = this.thresholdCache.get(projectName);
@@ -46,47 +95,33 @@ class MemoryGovernanceService {
 
     const DEFAULT = 0.5;
     try {
-      const quarantine = this.getQuarantineCollection(projectName);
-      const durable = this.getDurableCollection(projectName);
+      const [promoted, rejected] = await Promise.all([
+        this.readCounter(this.promotedCounterKey(projectName)),
+        this.readCounter(this.rejectedCounterKey(projectName)),
+      ]);
 
-      // Count promoted (durable with originalSource=auto_*)
-      let promoted = 0;
-      try {
-        const durableResults = await vectorStore['client'].scroll(durable, {
-          limit: 200, with_payload: true, with_vector: false,
-          filter: {
-            should: [
-              { key: 'metadata.originalSource', match: { value: 'auto_conversation' } },
-              { key: 'metadata.originalSource', match: { value: 'auto_pattern' } },
-              { key: 'metadata.originalSource', match: { value: 'auto_feedback' } },
-            ],
-          },
+      const reviewed = promoted + rejected;
+      if (reviewed < 5) {
+        this.thresholdCache.set(projectName, {
+          value: DEFAULT,
+          expiresAt: Date.now() + 30 * 60 * 1000,
         });
-        promoted = durableResults.points.length;
-      } catch { /* collection may not exist */ }
-
-      // Count still in quarantine (rejected or pending)
-      let pending = 0;
-      try {
-        const pendingResults = await vectorStore['client'].scroll(quarantine, {
-          limit: 200, with_payload: false, with_vector: false,
-        });
-        pending = pendingResults.points.length;
-      } catch { /* collection may not exist */ }
-
-      const total = promoted + pending;
-      if (total < 5) {
-        this.thresholdCache.set(projectName, { value: DEFAULT, expiresAt: Date.now() + 30 * 60 * 1000 });
         return DEFAULT;
       }
 
-      const successRate = promoted / total;
+      const successRate = promoted / reviewed;
       // Map success rate to threshold: high success → lower threshold
       // successRate 0.0 → 0.8, successRate 1.0 → 0.4
       const threshold = Math.max(0.4, Math.min(0.8, 0.8 - successRate * 0.4));
 
-      this.thresholdCache.set(projectName, { value: threshold, expiresAt: Date.now() + 30 * 60 * 1000 });
-      logger.debug(`Adaptive threshold for ${projectName}: ${threshold.toFixed(2)} (${promoted}/${total} promoted)`, { project: projectName });
+      this.thresholdCache.set(projectName, {
+        value: threshold,
+        expiresAt: Date.now() + 30 * 60 * 1000,
+      });
+      logger.debug(
+        `Adaptive threshold for ${projectName}: ${threshold.toFixed(2)} (${promoted}/${reviewed} reviewed promoted)`,
+        { project: projectName }
+      );
       return threshold;
     } catch (err: any) {
       logger.debug('Adaptive threshold computation failed, using default', { error: err.message });
@@ -112,19 +147,25 @@ class MemoryGovernanceService {
       // Phase 2: also store manual memories in semantic LTM for Ebbinghaus tracking
       if (config.CONSOLIDATION_ENABLED) {
         const subtypeMap: Record<string, SemanticSubtype> = {
-          decision: 'decision', insight: 'insight', procedure: 'procedure',
+          decision: 'decision',
+          insight: 'insight',
+          procedure: 'procedure',
         };
         const subtype = subtypeMap[memoryOptions.type ?? ''];
         if (subtype) {
-          memoryLtm.storeSemantic({
-            projectName,
-            content: memoryOptions.content,
-            subtype,
-            confidence: 0.9,
-            tags: memoryOptions.tags,
-            source: 'manual',
-            metadata: { durableId: memory.id },
-          }).catch(err => logger.debug('LTM store for manual memory failed', { error: err.message }));
+          memoryLtm
+            .storeSemantic({
+              projectName,
+              content: memoryOptions.content,
+              subtype,
+              confidence: 0.9,
+              tags: memoryOptions.tags,
+              source: 'manual',
+              metadata: { durableId: memory.id },
+            })
+            .catch((err) =>
+              logger.debug('LTM store for manual memory failed', { error: err.message })
+            );
         }
       }
 
@@ -134,7 +175,10 @@ class MemoryGovernanceService {
     // Auto-generated → check adaptive threshold, then quarantine
     const threshold = await this.getAdaptiveThreshold(projectName);
     if (confidence !== undefined && confidence < threshold) {
-      logger.debug(`Memory below adaptive threshold (${confidence} < ${threshold.toFixed(2)}), skipped`, { project: projectName });
+      logger.debug(
+        `Memory below adaptive threshold (${confidence} < ${threshold.toFixed(2)}), skipped`,
+        { project: projectName }
+      );
       // Return a stub memory without persisting
       return {
         id: uuidv4(),
@@ -161,6 +205,8 @@ class MemoryGovernanceService {
       source,
       confidence: confidence ?? 0.5,
       validated: false,
+      triggerDescription: memoryOptions.triggerDescription,
+      pin: memoryOptions.pin,
       metadata: {
         ...memoryOptions.metadata,
         source,
@@ -189,7 +235,11 @@ class MemoryGovernanceService {
     };
 
     await vectorStore.upsert(collectionName, [point]);
-    logger.info(`Memory quarantined: ${memory.type}`, { id: memory.id, project: projectName, source });
+    logger.info(`Memory quarantined: ${memory.type}`, {
+      id: memory.id,
+      project: projectName,
+      source,
+    });
     return memory;
   }
 
@@ -212,8 +262,13 @@ class MemoryGovernanceService {
       });
 
       if (!report.passed) {
-        const failedGates = report.gates.filter(g => !g.passed).map(g => g.gate);
-        throw new Error(`Quality gates failed: ${failedGates.join(', ')}. Details: ${report.gates.filter(g => !g.passed).map(g => g.details).join('; ')}`);
+        const failedGates = report.gates.filter((g) => !g.passed).map((g) => g.gate);
+        throw new Error(
+          `Quality gates failed: ${failedGates.join(', ')}. Details: ${report.gates
+            .filter((g) => !g.passed)
+            .map((g) => g.details)
+            .join('; ')}`
+        );
       }
     }
 
@@ -236,10 +291,9 @@ class MemoryGovernanceService {
     const point = results.points[0];
     const payload = point.payload as Record<string, unknown>;
 
-    // Delete from quarantine
-    await vectorStore.delete(quarantineCollection, [memoryId]);
-
-    // Promote to durable with metadata
+    // Write durable FIRST — if embed/upsert throws, the quarantine copy is still
+    // intact so the promotion can be retried (no data loss). The quarantine point
+    // is only deleted AFTER the durable write succeeds.
     const promotedMemory = await memoryService.remember({
       projectName,
       content: payload.content as string,
@@ -247,7 +301,7 @@ class MemoryGovernanceService {
       tags: (payload.tags as string[]) || [],
       relatedTo: payload.relatedTo as string | undefined,
       metadata: {
-        ...(payload.metadata as Record<string, unknown> || {}),
+        ...((payload.metadata as Record<string, unknown>) || {}),
         validated: true,
         promotedAt: new Date().toISOString(),
         promoteReason: reason,
@@ -257,7 +311,53 @@ class MemoryGovernanceService {
       },
     });
 
-    logger.info(`Memory promoted: ${memoryId} → ${promotedMemory.id}`, { project: projectName, reason });
+    // Durable write succeeded → remove the quarantine copy. A failure here leaves
+    // a harmless duplicate in quarantine (idempotent: a retry re-finds and re-deletes).
+    try {
+      await vectorStore.delete(quarantineCollection, [memoryId]);
+    } catch (err: any) {
+      logger.warn(`Promoted ${memoryId} but failed to remove quarantine copy`, {
+        project: projectName,
+        error: err.message,
+      });
+    }
+
+    // Record the review outcome for adaptive-threshold computation.
+    await this.incrCounter(this.promotedCounterKey(projectName));
+
+    // Append-only version audit: promotion is a governance-actor MODIFICATION of
+    // the memory (quarantine → durable). Fire-and-forget — never block the promote.
+    memoryVersions
+      .record(projectName, {
+        op: 'modified',
+        memoryId: promotedMemory.id,
+        actor: 'governance',
+        content: promotedMemory.content,
+        type: promotedMemory.type,
+        tags: promotedMemory.tags,
+        metadata: {
+          ...promotedMemory.metadata,
+          promotedFrom: memoryId,
+          promoteReason: reason,
+        },
+        // Snapshot the full promoted memory so a rollback restores every field
+        // (validated, confidence, source, relatedTo, …), not just content.
+        snapshot: {
+          ...promotedMemory,
+          project: projectName,
+          metadata: {
+            ...promotedMemory.metadata,
+            promotedFrom: memoryId,
+            promoteReason: reason,
+          },
+        },
+      })
+      .catch(() => {});
+
+    logger.info(`Memory promoted: ${memoryId} → ${promotedMemory.id}`, {
+      project: projectName,
+      reason,
+    });
     return promotedMemory;
   }
 
@@ -270,6 +370,8 @@ class MemoryGovernanceService {
 
     try {
       await vectorStore.delete(quarantineCollection, [memoryId]);
+      // Record the review outcome for adaptive-threshold computation.
+      await this.incrCounter(this.rejectedCounterKey(projectName));
       logger.info(`Memory rejected: ${memoryId}`, { project: projectName });
       return true;
     } catch (error: any) {
@@ -306,7 +408,7 @@ class MemoryGovernanceService {
 
     const results = await vectorStore.search(collectionName, embedding, limit, filter);
 
-    return results.map(r => ({
+    return results.map((r) => ({
       memory: {
         id: r.id,
         type: r.payload.type as MemoryType,
@@ -327,7 +429,11 @@ class MemoryGovernanceService {
   /**
    * List quarantine memories (non-semantic, for review UI).
    */
-  async listQuarantine(projectName: string, limit: number = 20, offset?: string | number): Promise<Memory[]> {
+  async listQuarantine(
+    projectName: string,
+    limit: number = 20,
+    offset?: string | number
+  ): Promise<Memory[]> {
     const collectionName = this.getQuarantineCollection(projectName);
 
     try {
@@ -338,7 +444,7 @@ class MemoryGovernanceService {
         with_vector: false,
       });
 
-      return results.points.map(p => {
+      return results.points.map((p) => {
         const payload = p.payload as Record<string, unknown>;
         return {
           id: p.id as string,
@@ -355,14 +461,16 @@ class MemoryGovernanceService {
         };
       });
     } catch (error: any) {
-      if (error.status === 404) return [];
+      if (error.status === 404 || error.status === 400) return [];
       throw error;
     }
   }
   /**
    * Auto-promote memories with 3+ positive feedback from quarantine to durable.
    */
-  async autoPromoteByFeedback(projectName: string): Promise<{ promoted: string[]; errors: string[] }> {
+  async autoPromoteByFeedback(
+    projectName: string
+  ): Promise<{ promoted: string[]; errors: string[] }> {
     const promoted: string[] = [];
     const errors: string[] = [];
 
@@ -372,7 +480,12 @@ class MemoryGovernanceService {
       for (const [memoryId, counts] of feedbackCounts) {
         if (counts.accurate >= 3) {
           try {
-            await this.promote(projectName, memoryId, 'human_validated', `Auto-promoted: ${counts.accurate} accurate feedback`);
+            await this.promote(
+              projectName,
+              memoryId,
+              'human_validated',
+              `Auto-promoted: ${counts.accurate} accurate feedback`
+            );
             promoted.push(memoryId);
           } catch (error: any) {
             // Memory might not be in quarantine (already promoted or durable)
@@ -411,14 +524,22 @@ class MemoryGovernanceService {
             const quarantineCollection = this.getQuarantineCollection(projectName);
             await vectorStore.delete(quarantineCollection, [memoryId]);
             pruned.push(memoryId);
-            memoryGovernanceTotal.inc({ operation: 'prune', tier: 'quarantine', project: projectName });
+            memoryGovernanceTotal.inc({
+              operation: 'prune',
+              tier: 'quarantine',
+              project: projectName,
+            });
           } catch {
             try {
               // Then try durable
               const durableCollection = this.getDurableCollection(projectName);
               await vectorStore.delete(durableCollection, [memoryId]);
               pruned.push(memoryId);
-              memoryGovernanceTotal.inc({ operation: 'prune', tier: 'durable', project: projectName });
+              memoryGovernanceTotal.inc({
+                operation: 'prune',
+                tier: 'durable',
+                project: projectName,
+              });
             } catch (error: any) {
               errors.push(`${memoryId}: ${error.message}`);
             }
@@ -459,14 +580,21 @@ class MemoryGovernanceService {
   /**
    * Cleanup expired quarantine memories (older than TTL).
    */
-  async cleanupExpiredQuarantine(projectName: string): Promise<{ rejected: string[]; errors: string[] }> {
-    const end = maintenanceDuration.startTimer({ operation: 'quarantine_cleanup', project: projectName });
+  async cleanupExpiredQuarantine(
+    projectName: string
+  ): Promise<{ rejected: string[]; errors: string[] }> {
+    const end = maintenanceDuration.startTimer({
+      operation: 'quarantine_cleanup',
+      project: projectName,
+    });
     const rejected: string[] = [];
     const errors: string[] = [];
 
     try {
       const collectionName = this.getQuarantineCollection(projectName);
-      const cutoff = new Date(Date.now() - config.MEMORY_QUARANTINE_TTL_DAYS * 24 * 60 * 60 * 1000).toISOString();
+      const cutoff = new Date(
+        Date.now() - config.MEMORY_QUARANTINE_TTL_DAYS * 24 * 60 * 60 * 1000
+      ).toISOString();
 
       let offset: string | number | undefined = undefined;
 
@@ -491,7 +619,10 @@ class MemoryGovernanceService {
           try {
             await vectorStore.delete(collectionName, chunk);
             rejected.push(...chunk);
-            memoryGovernanceTotal.inc({ operation: 'quarantine_expired', tier: 'quarantine', project: projectName }, chunk.length);
+            memoryGovernanceTotal.inc(
+              { operation: 'quarantine_expired', tier: 'quarantine', project: projectName },
+              chunk.length
+            );
           } catch (err: any) {
             errors.push(`Batch delete failed: ${err.message}`);
           }
@@ -500,7 +631,9 @@ class MemoryGovernanceService {
         offset = response.next_page_offset as string | number | undefined;
       } while (offset);
 
-      logger.info(`Quarantine cleanup: ${rejected.length} expired memories removed`, { project: projectName });
+      logger.info(`Quarantine cleanup: ${rejected.length} expired memories removed`, {
+        project: projectName,
+      });
     } catch (error: any) {
       if (error.status !== 404) {
         errors.push(`Quarantine cleanup failed: ${error.message}`);
@@ -558,7 +691,7 @@ class MemoryGovernanceService {
       }
 
       for (const cluster of mergeResult.merged) {
-        const originalIds = cluster.original.map(m => m.id);
+        const originalIds = cluster.original.map((m) => m.id);
         const mergedContent = cluster.merged.content;
 
         if (!dryRun) {
@@ -585,20 +718,34 @@ class MemoryGovernanceService {
                   updatedAt: new Date().toISOString(),
                 },
               });
-              memoryGovernanceTotal.inc({ operation: 'compaction_superseded', tier: 'durable', project: projectName });
+              memoryGovernanceTotal.inc({
+                operation: 'compaction_superseded',
+                tier: 'durable',
+                project: projectName,
+              });
             } catch (err: any) {
-              logger.debug('Failed to mark superseded during compaction', { origId, error: err.message });
+              logger.debug('Failed to mark superseded during compaction', {
+                origId,
+                error: err.message,
+              });
             }
           }
 
-          memoryGovernanceTotal.inc({ operation: 'compaction_merged', tier: 'durable', project: projectName });
+          memoryGovernanceTotal.inc({
+            operation: 'compaction_merged',
+            tier: 'durable',
+            project: projectName,
+          });
           result.clusters.push({ originalIds, mergedId: newMemory.id, mergedContent });
         } else {
           result.clusters.push({ originalIds, mergedContent });
         }
       }
 
-      logger.info(`Compaction: ${result.clusters.length} clusters${dryRun ? ' (dry run)' : ' merged'}`, { project: projectName });
+      logger.info(
+        `Compaction: ${result.clusters.length} clusters${dryRun ? ' (dry run)' : ' merged'}`,
+        { project: projectName }
+      );
     } catch (error: any) {
       if (error.status !== 404) {
         logger.error('Compaction failed', { error: error.message, project: projectName });
@@ -643,13 +790,17 @@ class MemoryGovernanceService {
 
     if (ops.quarantine_cleanup) {
       parallelTasks.push(
-        this.cleanupExpiredQuarantine(projectName).then(r => { result.quarantine_cleanup = r; })
+        this.cleanupExpiredQuarantine(projectName).then((r) => {
+          result.quarantine_cleanup = r;
+        })
       );
     }
 
     if (ops.feedback_maintenance) {
       parallelTasks.push(
-        this.runFeedbackMaintenance(projectName).then(r => { result.feedback_maintenance = r; })
+        this.runFeedbackMaintenance(projectName).then((r) => {
+          result.feedback_maintenance = r;
+        })
       );
     }
 

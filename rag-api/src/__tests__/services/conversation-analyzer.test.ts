@@ -35,7 +35,13 @@ describe('ConversationAnalyzerService', () => {
     it('returns parsed learnings, entities, and summary', async () => {
       const analysis = {
         learnings: [
-          { type: 'insight', content: 'Redis caching improves latency', tags: ['cache'], confidence: 0.9, reasoning: 'confirmed' },
+          {
+            type: 'insight',
+            content: 'Redis caching improves latency',
+            tags: ['cache'],
+            confidence: 0.9,
+            reasoning: 'confirmed',
+          },
         ],
         entities: { files: ['cache.ts'], functions: ['getCache'], concepts: ['Redis'] },
         summary: 'Discussed caching strategy',
@@ -76,7 +82,13 @@ describe('ConversationAnalyzerService', () => {
     it('with autoSave calls saveLearnings', async () => {
       const analysis = {
         learnings: [
-          { type: 'insight', content: 'save me', tags: ['test'], confidence: 0.8, reasoning: 'valid' },
+          {
+            type: 'insight',
+            content: 'save me',
+            tags: ['test'],
+            confidence: 0.8,
+            reasoning: 'valid',
+          },
         ],
         entities: { files: [], functions: [], concepts: [] },
         summary: 'test',
@@ -109,9 +121,7 @@ describe('ConversationAnalyzerService', () => {
 
   describe('saveLearnings', () => {
     it('calls governance ingest for each learning', async () => {
-      mocks.ingest
-        .mockResolvedValueOnce({ id: 'mem-1' })
-        .mockResolvedValueOnce({ id: 'mem-2' });
+      mocks.ingest.mockResolvedValueOnce({ id: 'mem-1' }).mockResolvedValueOnce({ id: 'mem-2' });
 
       const ids = await conversationAnalyzer.saveLearnings('test', [
         { type: 'insight' as any, content: 'first', tags: [], confidence: 0.8, reasoning: '' },

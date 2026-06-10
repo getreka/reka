@@ -27,7 +27,10 @@ export function compareReports(beforePath: string, afterPath: string): CompareRe
   const deltaLatency = after.latency.mean - before.latency.mean;
 
   // Per-category deltas
-  const allCategories = new Set([...Object.keys(before.byCategory), ...Object.keys(after.byCategory)]);
+  const allCategories = new Set([
+    ...Object.keys(before.byCategory),
+    ...Object.keys(after.byCategory),
+  ]);
   const byCategory: Record<string, { deltaRecall: number; deltaMRR: number }> = {};
   for (const cat of allCategories) {
     const b = before.byCategory[cat];
@@ -78,14 +81,20 @@ function printCompare(result: CompareResult): void {
   console.log(`  Before: ${result.before}`);
   console.log(`  After:  ${result.after}`);
   console.log('');
-  console.log(`  Recall@K:    ${sign(result.deltaRecall)}${(result.deltaRecall * 100).toFixed(1)}%`);
-  console.log(`  Precision@K: ${sign(result.deltaPrecision)}${(result.deltaPrecision * 100).toFixed(1)}%`);
+  console.log(
+    `  Recall@K:    ${sign(result.deltaRecall)}${(result.deltaRecall * 100).toFixed(1)}%`
+  );
+  console.log(
+    `  Precision@K: ${sign(result.deltaPrecision)}${(result.deltaPrecision * 100).toFixed(1)}%`
+  );
   console.log(`  MRR:         ${sign(result.deltaMRR)}${result.deltaMRR.toFixed(3)}`);
   console.log(`  Latency:     ${sign(result.deltaLatency)}${result.deltaLatency}ms`);
 
   console.log('\nBy Category:');
   for (const [cat, delta] of Object.entries(result.byCategory)) {
-    console.log(`  ${cat.padEnd(15)} recall: ${sign(delta.deltaRecall)}${(delta.deltaRecall * 100).toFixed(1)}%  mrr: ${sign(delta.deltaMRR)}${delta.deltaMRR.toFixed(3)}`);
+    console.log(
+      `  ${cat.padEnd(15)} recall: ${sign(delta.deltaRecall)}${(delta.deltaRecall * 100).toFixed(1)}%  mrr: ${sign(delta.deltaMRR)}${delta.deltaMRR.toFixed(3)}`
+    );
   }
 
   if (result.improved.length > 0) {

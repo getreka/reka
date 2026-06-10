@@ -39,23 +39,24 @@ Memory Governance -- це двотиерна система управління
 Клас `MemoryGovernanceService` (рядки 22-426) -- це singleton, що експортується як `memoryGovernance`.
 
 #### Колекції Qdrant
+
 - `{project}_memory_pending` -- карантин для автоматично згенерованих спогадів
 - `{project}_agent_memory` -- довготривале сховище перевірених спогадів
 
 #### Методи
 
-| Метод | Рядки | Опис |
-|-------|-------|------|
-| `getAdaptiveThreshold()` | 39-85 | Обчислює адаптивний поріг confidence [0.4, 0.8]. Високий success rate промоушенів → нижчий поріг |
-| `ingest()` | 91-163 | Маршрутизація: manual → durable, auto_* → quarantine (якщо confidence >= threshold) |
-| `promote()` | 168-231 | Переміщення з quarantine → durable. Опціональний запуск quality gates |
-| `reject()` | 236-248 | Видалення з quarantine |
-| `recallDurable()` | 253-255 | Пошук тільки по durable (для enrichment) |
-| `recallQuarantine()` | 260-294 | Пошук по quarantine (для review) |
-| `listQuarantine()` | 299-329 | Список карантинних спогадів (для UI) |
-| `autoPromoteByFeedback()` | 333-362 | Авто-промоушен при 3+ accurate feedback |
-| `autoPruneByFeedback()` | 368-405 | Авто-видалення при 2+ incorrect feedback |
-| `runFeedbackMaintenance()` | 410-425 | Виконання auto-promote + auto-prune в одному проході |
+| Метод                      | Рядки   | Опис                                                                                             |
+| -------------------------- | ------- | ------------------------------------------------------------------------------------------------ |
+| `getAdaptiveThreshold()`   | 39-85   | Обчислює адаптивний поріг confidence [0.4, 0.8]. Високий success rate промоушенів → нижчий поріг |
+| `ingest()`                 | 91-163  | Маршрутизація: manual → durable, auto\_\* → quarantine (якщо confidence >= threshold)            |
+| `promote()`                | 168-231 | Переміщення з quarantine → durable. Опціональний запуск quality gates                            |
+| `reject()`                 | 236-248 | Видалення з quarantine                                                                           |
+| `recallDurable()`          | 253-255 | Пошук тільки по durable (для enrichment)                                                         |
+| `recallQuarantine()`       | 260-294 | Пошук по quarantine (для review)                                                                 |
+| `listQuarantine()`         | 299-329 | Список карантинних спогадів (для UI)                                                             |
+| `autoPromoteByFeedback()`  | 333-362 | Авто-промоушен при 3+ accurate feedback                                                          |
+| `autoPruneByFeedback()`    | 368-405 | Авто-видалення при 2+ incorrect feedback                                                         |
+| `runFeedbackMaintenance()` | 410-425 | Виконання auto-promote + auto-prune в одному проході                                             |
 
 ### 2. Adaptive Confidence Threshold
 
@@ -77,11 +78,11 @@ const threshold = Math.max(0.4, Math.min(0.8, 0.8 - successRate * 0.4));
 
 При виклику `promote()` з `runGates: true` виконуються перевірки:
 
-| Gate | Обов'язковий | Опис |
-|------|-------------|------|
-| `typecheck` | Так | `tsc --noEmit` (timeout 30s) |
-| `test` | Так | Виявлення jest/vitest, запуск related тестів (timeout 60s) |
-| `blast_radius` | Ні (info) | Аналіз транзитивних залежностей через graph store |
+| Gate           | Обов'язковий | Опис                                                       |
+| -------------- | ------------ | ---------------------------------------------------------- |
+| `typecheck`    | Так          | `tsc --noEmit` (timeout 30s)                               |
+| `test`         | Так          | Виявлення jest/vitest, запуск related тестів (timeout 60s) |
+| `blast_radius` | Ні (info)    | Аналіз транзитивних залежностей через graph store          |
 
 Якщо quality gates не проходять, промоушен блокується з помилкою.
 
@@ -101,31 +102,32 @@ ctx.api.post("/api/memory/recall-durable", { ... })
 
 **Файл:** `/home/ake/shared-ai-infra/rag-api/src/routes/memory.ts`
 
-| Route | Метод | Рядки | Опис |
-|-------|-------|-------|------|
-| `/api/memory` | POST | 27-56 | Створення memory; auto_* source → governance routing |
-| `/api/memory/recall-durable` | POST | 185-197 | Пошук тільки по durable (для enrichment) |
-| `/api/memory/promote` | POST | 203-215 | Промоушен quarantine → durable |
-| `/api/memory/quarantine` | GET | 221-227 | Список карантинних спогадів для review |
-| `/api/memory/maintenance` | POST | 358-362 | Feedback-driven maintenance |
+| Route                        | Метод | Рядки   | Опис                                                   |
+| ---------------------------- | ----- | ------- | ------------------------------------------------------ |
+| `/api/memory`                | POST  | 27-56   | Створення memory; auto\_\* source → governance routing |
+| `/api/memory/recall-durable` | POST  | 185-197 | Пошук тільки по durable (для enrichment)               |
+| `/api/memory/promote`        | POST  | 203-215 | Промоушен quarantine → durable                         |
+| `/api/memory/quarantine`     | GET   | 221-227 | Список карантинних спогадів для review                 |
+| `/api/memory/maintenance`    | POST  | 358-362 | Feedback-driven maintenance                            |
 
 ### 6. MCP Tools
 
 **Файл:** `/home/ake/shared-ai-infra/mcp-server/src/tools/memory.ts`
 
-| Tool | Рядки | Опис |
-|------|-------|------|
-| `promote_memory` | 361-401 | Промоушен з reason + optional quality gates |
-| `review_memories` | 307-358 | Перегляд карантинних спогадів |
-| `validate_memory` | 276-305 | Валідація/відхилення auto-extracted memory |
+| Tool                 | Рядки   | Опис                                        |
+| -------------------- | ------- | ------------------------------------------- |
+| `promote_memory`     | 361-401 | Промоушен з reason + optional quality gates |
+| `review_memories`    | 307-358 | Перегляд карантинних спогадів               |
+| `validate_memory`    | 276-305 | Валідація/відхилення auto-extracted memory  |
 | `memory_maintenance` | 448-485 | Автоматичний maintenance на основі feedback |
-| `run_quality_gates` | 403-446 | Запуск quality gates вручну |
+| `run_quality_gates`  | 403-446 | Запуск quality gates вручну                 |
 
 ### 7. Метрики
 
 **Файл:** `/home/ake/shared-ai-infra/rag-api/src/utils/metrics.ts` (рядки 270-275)
 
 Prometheus counter `memory_governance_total` з labels:
+
 - `operation`: ingest, promote, reject, prune
 - `tier`: durable, quarantine
 - `project`: назва проекту
@@ -138,7 +140,7 @@ Prometheus counter `memory_governance_total` з labels:
 export const promoteMemorySchema = z.object({
   projectName: projectNameSchema.optional(),
   memoryId: z.string().min(1),
-  reason: z.enum(['human_validated', 'pr_merged', 'tests_passed']),
+  reason: z.enum(["human_validated", "pr_merged", "tests_passed"]),
   evidence: z.string().max(2000).optional(),
   runGates: z.boolean().default(false),
   projectPath: z.string().optional(),
@@ -171,6 +173,7 @@ context-enrichment.ts
 ## Патерн: Memory Dual-Tier Governance
 
 Зафіксований як архітектурний патерн:
+
 1. **Ingest**: manual → durable, auto → quarantine
 2. **Recall**: recall() шукає по обох тирах, recall-durable() -- тільки durable
 3. **Context enrichment** використовує recall-durable only

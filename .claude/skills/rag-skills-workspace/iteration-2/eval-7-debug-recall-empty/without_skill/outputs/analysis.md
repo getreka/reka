@@ -23,6 +23,7 @@ The `recall` method always searches `{project}_agent_memory` (the durable collec
 **How it manifests:** User stores memories via auto-extraction (e.g., `analyze_conversation` with `autoSave: true`), then calls `recall` and gets empty results. No errors because the durable collection exists but is simply empty.
 
 **Evidence:**
+
 - `memory-governance.ts` line 120: `const collectionName = this.getQuarantineCollection(projectName);`
 - Auto-generated memories with `source: 'auto_*'` go to quarantine
 - `recall` only queries `{project}_agent_memory`
@@ -101,11 +102,12 @@ Combined with the memory aging decay (line 179-188 of memory.ts), old memories w
 ```typescript
 if (ageMs > THIRTY_DAYS) {
   const validated = r.payload.validated as boolean | undefined;
-  const promoted = !!(r.payload.metadata as Record<string, unknown> | undefined)?.promotedAt;
+  const promoted = !!(r.payload.metadata as Record<string, unknown> | undefined)
+    ?.promotedAt;
   if (!validated && !promoted) {
     const periodsOld = Math.floor(ageMs / THIRTY_DAYS) - 1;
     const decay = Math.min(0.25, periodsOld * 0.05);
-    score *= (1 - decay);
+    score *= 1 - decay;
   }
 }
 ```
@@ -159,11 +161,13 @@ The `validated` field is indexed as a `keyword` (string) type in Qdrant, but the
 ## Reproduction Scenarios
 
 ### Scenario 1: Auto-extracted memories never appear in recall
+
 1. Call `analyze_conversation` with `autoSave: true` -- memories go to quarantine (`_memory_pending`)
 2. Call `recall` -- searches only durable (`_agent_memory`), returns empty
 3. No errors in logs
 
 ### Scenario 2: Adaptive threshold silently drops memories
+
 1. Most auto-memories haven't been promoted (low success rate)
 2. Adaptive threshold rises to 0.7-0.8
 3. New auto-memories with confidence 0.5-0.6 are silently skipped
@@ -171,6 +175,7 @@ The `validated` field is indexed as a `keyword` (string) type in Qdrant, but the
 5. `recall` returns empty because nothing was persisted
 
 ### Scenario 3: All memories superseded
+
 1. Store memory A about topic X
 2. Store memory B about topic X (very similar, auto-detected as superseding A)
 3. Store memory C about topic X (supersedes B)
@@ -179,6 +184,7 @@ The `validated` field is indexed as a `keyword` (string) type in Qdrant, but the
 6. `recall` fetches all 3, filters them all out, returns empty
 
 ### Scenario 4: Project name mismatch
+
 1. MCP server starts with `PROJECT_NAME=MyProject`
 2. Headers send `X-Project-Name: MyProject`
 3. Collection created: `MyProject_agent_memory`
@@ -200,16 +206,16 @@ The `validated` field is indexed as a `keyword` (string) type in Qdrant, but the
 
 ## Files Examined
 
-| File | Path | Relevance |
-|------|------|-----------|
-| Memory MCP Tool | `/home/ake/shared-ai-infra/mcp-server/src/tools/memory.ts` | recall handler (line 80-99) |
-| Memory Service | `/home/ake/shared-ai-infra/rag-api/src/services/memory.ts` | recall method (line 142-212), supersededBy filter (line 171) |
-| Memory Routes | `/home/ake/shared-ai-infra/rag-api/src/routes/memory.ts` | recall endpoint (line 62-74) |
-| Memory Governance | `/home/ake/shared-ai-infra/rag-api/src/services/memory-governance.ts` | quarantine routing (line 91-163), adaptive threshold (line 39-85) |
-| Vector Store | `/home/ake/shared-ai-infra/rag-api/src/services/vector-store.ts` | search method (line 495-540), silent 404 handling |
-| Context Enrichment | `/home/ake/shared-ai-infra/mcp-server/src/context-enrichment.ts` | wrong response path (line 227) |
-| Validation Schemas | `/home/ake/shared-ai-infra/rag-api/src/utils/validation.ts` | recallMemorySchema (line 126-132) |
-| Tool Middleware | `/home/ake/shared-ai-infra/mcp-server/src/tool-middleware.ts` | wrapHandler pipeline |
-| API Client | `/home/ake/shared-ai-infra/mcp-server/src/api-client.ts` | X-Project-Name header |
-| Config | `/home/ake/shared-ai-infra/rag-api/src/config.ts` | VECTOR_SIZE, LOG_LEVEL |
-| Embedding Service | `/home/ake/shared-ai-infra/rag-api/src/services/embedding.ts` | provider-dependent embeddings |
+| File               | Path                                                                  | Relevance                                                         |
+| ------------------ | --------------------------------------------------------------------- | ----------------------------------------------------------------- |
+| Memory MCP Tool    | `/home/ake/shared-ai-infra/mcp-server/src/tools/memory.ts`            | recall handler (line 80-99)                                       |
+| Memory Service     | `/home/ake/shared-ai-infra/rag-api/src/services/memory.ts`            | recall method (line 142-212), supersededBy filter (line 171)      |
+| Memory Routes      | `/home/ake/shared-ai-infra/rag-api/src/routes/memory.ts`              | recall endpoint (line 62-74)                                      |
+| Memory Governance  | `/home/ake/shared-ai-infra/rag-api/src/services/memory-governance.ts` | quarantine routing (line 91-163), adaptive threshold (line 39-85) |
+| Vector Store       | `/home/ake/shared-ai-infra/rag-api/src/services/vector-store.ts`      | search method (line 495-540), silent 404 handling                 |
+| Context Enrichment | `/home/ake/shared-ai-infra/mcp-server/src/context-enrichment.ts`      | wrong response path (line 227)                                    |
+| Validation Schemas | `/home/ake/shared-ai-infra/rag-api/src/utils/validation.ts`           | recallMemorySchema (line 126-132)                                 |
+| Tool Middleware    | `/home/ake/shared-ai-infra/mcp-server/src/tool-middleware.ts`         | wrapHandler pipeline                                              |
+| API Client         | `/home/ake/shared-ai-infra/mcp-server/src/api-client.ts`              | X-Project-Name header                                             |
+| Config             | `/home/ake/shared-ai-infra/rag-api/src/config.ts`                     | VECTOR_SIZE, LOG_LEVEL                                            |
+| Embedding Service  | `/home/ake/shared-ai-infra/rag-api/src/services/embedding.ts`         | provider-dependent embeddings                                     |

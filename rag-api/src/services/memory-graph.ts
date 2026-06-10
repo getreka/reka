@@ -125,7 +125,7 @@ class MemoryGraphService {
     const nodes: GraphNode[] = [];
 
     for (const collection of collections) {
-      const remaining = ids.filter(id => !foundIds.has(id));
+      const remaining = ids.filter((id) => !foundIds.has(id));
       if (remaining.length === 0) break;
 
       try {

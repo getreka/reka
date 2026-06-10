@@ -10,11 +10,13 @@ export function mockEmbedding(dim = 1024): number[] {
 }
 
 /** Generate a Qdrant-style search result with sensible defaults. */
-export function mockSearchResult(overrides?: Partial<{
-  id: string;
-  score: number;
-  payload: Record<string, unknown>;
-}>): { id: string; score: number; payload: Record<string, unknown> } {
+export function mockSearchResult(
+  overrides?: Partial<{
+    id: string;
+    score: number;
+    payload: Record<string, unknown>;
+  }>
+): { id: string; score: number; payload: Record<string, unknown> } {
   return {
     id: overrides?.id ?? uuidv4(),
     score: overrides?.score ?? 0.85,
@@ -29,19 +31,21 @@ export function mockSearchResult(overrides?: Partial<{
 }
 
 /** Generate a Memory-shaped object. */
-export function mockMemory(overrides?: Partial<{
-  id: string;
-  type: string;
-  content: string;
-  tags: string[];
-  createdAt: string;
-  updatedAt: string;
-  metadata: Record<string, unknown>;
-  validated: boolean;
-  supersededBy: string;
-  source: string;
-  confidence: number;
-}>): Record<string, unknown> {
+export function mockMemory(
+  overrides?: Partial<{
+    id: string;
+    type: string;
+    content: string;
+    tags: string[];
+    createdAt: string;
+    updatedAt: string;
+    metadata: Record<string, unknown>;
+    validated: boolean;
+    supersededBy: string;
+    source: string;
+    confidence: number;
+  }>
+): Record<string, unknown> {
   const now = new Date().toISOString();
   return {
     id: overrides?.id ?? uuidv4(),
@@ -59,11 +63,13 @@ export function mockMemory(overrides?: Partial<{
 }
 
 /** Generate a VectorPoint-compatible object. */
-export function mockVectorPoint(overrides?: Partial<{
-  id: string;
-  vector: number[];
-  payload: Record<string, unknown>;
-}>): { id: string; vector: number[]; payload: Record<string, unknown> } {
+export function mockVectorPoint(
+  overrides?: Partial<{
+    id: string;
+    vector: number[];
+    payload: Record<string, unknown>;
+  }>
+): { id: string; vector: number[]; payload: Record<string, unknown> } {
   return {
     id: overrides?.id ?? uuidv4(),
     vector: overrides?.vector ?? mockEmbedding(),

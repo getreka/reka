@@ -68,10 +68,12 @@ export interface Config {
   ANTHROPIC_API_KEY?: string;
   ANTHROPIC_MODEL: string;
   ANTHROPIC_THINK: boolean;
-  CLAUDE_EFFORT: 'low' | 'medium' | 'high' | 'max';
+  CLAUDE_EFFORT: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 
   // Vector
   VECTOR_SIZE: number;
+  EMBEDDING_MAX_INPUT_CHARS: number;
+  EMBEDDING_STARTUP_DIM_CHECK: boolean;
 
   // Redis (caching)
   REDIS_URL?: string;
@@ -123,6 +125,11 @@ export interface Config {
 
   // Authentication
   API_KEY?: string;
+
+  // Demo mode
+  DEMO_MODE: boolean;
+  DEMO_DASHBOARD_URL: string;
+  DEMO_API_URL: string;
 
   // Memory Governance
   MEMORY_QUARANTINE_TTL_DAYS: number;
@@ -181,6 +188,12 @@ export interface Config {
   LSP_IDLE_SHUTDOWN_MS: number;
   LSP_MAX_CONCURRENT: number;
 
+  // Search tuning
+  CHUNK_SIZE: number;
+  CODE_BOOST: number;
+  GRAPH_EXPAND_SCORE_THRESHOLD: number;
+  RERANKER_MAX_CHARS: number;
+
   // Logging
   LOG_LEVEL: string;
 }
@@ -211,7 +224,7 @@ const config: Config = {
     'models.llm.standard.provider',
     'ollama'
   ) as Config['LLM_PROVIDER'],
-  OLLAMA_MODEL: envOrYaml('OLLAMA_MODEL', 'models.llm.utility.model', 'qwen3.5:35b'),
+  OLLAMA_MODEL: envOrYaml('OLLAMA_MODEL', 'models.llm.utility.model', 'qwen3.5:9b'),
   OPENAI_MODEL: envOrYaml('OPENAI_MODEL', 'models.llm.standard.model', 'gpt-4-turbo-preview'),
   ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY || yamlConfig?.models?.llm?.complex?.api_key,
   ANTHROPIC_MODEL: envOrYaml('ANTHROPIC_MODEL', 'models.llm.complex.model', 'claude-sonnet-4-6'),
@@ -220,13 +233,18 @@ const config: Config = {
 
   // Vector size based on embedding provider
   VECTOR_SIZE: parseInt(process.env.VECTOR_SIZE || '1024', 10),
+  // Hard cap on embedding input length (chars). Inputs over this are truncated with a warn.
+  // Default ~24K chars stays well below qwen3-embedding:4b's 32K-token context.
+  EMBEDDING_MAX_INPUT_CHARS: parseInt(process.env.EMBEDDING_MAX_INPUT_CHARS || '24000', 10),
+  // Probe embedding dim at startup; exit on mismatch with VECTOR_SIZE.
+  EMBEDDING_STARTUP_DIM_CHECK: process.env.EMBEDDING_STARTUP_DIM_CHECK !== 'false',
 
   // Ollama Thinking/Reasoning
   OLLAMA_THINK: process.env.OLLAMA_THINK !== 'false',
   OLLAMA_THINK_BUDGET: parseInt(process.env.OLLAMA_THINK_BUDGET || '8192', 10),
 
   // Agent Runtime
-  AGENT_OLLAMA_MODEL: process.env.AGENT_OLLAMA_MODEL || process.env.OLLAMA_MODEL || 'qwen3.5:35b',
+  AGENT_OLLAMA_MODEL: process.env.AGENT_OLLAMA_MODEL || process.env.OLLAMA_MODEL || 'qwen3.5:27b',
   AGENT_MAX_ITERATIONS: parseInt(process.env.AGENT_MAX_ITERATIONS || '8', 10),
   AGENT_TIMEOUT: parseInt(process.env.AGENT_TIMEOUT || '180000', 10),
 
@@ -283,6 +301,11 @@ const config: Config = {
   // Authentication
   API_KEY: process.env.API_KEY,
 
+  // Demo mode
+  DEMO_MODE: process.env.DEMO_MODE === 'true',
+  DEMO_DASHBOARD_URL: process.env.DEMO_DASHBOARD_URL || 'https://app.getreka.dev',
+  DEMO_API_URL: process.env.DEMO_API_URL || 'https://api.getreka.dev',
+
   // Memory Governance
   MEMORY_QUARANTINE_TTL_DAYS: parseInt(process.env.MEMORY_QUARANTINE_TTL_DAYS || '7', 10),
   MEMORY_DECAY_RATE: parseFloat(process.env.MEMORY_DECAY_RATE || '0.10'),
@@ -331,7 +354,12 @@ const config: Config = {
   SPREADING_ACTIVATION_HOP_DECAY: parseFloat(process.env.SPREADING_ACTIVATION_HOP_DECAY || '0.7'),
   SPREADING_ACTIVATION_CACHE_TTL: parseInt(process.env.SPREADING_ACTIVATION_CACHE_TTL || '300', 10),
 
-  // Logging
+  // Search tuning
+  CHUNK_SIZE: parseInt(process.env.CHUNK_SIZE || '500', 10),
+  CODE_BOOST: parseFloat(process.env.CODE_BOOST || '1.15'),
+  GRAPH_EXPAND_SCORE_THRESHOLD: parseFloat(process.env.GRAPH_EXPAND_SCORE_THRESHOLD || '0.5'),
+  RERANKER_MAX_CHARS: parseInt(process.env.RERANKER_MAX_CHARS || '800', 10),
+
   LOG_LEVEL: process.env.LOG_LEVEL || 'info',
 };
 

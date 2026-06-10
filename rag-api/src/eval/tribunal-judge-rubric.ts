@@ -7,7 +7,7 @@
 
 export interface RubricScore {
   metric: string;
-  score: number;       // 1-10
+  score: number; // 1-10
   maxScore: number;
   reasoning: string;
 }
@@ -16,7 +16,7 @@ export interface EvalScorecard {
   caseId: string;
   scores: RubricScore[];
   averageScore: number;
-  pass: boolean;          // All metrics meet threshold
+  pass: boolean; // All metrics meet threshold
   details: string;
 }
 
@@ -86,14 +86,14 @@ Respond in this EXACT JSON format:
 
 /** Thresholds for each metric (minimum score to pass) */
 export const METRIC_THRESHOLDS: Record<string, number> = {
-  argument_quality: 7,       // ≥ 7/10
-  rebuttal_relevance: 6,     // ≥ 6/10
-  verdict_completeness: 7,   // ≥ 7/10
-  verdict_consistency: 7,    // ≥ 7/10
-  actionability: 7,          // ≥ 7/10
-  dissent_quality: 6,        // ≥ 6/10
-  evidence_depth: 6,         // ≥ 6/10
-  balance: 7,                // ≥ 7/10
+  argument_quality: 7, // ≥ 7/10
+  rebuttal_relevance: 6, // ≥ 6/10
+  verdict_completeness: 7, // ≥ 7/10
+  verdict_consistency: 7, // ≥ 7/10
+  actionability: 7, // ≥ 7/10
+  dissent_quality: 6, // ≥ 6/10
+  evidence_depth: 6, // ≥ 6/10
+  balance: 7, // ≥ 7/10
 };
 
 /**
@@ -115,11 +115,10 @@ export function parseJudgeResponse(caseId: string, responseText: string): EvalSc
       reasoning: s.reasoning || '',
     }));
 
-    const averageScore = scores.length > 0
-      ? scores.reduce((sum, s) => sum + s.score, 0) / scores.length
-      : 0;
+    const averageScore =
+      scores.length > 0 ? scores.reduce((sum, s) => sum + s.score, 0) / scores.length : 0;
 
-    const pass = scores.every(s => {
+    const pass = scores.every((s) => {
       const threshold = METRIC_THRESHOLDS[s.metric] || 6;
       return s.score >= threshold;
     });
@@ -129,7 +128,7 @@ export function parseJudgeResponse(caseId: string, responseText: string): EvalSc
       scores,
       averageScore: Math.round(averageScore * 100) / 100,
       pass,
-      details: scores.map(s => `${s.metric}: ${s.score}/10 — ${s.reasoning}`).join('\n'),
+      details: scores.map((s) => `${s.metric}: ${s.score}/10 — ${s.reasoning}`).join('\n'),
     };
   } catch (error: any) {
     return {

@@ -106,10 +106,7 @@ describe('LongTermMemoryService', () => {
       expect(mem.sessionId).toBe('sess-123');
       expect(mem.stability).toBe(7); // EPISODIC_BASE_STABILITY_DAYS
       expect(mem.accessCount).toBe(0);
-      expect(mockedVS.upsert).toHaveBeenCalledWith(
-        'test_memory_episodic',
-        expect.any(Array)
-      );
+      expect(mockedVS.upsert).toHaveBeenCalledWith('test_memory_episodic', expect.any(Array));
     });
 
     it('embeds with [episodic] prefix', async () => {
@@ -135,10 +132,7 @@ describe('LongTermMemoryService', () => {
       expect(mem.subtype).toBe('decision');
       expect(mem.stability).toBe(90); // SEMANTIC_BASE_STABILITY_DAYS
       expect(mem.confidence).toBe(0.7);
-      expect(mockedVS.upsert).toHaveBeenCalledWith(
-        'test_memory_semantic',
-        expect.any(Array)
-      );
+      expect(mockedVS.upsert).toHaveBeenCalledWith('test_memory_semantic', expect.any(Array));
     });
 
     it('uses procedural stability for procedure subtype', async () => {
@@ -168,23 +162,25 @@ describe('LongTermMemoryService', () => {
 
     it('filters out memories with retention below threshold', async () => {
       const oldDate = new Date(Date.now() - 60 * 86400000).toISOString(); // 60d ago
-      mockedVS.search.mockResolvedValueOnce([
-        {
-          id: 'old-ep',
-          score: 0.8,
-          payload: {
+      mockedVS.search
+        .mockResolvedValueOnce([
+          {
             id: 'old-ep',
-            content: 'old event',
-            timestamp: oldDate,
-            stability: 7, // episodic — will decay heavily
-            accessCount: 0,
-            tags: [],
-            sessionId: 's1',
-            files: [],
-            actions: [],
+            score: 0.8,
+            payload: {
+              id: 'old-ep',
+              content: 'old event',
+              timestamp: oldDate,
+              stability: 7, // episodic — will decay heavily
+              accessCount: 0,
+              tags: [],
+              sessionId: 's1',
+              files: [],
+              actions: [],
+            },
           },
-        },
-      ]).mockResolvedValueOnce([]);
+        ])
+        .mockResolvedValueOnce([]);
 
       const results = await memoryLtm.recall({
         projectName: 'test',
@@ -202,12 +198,30 @@ describe('LongTermMemoryService', () => {
         .mockResolvedValueOnce([]) // episodic empty
         .mockResolvedValueOnce([
           {
-            id: 'sem-1', score: 0.7,
-            payload: { id: 'sem-1', content: 'fact A', createdAt: now, stability: 90, accessCount: 3, tags: [], subtype: 'insight' },
+            id: 'sem-1',
+            score: 0.7,
+            payload: {
+              id: 'sem-1',
+              content: 'fact A',
+              createdAt: now,
+              stability: 90,
+              accessCount: 3,
+              tags: [],
+              subtype: 'insight',
+            },
           },
           {
-            id: 'sem-2', score: 0.9,
-            payload: { id: 'sem-2', content: 'fact B', createdAt: now, stability: 90, accessCount: 0, tags: [], subtype: 'decision' },
+            id: 'sem-2',
+            score: 0.9,
+            payload: {
+              id: 'sem-2',
+              content: 'fact B',
+              createdAt: now,
+              stability: 90,
+              accessCount: 0,
+              tags: [],
+              subtype: 'decision',
+            },
           },
         ]);
 
@@ -224,12 +238,21 @@ describe('LongTermMemoryService', () => {
 
     it('skips superseded memories', async () => {
       const now = new Date().toISOString();
-      mockedVS.search
-        .mockResolvedValueOnce([])
-        .mockResolvedValueOnce([{
-          id: 'sup', score: 0.9,
-          payload: { id: 'sup', content: 'old', createdAt: now, stability: 90, accessCount: 0, supersededBy: 'new-id', tags: [] },
-        }]);
+      mockedVS.search.mockResolvedValueOnce([]).mockResolvedValueOnce([
+        {
+          id: 'sup',
+          score: 0.9,
+          payload: {
+            id: 'sup',
+            content: 'old',
+            createdAt: now,
+            stability: 90,
+            accessCount: 0,
+            supersededBy: 'new-id',
+            tags: [],
+          },
+        },
+      ]);
 
       const results = await memoryLtm.recall({ projectName: 'test', query: 'test' });
       expect(results).toHaveLength(0);
@@ -238,10 +261,12 @@ describe('LongTermMemoryService', () => {
 
   describe('strengthenOnRecall', () => {
     it('increments accessCount and stability', async () => {
-      mockQdrantClient.retrieve.mockResolvedValue([{
-        id: 'mem-1',
-        payload: { accessCount: 2, stability: 90 },
-      }]);
+      mockQdrantClient.retrieve.mockResolvedValue([
+        {
+          id: 'mem-1',
+          payload: { accessCount: 2, stability: 90 },
+        },
+      ]);
 
       await memoryLtm.strengthenOnRecall('test', 'mem-1', 'semantic');
 

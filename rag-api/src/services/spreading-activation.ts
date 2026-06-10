@@ -31,14 +31,14 @@ export interface ActivatedMemory {
   content: string;
   type: string;
   activation: number;
-  hop: number;                   // 0 = seed, 1 = 1-hop neighbor, etc.
-  activatedVia?: string;         // edge type that activated this node
+  hop: number; // 0 = seed, 1 = 1-hop neighbor, etc.
+  activatedVia?: string; // edge type that activated this node
 }
 
 export interface ActivationOptions {
   maxHops?: number;
   threshold?: number;
-  crossGraph?: boolean;          // reserved for code-graph bridging (Phase 4+)
+  crossGraph?: boolean; // reserved for code-graph bridging (Phase 4+)
 }
 
 // ── Edge Weights ──────────────────────────────────────────
@@ -84,8 +84,11 @@ class SpreadingActivationService {
     const activated = new Map<string, ActivatedMemory>();
 
     // Initialize seeds
-    const seedNodes = await memoryGraph.getNodes(projectName, seeds.map(s => s.id));
-    const nodeMap = new Map(seedNodes.map(n => [n.id, n]));
+    const seedNodes = await memoryGraph.getNodes(
+      projectName,
+      seeds.map((s) => s.id)
+    );
+    const nodeMap = new Map(seedNodes.map((n) => [n.id, n]));
 
     for (const seed of seeds) {
       const node = nodeMap.get(seed.id);
@@ -110,7 +113,8 @@ class SpreadingActivationService {
 
         for (const rel of node.relationships) {
           const edgeWeight = getEdgeWeight(rel.type);
-          const propagated = current.activation * edgeWeight * config.SPREADING_ACTIVATION_HOP_DECAY;
+          const propagated =
+            current.activation * edgeWeight * config.SPREADING_ACTIVATION_HOP_DECAY;
 
           if (propagated < threshold) continue;
 
@@ -154,7 +158,10 @@ class SpreadingActivationService {
   // ── Cache ─────────────────────────────────────────────────
 
   private cacheKey(projectName: string, seeds: ActivationSeed[]): string {
-    const seedStr = seeds.map(s => `${s.id}:${s.activation.toFixed(3)}`).sort().join('|');
+    const seedStr = seeds
+      .map((s) => `${s.id}:${s.activation.toFixed(3)}`)
+      .sort()
+      .join('|');
     const hash = crypto.createHash('md5').update(seedStr).digest('hex');
     return `sa_cache:${projectName}:${hash}`;
   }

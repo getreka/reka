@@ -132,10 +132,12 @@ class UsageTrackerService {
           with_payload: true,
           with_vector: false,
           filter: {
-            must: [{
-              key: 'timestampMs',
-              range: { gte: cutoffMs },
-            }],
+            must: [
+              {
+                key: 'timestampMs',
+                range: { gte: cutoffMs },
+              },
+            ],
           },
         });
 
@@ -148,11 +150,10 @@ class UsageTrackerService {
 
       // Calculate stats
       const totalCalls = usages.length;
-      const successCount = usages.filter(u => u.success).length;
+      const successCount = usages.filter((u) => u.success).length;
       const successRate = totalCalls > 0 ? successCount / totalCalls : 0;
-      const avgDurationMs = totalCalls > 0
-        ? usages.reduce((sum, u) => sum + u.durationMs, 0) / totalCalls
-        : 0;
+      const avgDurationMs =
+        totalCalls > 0 ? usages.reduce((sum, u) => sum + u.durationMs, 0) / totalCalls : 0;
 
       // Top tools
       const toolCounts: Record<string, number> = {};
@@ -210,7 +211,7 @@ class UsageTrackerService {
       const embedding = await embeddingService.embed(query);
       const results = await vectorStore.search(collectionName, embedding, limit);
 
-      return results.map(r => ({
+      return results.map((r) => ({
         usage: r.payload as unknown as ToolUsage,
         score: r.score,
       }));
@@ -225,10 +226,13 @@ class UsageTrackerService {
   /**
    * Analyze user behavior patterns from tool usage data
    */
-  async getBehaviorPatterns(projectName: string, options: {
-    days?: number;
-    sessionId?: string;
-  } = {}): Promise<{
+  async getBehaviorPatterns(
+    projectName: string,
+    options: {
+      days?: number;
+      sessionId?: string;
+    } = {}
+  ): Promise<{
     peakHours: Array<{ hour: number; count: number }>;
     toolPreferences: Array<{ tool: string; count: number; avgDuration: number }>;
     workflows: Array<{ sequence: string[]; count: number }>;
@@ -316,7 +320,7 @@ class UsageTrackerService {
       // Extract 2-gram and 3-gram tool sequences
       const ngramCounts = new Map<string, { sequence: string[]; count: number }>();
       for (const [, sessionUsages] of sessions) {
-        const tools = sessionUsages.map(u => u.toolName);
+        const tools = sessionUsages.map((u) => u.toolName);
         for (let n = 2; n <= 3; n++) {
           for (let i = 0; i <= tools.length - n; i++) {
             const ngram = tools.slice(i, i + n);
@@ -329,26 +333,28 @@ class UsageTrackerService {
       }
 
       result.workflows = Array.from(ngramCounts.values())
-        .filter(w => w.count >= 2)
+        .filter((w) => w.count >= 2)
         .sort((a, b) => b.count - a.count)
         .slice(0, 15);
 
       // Session stats
       result.sessionStats.totalSessions = sessions.size;
-      const sessionSizes = Array.from(sessions.values()).map(s => s.length);
-      result.sessionStats.avgToolsPerSession = sessionSizes.length > 0
-        ? Math.round(sessionSizes.reduce((a, b) => a + b, 0) / sessionSizes.length)
-        : 0;
+      const sessionSizes = Array.from(sessions.values()).map((s) => s.length);
+      result.sessionStats.avgToolsPerSession =
+        sessionSizes.length > 0
+          ? Math.round(sessionSizes.reduce((a, b) => a + b, 0) / sessionSizes.length)
+          : 0;
 
-      const sessionDurations = Array.from(sessions.values()).map(s => {
+      const sessionDurations = Array.from(sessions.values()).map((s) => {
         if (s.length < 2) return 0;
         const first = new Date(s[0].timestamp).getTime();
         const last = new Date(s[s.length - 1].timestamp).getTime();
         return (last - first) / 60000; // minutes
       });
-      result.sessionStats.avgDurationMinutes = sessionDurations.length > 0
-        ? Math.round(sessionDurations.reduce((a, b) => a + b, 0) / sessionDurations.length)
-        : 0;
+      result.sessionStats.avgDurationMinutes =
+        sessionDurations.length > 0
+          ? Math.round(sessionDurations.reduce((a, b) => a + b, 0) / sessionDurations.length)
+          : 0;
 
       return result;
     } catch (error: any) {
@@ -362,12 +368,17 @@ class UsageTrackerService {
   /**
    * Get knowledge gaps (queries with no/low results)
    */
-  async getKnowledgeGaps(projectName: string, limit: number = 20): Promise<{
-    query: string;
-    toolName: string;
-    count: number;
-    avgResultCount: number;
-  }[]> {
+  async getKnowledgeGaps(
+    projectName: string,
+    limit: number = 20
+  ): Promise<
+    {
+      query: string;
+      toolName: string;
+      count: number;
+      avgResultCount: number;
+    }[]
+  > {
     const collectionName = this.getCollectionName(projectName);
     const gaps: Map<string, { toolName: string; count: number; totalResults: number }> = new Map();
 

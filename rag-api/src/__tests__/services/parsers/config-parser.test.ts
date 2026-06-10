@@ -17,12 +17,9 @@ describe('ConfigParser', () => {
       }
     );
 
-    it.each(['.ts', '.js', '.md', '.txt', '.py', '.go'])(
-      'returns false for %s files',
-      (ext) => {
-        expect(parser.canParse(`config/file${ext}`)).toBe(false);
-      }
-    );
+    it.each(['.ts', '.js', '.md', '.txt', '.py', '.go'])('returns false for %s files', (ext) => {
+      expect(parser.canParse(`config/file${ext}`)).toBe(false);
+    });
 
     it('is case-insensitive for extensions', () => {
       expect(parser.canParse('config/app.YAML')).toBe(true);
@@ -32,16 +29,20 @@ describe('ConfigParser', () => {
 
   describe('parse() — JSON', () => {
     it('creates one chunk per top-level key', () => {
-      const content = JSON.stringify({
-        name: 'my-app',
-        version: '1.0.0',
-        port: 3000,
-      }, null, 2);
+      const content = JSON.stringify(
+        {
+          name: 'my-app',
+          version: '1.0.0',
+          port: 3000,
+        },
+        null,
+        2
+      );
 
       const chunks = parser.parse(content, 'config/package.json');
 
       expect(chunks.length).toBe(3);
-      const keys = chunks.flatMap(c => c.symbols ?? []);
+      const keys = chunks.flatMap((c) => c.symbols ?? []);
       expect(keys).toContain('name');
       expect(keys).toContain('version');
       expect(keys).toContain('port');
@@ -76,15 +77,19 @@ describe('ConfigParser', () => {
     });
 
     it('handles nested objects as a single chunk per top-level key', () => {
-      const content = JSON.stringify({
-        server: { host: 'localhost', port: 8080 },
-        database: { url: 'postgres://localhost/db' },
-      }, null, 2);
+      const content = JSON.stringify(
+        {
+          server: { host: 'localhost', port: 8080 },
+          database: { url: 'postgres://localhost/db' },
+        },
+        null,
+        2
+      );
 
       const chunks = parser.parse(content, 'config/app.json');
 
       expect(chunks.length).toBe(2);
-      const symbols = chunks.flatMap(c => c.symbols ?? []);
+      const symbols = chunks.flatMap((c) => c.symbols ?? []);
       expect(symbols).toContain('server');
       expect(symbols).toContain('database');
     });
@@ -104,7 +109,7 @@ describe('ConfigParser', () => {
       const chunks = parser.parse(content, 'config/list.json');
 
       expect(chunks.length).toBe(3);
-      const symbols = chunks.flatMap(c => c.symbols ?? []);
+      const symbols = chunks.flatMap((c) => c.symbols ?? []);
       expect(symbols).toContain('0');
       expect(symbols).toContain('1');
       expect(symbols).toContain('2');
@@ -137,7 +142,7 @@ debug: true`;
       const chunks = parser.parse(content, 'config/app.yaml');
 
       expect(chunks.length).toBe(3);
-      const symbols = chunks.flatMap(c => c.symbols ?? []);
+      const symbols = chunks.flatMap((c) => c.symbols ?? []);
       expect(symbols).toContain('host');
       expect(symbols).toContain('port');
       expect(symbols).toContain('debug');
@@ -171,7 +176,7 @@ server:
 
       const chunks = parser.parse(content, 'config/app.yml');
 
-      const dbChunk = chunks.find(c => c.symbols?.includes('database'));
+      const dbChunk = chunks.find((c) => c.symbols?.includes('database'));
       expect(dbChunk).toBeDefined();
       expect(dbChunk!.content).toContain('host: localhost');
       expect(dbChunk!.content).toContain('port: 5432');
@@ -257,7 +262,7 @@ APP_HOST=0.0.0.0`;
       const content = `lowercase_var=value\nUPPERCASE_VAR=value`;
       const chunks = parser.parse(content, 'app.env');
 
-      const symbols = chunks.flatMap(c => c.symbols ?? []);
+      const symbols = chunks.flatMap((c) => c.symbols ?? []);
       expect(symbols).toContain('UPPERCASE_VAR');
       expect(symbols).not.toContain('lowercase_var');
     });

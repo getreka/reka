@@ -6,16 +6,16 @@ import { logger } from './logger';
 import { CircuitOpenError } from './errors';
 
 export enum CircuitState {
-  CLOSED = 'CLOSED',     // Normal operation
-  OPEN = 'OPEN',         // Failing, reject requests
-  HALF_OPEN = 'HALF_OPEN' // Testing if service recovered
+  CLOSED = 'CLOSED', // Normal operation
+  OPEN = 'OPEN', // Failing, reject requests
+  HALF_OPEN = 'HALF_OPEN', // Testing if service recovered
 }
 
 export interface CircuitBreakerOptions {
-  failureThreshold: number;  // Failures before opening
-  successThreshold: number;  // Successes in half-open to close
-  timeout: number;           // Time in OPEN before trying half-open (ms)
-  resetTimeout?: number;     // Time to reset failure count when healthy (ms)
+  failureThreshold: number; // Failures before opening
+  successThreshold: number; // Successes in half-open to close
+  timeout: number; // Time in OPEN before trying half-open (ms)
+  resetTimeout?: number; // Time to reset failure count when healthy (ms)
 }
 
 const DEFAULT_OPTIONS: CircuitBreakerOptions = {
@@ -190,14 +190,14 @@ class CircuitBreakerRegistry {
    * Get stats for all breakers
    */
   getAllStats() {
-    return this.getAll().map(breaker => breaker.getStats());
+    return this.getAll().map((breaker) => breaker.getStats());
   }
 
   /**
    * Reset all circuit breakers
    */
   resetAll(): void {
-    this.breakers.forEach(breaker => breaker.reset());
+    this.breakers.forEach((breaker) => breaker.reset());
   }
 }
 

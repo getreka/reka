@@ -15,7 +15,9 @@ import type { ToolInputSchema } from "./types.js";
  * Used during Phase 2 migration while ToolRegistry still expects raw JSON Schema.
  * Phase 3 passes Zod schemas directly to McpServer.registerTool().
  */
-export function zodToInputSchema(schema: z.ZodObject<Record<string, z.ZodType>>): ToolInputSchema {
+export function zodToInputSchema(
+  schema: z.ZodObject<Record<string, z.ZodType>>,
+): ToolInputSchema {
   const jsonSchema = z.toJSONSchema(schema) as Record<string, unknown>;
   return {
     type: "object",
@@ -28,10 +30,7 @@ export function zodToInputSchema(schema: z.ZodObject<Record<string, z.ZodType>>)
 
 // ── Primitives ──────────────────────────────────────────────
 
-export const QueryStr = z
-  .string()
-  .min(1)
-  .describe("Search query or question");
+export const QueryStr = z.string().min(1).describe("Search query or question");
 
 export const Limit = z
   .number()
@@ -58,10 +57,7 @@ export const FilePaths = z
   .min(1)
   .describe("List of file paths");
 
-export const Content = z
-  .string()
-  .min(1)
-  .describe("Text content");
+export const Content = z.string().min(1).describe("Text content");
 
 export const CollectionSuffix = z
   .string()
@@ -114,10 +110,7 @@ export const SearchFilters = z
       .string()
       .optional()
       .describe("Filter by file extension (e.g. 'ts', 'py')"),
-    directory: z
-      .string()
-      .optional()
-      .describe("Filter by directory prefix"),
+    directory: z.string().optional().describe("Filter by directory prefix"),
   })
   .optional()
   .describe("Search filters");

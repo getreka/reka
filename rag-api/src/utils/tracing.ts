@@ -53,7 +53,7 @@ const tracer = trace.getTracer('rag-api');
 export async function withSpan<T>(
   name: string,
   attributes: Record<string, string | number | boolean>,
-  fn: (span: Span) => Promise<T>,
+  fn: (span: Span) => Promise<T>
 ): Promise<T> {
   if (!OTEL_ENABLED) return fn({} as Span);
 
@@ -81,12 +81,16 @@ export async function withSpan<T>(
 export function traceLLM<T>(
   provider: string,
   model: string,
-  fn: (span: Span) => Promise<T>,
+  fn: (span: Span) => Promise<T>
 ): Promise<T> {
-  return withSpan('llm.completion', {
-    'llm.provider': provider,
-    'llm.model': model,
-  }, fn);
+  return withSpan(
+    'llm.completion',
+    {
+      'llm.provider': provider,
+      'llm.model': model,
+    },
+    fn
+  );
 }
 
 /**
@@ -95,10 +99,14 @@ export function traceLLM<T>(
 export function traceEmbedding<T>(
   provider: string,
   batchSize: number,
-  fn: (span: Span) => Promise<T>,
+  fn: (span: Span) => Promise<T>
 ): Promise<T> {
-  return withSpan('embedding.compute', {
-    'embedding.provider': provider,
-    'embedding.batch_size': batchSize,
-  }, fn);
+  return withSpan(
+    'embedding.compute',
+    {
+      'embedding.provider': provider,
+      'embedding.batch_size': batchSize,
+    },
+    fn
+  );
 }

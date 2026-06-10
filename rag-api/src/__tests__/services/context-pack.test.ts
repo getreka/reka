@@ -44,7 +44,11 @@ describe('ContextPackBuilder', () => {
 
   it('returns assembled context for basic query', async () => {
     mocks.search.mockResolvedValue([
-      { id: '1', score: 0.9, payload: { file: 'auth.ts', content: 'export class Auth {}', language: 'typescript' } },
+      {
+        id: '1',
+        score: 0.9,
+        payload: { file: 'auth.ts', content: 'export class Auth {}', language: 'typescript' },
+      },
     ]);
 
     const pack = await contextPackBuilder.build({
@@ -69,7 +73,7 @@ describe('ContextPackBuilder', () => {
 
     // Should have attempted search on docs collection
     const searchCalls = mocks.search.mock.calls;
-    const collections = searchCalls.map(c => c[0]);
+    const collections = searchCalls.map((c) => c[0]);
     expect(collections).toContain('test_docs');
   });
 
@@ -82,7 +86,7 @@ describe('ContextPackBuilder', () => {
       maxTokens: 4000,
     });
 
-    const collections = mocks.search.mock.calls.map(c => c[0]);
+    const collections = mocks.search.mock.calls.map((c) => c[0]);
     expect(collections).toContain('test_contracts');
   });
 

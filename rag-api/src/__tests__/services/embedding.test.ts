@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import axios from 'axios';
 import { mockEmbedding } from '../helpers/fixtures';
 
@@ -21,6 +21,7 @@ vi.mock('../../services/cache', () => ({
 
 import { cacheService } from '../../services/cache';
 import { embeddingService } from '../../services/embedding';
+import { embeddingCircuit } from '../../utils/circuit-breaker';
 
 const mockedAxios = vi.mocked(axios);
 const mockedCache = vi.mocked(cacheService);
@@ -30,6 +31,9 @@ describe('EmbeddingService', () => {
 
   beforeEach(() => {
     vi.clearAllMocks();
+    // Circuit breaker state is module-level singleton — reset between tests
+    // so earlier failures don't poison later ones.
+    embeddingCircuit.reset();
   });
 
   describe('embed (basic caching)', () => {
@@ -51,11 +55,11 @@ describe('EmbeddingService', () => {
 
       const result = await embeddingService.embed('hello');
 
-      expect(result).toBe(fakeVector);
-      expect(mockedAxios.post).toHaveBeenCalledWith(
-        expect.stringContaining('/embed'),
-        { text: 'hello' }
-      );
+      // validateOutput slices to VECTOR_SIZE, so we deep-equal instead of identity.
+      expect(result).toEqual(fakeVector);
+      expect(mockedAxios.post).toHaveBeenCalledWith(expect.stringContaining('/embed'), {
+        text: 'hello',
+      });
       expect(mockedCache.setEmbedding).toHaveBeenCalledWith('hello', fakeVector);
     });
   });
@@ -96,11 +100,10 @@ describe('EmbeddingService', () => {
 
       expect(result).toEqual(fakeVector);
       expect(mockedAxios.post).toHaveBeenCalled();
-      expect(mockedCache.setSessionEmbedding).toHaveBeenCalledWith(
-        'query',
-        fakeVector,
-        { sessionId: 'sess-1', projectName: 'proj' }
-      );
+      expect(mockedCache.setSessionEmbedding).toHaveBeenCalledWith('query', fakeVector, {
+        sessionId: 'sess-1',
+        projectName: 'proj',
+      });
     });
   });
 
@@ -110,9 +113,7 @@ describe('EmbeddingService', () => {
       const vec2 = mockEmbedding(1024);
 
       // First text cached, second not
-      mockedCache.getEmbedding
-        .mockResolvedValueOnce(vec1)
-        .mockResolvedValueOnce(null);
+      mockedCache.getEmbedding.mockResolvedValueOnce(vec1).mockResolvedValueOnce(null);
 
       mockedAxios.post.mockResolvedValue({
         data: { embeddings: [vec2] },
@@ -121,21 +122,19 @@ describe('EmbeddingService', () => {
       const result = await embeddingService.embedBatch(['cached', 'uncached']);
 
       expect(result).toHaveLength(2);
+      // Cached value passes through as-is; computed value is sliced (new array).
       expect(result[0]).toBe(vec1);
-      expect(result[1]).toBe(vec2);
-      expect(mockedAxios.post).toHaveBeenCalledWith(
-        expect.stringContaining('/embed/batch'),
-        { texts: ['uncached'] }
-      );
+      expect(result[1]).toEqual(vec2);
+      expect(mockedAxios.post).toHaveBeenCalledWith(expect.stringContaining('/embed/batch'), {
+        texts: ['uncached'],
+      });
     });
 
     it('skips HTTP call when all texts are cached', async () => {
       const vec1 = mockEmbedding(1024);
       const vec2 = mockEmbedding(1024);
 
-      mockedCache.getEmbedding
-        .mockResolvedValueOnce(vec1)
-        .mockResolvedValueOnce(vec2);
+      mockedCache.getEmbedding.mockResolvedValueOnce(vec1).mockResolvedValueOnce(vec2);
 
       const result = await embeddingService.embedBatch(['a', 'b']);
 
@@ -155,12 +154,11 @@ describe('EmbeddingService', () => {
 
       const result = await embeddingService.embedFull('test text');
 
-      expect(result.dense).toBe(dense);
+      expect(result.dense).toEqual(dense);
       expect(result.sparse).toEqual(sparse);
-      expect(mockedAxios.post).toHaveBeenCalledWith(
-        expect.stringContaining('/embed/full'),
-        { text: 'test text' }
-      );
+      expect(mockedAxios.post).toHaveBeenCalledWith(expect.stringContaining('/embed/full'), {
+        text: 'test text',
+      });
     });
   });
 
@@ -170,6 +168,109 @@ describe('EmbeddingService', () => {
       mockedAxios.post.mockRejectedValue(new Error('ECONNREFUSED'));
 
       await expect(embeddingService.embed('fail')).rejects.toThrow('ECONNREFUSED');
+    });
+  });
+
+  describe('input/output guards', () => {
+    it('rejects empty input', async () => {
+      mockedCache.getEmbedding.mockResolvedValue(null);
+
+      await expect(embeddingService.embed('')).rejects.toThrow(/empty input/);
+      await expect(embeddingService.embed('   \n\t')).rejects.toThrow(/empty input/);
+      expect(mockedAxios.post).not.toHaveBeenCalled();
+    });
+
+    it('throws EmbeddingError when provider returns empty vector', async () => {
+      mockedCache.getEmbedding.mockResolvedValue(null);
+      mockedAxios.post.mockResolvedValue({ data: { embedding: [] } });
+
+      await expect(embeddingService.embed('hi')).rejects.toThrow(/empty vector/);
+    });
+
+    it('throws EmbeddingError when provider returns short vector', async () => {
+      mockedCache.getEmbedding.mockResolvedValue(null);
+      mockedAxios.post.mockResolvedValue({ data: { embedding: mockEmbedding(512) } });
+
+      await expect(embeddingService.embed('hi')).rejects.toThrow(/smaller than VECTOR_SIZE/);
+    });
+
+    it('truncates oversize input before sending to provider', async () => {
+      mockedCache.getEmbedding.mockResolvedValue(null);
+      mockedAxios.post.mockResolvedValue({ data: { embedding: fakeVector } });
+
+      const huge = 'a'.repeat(50_000);
+      await embeddingService.embed(huge);
+
+      const sent = mockedAxios.post.mock.calls[0][1] as { text: string };
+      expect(sent.text.length).toBeLessThanOrEqual(24_000);
+    });
+
+    it('embedBatch (BGE): short vector at any slot fails the batch', async () => {
+      // BGE batch path — no per-slot recovery; provider returns one valid + one short vector.
+      mockedCache.getEmbedding.mockResolvedValue(null);
+      mockedAxios.post.mockResolvedValue({
+        data: { embeddings: [fakeVector, mockEmbedding(100)] },
+      });
+
+      await expect(embeddingService.embedBatch(['a', 'b'])).rejects.toThrow(
+        /smaller than VECTOR_SIZE/
+      );
+    });
+  });
+
+  describe('embedBatchOllama (per-slot recovery)', () => {
+    let originalProvider: string;
+
+    beforeEach(() => {
+      // Singleton reads provider in constructor — patch for these tests only.
+      originalProvider = (embeddingService as any).provider;
+      (embeddingService as any).provider = 'ollama';
+    });
+
+    afterEach(() => {
+      (embeddingService as any).provider = originalProvider;
+    });
+
+    it('falls back to per-text embed when one batch slot is empty', async () => {
+      mockedCache.getEmbedding.mockResolvedValue(null);
+
+      // 1st call: batch returns 2 valid + 1 empty (poisoned slot 1)
+      // 2nd call: per-text fallback for slot 1 returns a valid vector
+      mockedAxios.post
+        .mockResolvedValueOnce({
+          data: { embeddings: [fakeVector, [], fakeVector] },
+        })
+        .mockResolvedValueOnce({
+          data: { embeddings: [fakeVector] },
+        });
+
+      const result = await embeddingService.embedBatch(['ok', 'poisoned', 'ok']);
+
+      expect(result).toHaveLength(3);
+      expect(result[0]).toEqual(fakeVector);
+      expect(result[1]).toEqual(fakeVector); // recovered via fallback
+      expect(result[2]).toEqual(fakeVector);
+      // Two HTTP calls: one batch + one fallback for slot 1
+      expect(mockedAxios.post).toHaveBeenCalledTimes(2);
+    });
+
+    it('parks empty placeholder when fallback also fails (does not kill the batch)', async () => {
+      mockedCache.getEmbedding.mockResolvedValue(null);
+
+      // 1st call: batch returns one empty slot
+      // 2nd call: per-text fallback ALSO fails (network error → circuit retries → still fails)
+      mockedAxios.post
+        .mockResolvedValueOnce({
+          data: { embeddings: [fakeVector, []] },
+        })
+        .mockRejectedValue(new Error('ECONNREFUSED'));
+
+      const result = await embeddingService.embedBatch(['ok', 'permanently-poisoned']);
+
+      expect(result).toHaveLength(2);
+      expect(result[0]).toEqual(fakeVector);
+      // Slot 1 placeholder — indexer's filterValidDensePoints will drop it
+      expect(result[1]).toEqual([]);
     });
   });
 });

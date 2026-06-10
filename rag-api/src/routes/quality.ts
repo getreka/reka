@@ -12,19 +12,25 @@ const router = Router();
  * Get quality report
  * GET /api/quality/report
  */
-router.get('/quality/report', asyncHandler(async (req: Request, res: Response) => {
-  const endpoint = req.query.endpoint as string | undefined;
-  const report = await qualityGates.getReport(endpoint);
-  res.json(report);
-}));
+router.get(
+  '/quality/report',
+  asyncHandler(async (req: Request, res: Response) => {
+    const endpoint = req.query.endpoint as string | undefined;
+    const report = await qualityGates.getReport(endpoint);
+    res.json(report);
+  })
+);
 
 /**
  * Get quality alerts
  * GET /api/quality/alerts
  */
-router.get('/quality/alerts', asyncHandler(async (_req: Request, res: Response) => {
-  const alerts = await qualityGates.getAlerts();
-  res.json({ alerts, count: alerts.length });
-}));
+router.get(
+  '/quality/alerts',
+  asyncHandler(async (_req: Request, res: Response) => {
+    const alerts = await qualityGates.getAlerts();
+    res.json({ alerts, count: alerts.length });
+  })
+);
 
 export default router;

@@ -6,16 +6,16 @@
 
 ## Основнi файли
 
-| Файл | Роль |
-|------|------|
+| Файл                                        | Роль                                                                     |
+| ------------------------------------------- | ------------------------------------------------------------------------ |
 | `rag-api/src/services/memory-governance.ts` | Головний сервiс governance: ingest, promote, reject, recall, maintenance |
-| `rag-api/src/services/memory.ts` | Базовий сервiс пам'ятi: remember, recall з aging, list, merge |
-| `rag-api/src/services/quality-gates.ts` | Quality gates: typecheck, test, blast-radius перед promotion |
-| `rag-api/src/services/feedback.ts` | Збiр фiдбеку по пам'ятi: accurate/outdated/incorrect |
-| `rag-api/src/routes/memory.ts` | HTTP API ендпоiнти для всiх операцiй |
-| `mcp-server/src/tools/memory.ts` | MCP тули: promote_memory, review_memories, memory_maintenance |
-| `mcp-server/src/context-enrichment.ts` | Enricher -- викликає recall-durable для контекстного збагачення |
-| `rag-api/src/utils/validation.ts` | Zod-схема promoteMemorySchema |
+| `rag-api/src/services/memory.ts`            | Базовий сервiс пам'ятi: remember, recall з aging, list, merge            |
+| `rag-api/src/services/quality-gates.ts`     | Quality gates: typecheck, test, blast-radius перед promotion             |
+| `rag-api/src/services/feedback.ts`          | Збiр фiдбеку по пам'ятi: accurate/outdated/incorrect                     |
+| `rag-api/src/routes/memory.ts`              | HTTP API ендпоiнти для всiх операцiй                                     |
+| `mcp-server/src/tools/memory.ts`            | MCP тули: promote_memory, review_memories, memory_maintenance            |
+| `mcp-server/src/context-enrichment.ts`      | Enricher -- викликає recall-durable для контекстного збагачення          |
+| `rag-api/src/utils/validation.ts`           | Zod-схема promoteMemorySchema                                            |
 
 ## Потiк даних (Flow)
 
@@ -56,12 +56,13 @@ POST /api/memory
 
 ### 3. Qdrant колекцiї
 
-| Колекцiя | Тiр | Призначення |
-|----------|-----|-------------|
-| `{project}_agent_memory` | Durable | Валiдованi, ручнi, та промотованi пам'ятi |
-| `{project}_memory_pending` | Quarantine | Авто-згенерованi пам'ятi на перевiрцi |
+| Колекцiя                   | Тiр        | Призначення                               |
+| -------------------------- | ---------- | ----------------------------------------- |
+| `{project}_agent_memory`   | Durable    | Валiдованi, ручнi, та промотованi пам'ятi |
+| `{project}_memory_pending` | Quarantine | Авто-згенерованi пам'ятi на перевiрцi     |
 
 Генерацiя назв:
+
 ```typescript
 private getQuarantineCollection(projectName: string): string {
   return `${projectName}_memory_pending`;
@@ -96,6 +97,7 @@ promote(projectName, memoryId, reason, evidence?, gateOptions?)
 ```
 
 **Три причини для промоцiї (PromoteReason)**:
+
 - `human_validated` -- людина пiдтвердила
 - `pr_merged` -- PR було змержено
 - `tests_passed` -- тести пройшли
@@ -110,15 +112,16 @@ promote(projectName, memoryId, reason, evidence?, gateOptions?)
 
 Три рiвнi recall:
 
-| Метод | Колекцiя | Використання |
-|-------|----------|-------------|
-| `memoryService.recall()` | `{project}_agent_memory` | Загальний recall (MCP `recall` tool) |
-| `memoryGovernance.recallDurable()` | `{project}_agent_memory` | Context enrichment (MCP enricher) |
-| `memoryGovernance.recallQuarantine()` | `{project}_memory_pending` | Review UI |
+| Метод                                 | Колекцiя                   | Використання                         |
+| ------------------------------------- | -------------------------- | ------------------------------------ |
+| `memoryService.recall()`              | `{project}_agent_memory`   | Загальний recall (MCP `recall` tool) |
+| `memoryGovernance.recallDurable()`    | `{project}_agent_memory`   | Context enrichment (MCP enricher)    |
+| `memoryGovernance.recallQuarantine()` | `{project}_memory_pending` | Review UI                            |
 
 **Важливо**: Context enrichment (автоматичне збагачення запитiв) використовує ТIЛЬКИ `recall-durable`. Це означає, що неперевiренi авто-пам'ятi НЕ впливають на контекст iнших iнструментiв.
 
 Файл `mcp-server/src/context-enrichment.ts:196-221` -- enricher робить паралельний recall:
+
 - Загальнi пам'ятi (type: "all", limit: maxAutoRecall) з `/api/memory/recall-durable`
 - Рiшення (type: "decision", limit: 2) з `/api/memory/recall-durable`
 
@@ -137,7 +140,7 @@ promote(projectName, memoryId, reason, evidence?, gateOptions?)
 ```typescript
 const periodsOld = Math.floor(ageMs / THIRTY_DAYS) - 1;
 const decay = Math.min(0.25, periodsOld * 0.05);
-score *= (1 - decay);
+score *= 1 - decay;
 ```
 
 ### 8. Feedback-Driven Maintenance
@@ -147,10 +150,12 @@ score *= (1 - decay);
 Автоматичне обслуговування на основi фiдбеку:
 
 **Auto-promote** (`autoPromoteByFeedback`):
+
 - Збирає feedback counts через `feedbackService.getMemoryFeedbackCounts()`
 - Якщо пам'ять має 3+ "accurate" фiдбеки -> автоматична промоцiя з reason `human_validated`
 
 **Auto-prune** (`autoPruneByFeedback`):
+
 - Якщо пам'ять має 2+ "incorrect" фiдбеки -> видалення
 - Спочатку намагається видалити з quarantine, потiм з durable
 
@@ -165,11 +170,11 @@ MCP: `memory_maintenance` tool
 
 Три gate, якi можна запустити перед промоцiєю:
 
-| Gate | Дiя | Timeout | Fail behavior |
-|------|-----|---------|---------------|
-| `typecheck` | `npx tsc --noEmit` | 30s | Blocks promotion |
-| `test` | `npx vitest/jest --findRelatedTests` | 60s | Blocks promotion |
-| `blast_radius` | Graph traversal (3 hops) | - | Warns if >20 files |
+| Gate           | Дiя                                  | Timeout | Fail behavior      |
+| -------------- | ------------------------------------ | ------- | ------------------ |
+| `typecheck`    | `npx tsc --noEmit`                   | 30s     | Blocks promotion   |
+| `test`         | `npx vitest/jest --findRelatedTests` | 60s     | Blocks promotion   |
+| `blast_radius` | Graph traversal (3 hops)             | -       | Warns if >20 files |
 
 Quality gates можна пропустити через `skipGates` масив.
 
@@ -217,9 +222,9 @@ Quality gates можна пропустити через `skipGates` масив.
 
 ```typescript
 export const memoryGovernanceTotal = new Counter({
-  name: 'rag_memory_governance_total',
-  help: 'Memory governance operations',
-  labelNames: ['operation', 'tier', 'project'],
+  name: "rag_memory_governance_total",
+  help: "Memory governance operations",
+  labelNames: ["operation", "tier", "project"],
 });
 ```
 
@@ -228,28 +233,28 @@ Tiers: `durable`, `quarantine`
 
 ## API Endpoints
 
-| Method | Path | Description |
-|--------|------|-------------|
-| POST | `/api/memory` | Ingest (routes via governance) |
-| POST | `/api/memory/recall` | Recall from durable |
-| POST | `/api/memory/recall-durable` | Recall durable only (for enrichment) |
-| POST | `/api/memory/promote` | Promote quarantine -> durable |
-| GET | `/api/memory/quarantine` | List quarantine for review |
-| POST | `/api/memory/maintenance` | Run feedback-driven maintenance |
-| PATCH | `/api/memory/:id/validate` | Validate/reject auto-extracted memory |
-| GET | `/api/memory/unvalidated` | List unvalidated memories |
+| Method | Path                         | Description                           |
+| ------ | ---------------------------- | ------------------------------------- |
+| POST   | `/api/memory`                | Ingest (routes via governance)        |
+| POST   | `/api/memory/recall`         | Recall from durable                   |
+| POST   | `/api/memory/recall-durable` | Recall durable only (for enrichment)  |
+| POST   | `/api/memory/promote`        | Promote quarantine -> durable         |
+| GET    | `/api/memory/quarantine`     | List quarantine for review            |
+| POST   | `/api/memory/maintenance`    | Run feedback-driven maintenance       |
+| PATCH  | `/api/memory/:id/validate`   | Validate/reject auto-extracted memory |
+| GET    | `/api/memory/unvalidated`    | List unvalidated memories             |
 
 ## MCP Tools
 
-| Tool | Description |
-|------|-------------|
-| `remember` | Store memory (manual -> durable) |
-| `recall` | Semantic search in durable |
-| `promote_memory` | Promote quarantine -> durable with reason |
-| `review_memories` | List quarantine memories for review |
-| `validate_memory` | Validate/reject auto-extracted memory |
-| `memory_maintenance` | Run auto-promote + auto-prune |
-| `run_quality_gates` | Run typecheck/test/blast_radius gates |
+| Tool                 | Description                               |
+| -------------------- | ----------------------------------------- |
+| `remember`           | Store memory (manual -> durable)          |
+| `recall`             | Semantic search in durable                |
+| `promote_memory`     | Promote quarantine -> durable with reason |
+| `review_memories`    | List quarantine memories for review       |
+| `validate_memory`    | Validate/reject auto-extracted memory     |
+| `memory_maintenance` | Run auto-promote + auto-prune             |
+| `run_quality_gates`  | Run typecheck/test/blast_radius gates     |
 
 ## Резюме
 

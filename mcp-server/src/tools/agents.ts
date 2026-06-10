@@ -15,15 +15,25 @@ export function createAgentTools(projectName: string): ToolSpec[] {
       name: "run_agent",
       description: `Run a specialized agent for ${projectName}. Agents autonomously research, review, or analyze using multiple tool calls. Returns result + reasoning trace.`,
       schema: z.object({
-        type: z.enum(["research", "review", "documentation", "refactor", "test"]).describe("Agent type: research, review, documentation, refactor, or test"),
+        type: z
+          .enum(["research", "review", "documentation", "refactor", "test"])
+          .describe(
+            "Agent type: research, review, documentation, refactor, or test",
+          ),
         task: z.string().describe("The task for the agent to perform"),
-        context: z.string().optional().describe("Optional additional context (code, requirements, etc.)"),
-        maxIterations: z.coerce.number().optional().describe("Maximum ReAct iterations (default: varies by agent type)"),
+        context: z
+          .string()
+          .optional()
+          .describe("Optional additional context (code, requirements, etc.)"),
+        maxIterations: z.coerce
+          .number()
+          .optional()
+          .describe("Maximum ReAct iterations (default: varies by agent type)"),
       }),
       annotations: TOOL_ANNOTATIONS["run_agent"],
       handler: async (
         args: Record<string, unknown>,
-        ctx: ToolContext
+        ctx: ToolContext,
       ): Promise<string> => {
         const { type, task, context, maxIterations } = args as {
           type: string;
@@ -68,7 +78,8 @@ export function createAgentTools(projectName: string): ToolSpec[] {
               result += `  Action: ${step.action.tool}(${JSON.stringify(step.action.input).slice(0, 100)})\n`;
             }
             if (step.observation) {
-              const obsPreview = step.observation.result?.slice(0, 150) || "...";
+              const obsPreview =
+                step.observation.result?.slice(0, 150) || "...";
               result += `  Result: ${obsPreview}${step.observation.truncated ? " [truncated]" : ""}\n`;
             }
           }
@@ -81,19 +92,55 @@ export function createAgentTools(projectName: string): ToolSpec[] {
       name: "tribunal_debate",
       description: `Run an adversarial debate on a topic for ${projectName}. Multiple advocates argue positions, a judge renders a verdict. Use for architecture decisions, tech choices, or code approach trade-offs.`,
       schema: z.object({
-        topic: z.string().describe("The debate topic (e.g., 'Should we use REST or gRPC for the new API?')"),
-        positions: z.array(z.string()).min(2).max(4).describe("Positions to debate (2-4 options, e.g., ['REST', 'gRPC'])"),
-        context: z.string().optional().describe("Additional context for the debate"),
-        maxRounds: z.coerce.number().optional().describe("Number of rebuttal rounds (default: 1, max: 3)"),
-        useCodeContext: z.boolean().optional().describe("Fetch relevant code, ADRs, and patterns as evidence (default: false)"),
-        autoRecord: z.boolean().optional().describe("Save verdict as a decision in project memory (default: false)"),
+        topic: z
+          .string()
+          .describe(
+            "The debate topic (e.g., 'Should we use REST or gRPC for the new API?')",
+          ),
+        positions: z
+          .array(z.string())
+          .min(2)
+          .max(4)
+          .describe(
+            "Positions to debate (2-4 options, e.g., ['REST', 'gRPC'])",
+          ),
+        context: z
+          .string()
+          .optional()
+          .describe("Additional context for the debate"),
+        maxRounds: z.coerce
+          .number()
+          .optional()
+          .describe("Number of rebuttal rounds (default: 1, max: 3)"),
+        useCodeContext: z
+          .boolean()
+          .optional()
+          .describe(
+            "Fetch relevant code, ADRs, and patterns as evidence (default: false)",
+          ),
+        autoRecord: z
+          .boolean()
+          .optional()
+          .describe(
+            "Save verdict as a decision in project memory (default: false)",
+          ),
       }),
-      annotations: TOOL_ANNOTATIONS["tribunal_debate"] || { priority: 0.4, readOnlyHint: true },
+      annotations: TOOL_ANNOTATIONS["tribunal_debate"] || {
+        priority: 0.4,
+        readOnlyHint: true,
+      },
       handler: async (
         args: Record<string, unknown>,
-        ctx: ToolContext
+        ctx: ToolContext,
       ): Promise<string> => {
-        const { topic, positions, context, maxRounds, useCodeContext, autoRecord } = args as {
+        const {
+          topic,
+          positions,
+          context,
+          maxRounds,
+          useCodeContext,
+          autoRecord,
+        } = args as {
           topic: string;
           positions: string[];
           context?: string;
@@ -118,7 +165,7 @@ export function createAgentTools(projectName: string): ToolSpec[] {
         let result = `## Tribunal Debate: ${data.topic}\n`;
         result += `**Status:** ${data.status}`;
         result += ` | **Duration:** ${Math.round(data.durationMs / 1000)}s`;
-        result += ` | **Cost:** ~$${data.cost?.estimatedUsd?.toFixed(3) || '?'}\n\n`;
+        result += ` | **Cost:** ~$${data.cost?.estimatedUsd?.toFixed(3) || "?"}\n\n`;
 
         // Phases summary
         if (data.phases) {
@@ -133,7 +180,8 @@ export function createAgentTools(projectName: string): ToolSpec[] {
         if (data.arguments && data.arguments.length > 0) {
           result += `### Arguments\n`;
           for (const arg of data.arguments) {
-            const label = arg.round === 0 ? 'Initial' : `Rebuttal R${arg.round}`;
+            const label =
+              arg.round === 0 ? "Initial" : `Rebuttal R${arg.round}`;
             result += `#### ${arg.position} (${label})\n${arg.content}\n\n`;
           }
         }
@@ -172,7 +220,7 @@ export function createAgentTools(projectName: string): ToolSpec[] {
       annotations: TOOL_ANNOTATIONS["get_agent_types"],
       handler: async (
         _args: Record<string, unknown>,
-        ctx: ToolContext
+        ctx: ToolContext,
       ): Promise<string> => {
         const response = await ctx.api.get("/api/agent/types");
         const data = response.data;

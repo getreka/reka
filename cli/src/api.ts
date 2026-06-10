@@ -2,18 +2,18 @@
  * API client for Reka CLI
  */
 
-import axios, { AxiosInstance, AxiosError } from 'axios';
-import { RekaConfig } from './config';
+import axios, { AxiosInstance, AxiosError } from "axios";
+import { RekaConfig } from "./config";
 
 export function createClient(config: RekaConfig): AxiosInstance {
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
-    'X-Project-Name': config.project.name,
-    'X-Project-Path': config.project.path,
+    "Content-Type": "application/json",
+    "X-Project-Name": config.project.name,
+    "X-Project-Path": config.project.path,
   };
 
   if (config.api.key) {
-    headers['Authorization'] = `Bearer ${config.api.key}`;
+    headers["Authorization"] = `Bearer ${config.api.key}`;
   }
 
   return axios.create({
@@ -25,7 +25,7 @@ export function createClient(config: RekaConfig): AxiosInstance {
 
 export function formatError(err: unknown): string {
   if (err instanceof AxiosError) {
-    if (err.code === 'ECONNREFUSED') {
+    if (err.code === "ECONNREFUSED") {
       return `Cannot connect to Reka API at ${err.config?.baseURL}. Is it running?`;
     }
     if (err.response) {

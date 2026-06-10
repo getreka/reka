@@ -188,14 +188,23 @@
     {
       "id": "cross-2",
       "query": "how does file indexing flow from disk to Qdrant collections",
-      "expectedFiles": ["src/services/indexer.ts", "src/services/parsers/code-parser.ts", "src/services/embedding.ts", "src/services/vector-store.ts"],
+      "expectedFiles": [
+        "src/services/indexer.ts",
+        "src/services/parsers/code-parser.ts",
+        "src/services/embedding.ts",
+        "src/services/vector-store.ts"
+      ],
       "category": "cross-file",
       "k": 10
     },
     {
       "id": "cross-3",
       "query": "how does the memory remember and recall pipeline work end to end",
-      "expectedFiles": ["mcp-server/src/tools/memory.ts", "src/routes/memory.ts", "src/services/memory.ts"],
+      "expectedFiles": [
+        "mcp-server/src/tools/memory.ts",
+        "src/routes/memory.ts",
+        "src/services/memory.ts"
+      ],
       "category": "cross-file",
       "k": 10
     },
@@ -209,7 +218,11 @@
     {
       "id": "cross-5",
       "query": "how does graph expansion enhance search results across services",
-      "expectedFiles": ["src/services/graph-store.ts", "src/routes/search.ts", "src/services/context-pack.ts"],
+      "expectedFiles": [
+        "src/services/graph-store.ts",
+        "src/routes/search.ts",
+        "src/services/context-pack.ts"
+      ],
       "category": "cross-file",
       "k": 10
     },
@@ -223,14 +236,22 @@
     {
       "id": "cross-7",
       "query": "how do search filters flow from MCP tool params to Qdrant query",
-      "expectedFiles": ["mcp-server/src/tools/search.ts", "src/utils/filters.ts", "src/services/vector-store.ts"],
+      "expectedFiles": [
+        "mcp-server/src/tools/search.ts",
+        "src/utils/filters.ts",
+        "src/services/vector-store.ts"
+      ],
       "category": "cross-file",
       "k": 10
     },
     {
       "id": "cross-8",
       "query": "how does the config parser handle YAML and JSON files differently from code",
-      "expectedFiles": ["src/services/parsers/config-parser.ts", "src/services/parsers/code-parser.ts", "src/services/parsers/index.ts"],
+      "expectedFiles": [
+        "src/services/parsers/config-parser.ts",
+        "src/services/parsers/code-parser.ts",
+        "src/services/parsers/index.ts"
+      ],
       "category": "cross-file",
       "k": 10
     },

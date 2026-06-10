@@ -1,1 +1,31 @@
-{"eval_id":1,"eval_name":"session-start","prompt":"Починаю працювати над оптимізацією пошуку в vector-store.ts, запусти сесію","assertions":[{"type":"tool","text":"Calls start_session with a descriptive sessionId"},{"type":"tool","text":"Calls context_briefing with task mentioning vector-store.ts"},{"type":"tool","text":"Runs at least 2 tool calls in parallel (any combination)"},{"type":"outcome","text":"Briefing mentions specific file paths relevant to vector-store.ts (e.g., vector-store.ts, qdrant, search)"},{"type":"outcome","text":"Output contains at least 3 distinct sections (e.g., context, patterns, dependencies, profile)"},{"type":"outcome","text":"Briefing references project-specific concepts (Qdrant, embeddings, collections) not generic boilerplate"}]}
+{
+  "eval_id": 1,
+  "eval_name": "session-start",
+  "prompt": "Починаю працювати над оптимізацією пошуку в vector-store.ts, запусти сесію",
+  "assertions": [
+    {
+      "type": "tool",
+      "text": "Calls start_session with a descriptive sessionId"
+    },
+    {
+      "type": "tool",
+      "text": "Calls context_briefing with task mentioning vector-store.ts"
+    },
+    {
+      "type": "tool",
+      "text": "Runs at least 2 tool calls in parallel (any combination)"
+    },
+    {
+      "type": "outcome",
+      "text": "Briefing mentions specific file paths relevant to vector-store.ts (e.g., vector-store.ts, qdrant, search)"
+    },
+    {
+      "type": "outcome",
+      "text": "Output contains at least 3 distinct sections (e.g., context, patterns, dependencies, profile)"
+    },
+    {
+      "type": "outcome",
+      "text": "Briefing references project-specific concepts (Qdrant, embeddings, collections) not generic boilerplate"
+    }
+  ]
+}

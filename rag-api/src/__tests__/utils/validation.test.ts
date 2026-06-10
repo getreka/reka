@@ -93,9 +93,7 @@ describe('askSchema', () => {
   });
 
   it('rejects question over 5000 chars', () => {
-    expect(() =>
-      askSchema.parse({ collection: 'c', question: 'x'.repeat(5001) })
-    ).toThrow();
+    expect(() => askSchema.parse({ collection: 'c', question: 'x'.repeat(5001) })).toThrow();
   });
 });
 

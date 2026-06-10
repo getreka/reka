@@ -9,7 +9,14 @@
  */
 
 import { v4 as uuidv4 } from 'uuid';
-import { query, type Options, type SDKMessage, type SDKResultSuccess, type SDKResultError, type McpServerConfig } from '@anthropic-ai/claude-agent-sdk';
+import {
+  query,
+  type Options,
+  type SDKMessage,
+  type SDKResultSuccess,
+  type SDKResultError,
+  type McpServerConfig,
+} from '@anthropic-ai/claude-agent-sdk';
 import path from 'path';
 import config from '../config';
 import { logger } from '../utils/logger';
@@ -61,13 +68,16 @@ export interface AutonomousAgentResult {
 // Agent Type Configurations
 // ============================================
 
-const AGENT_CONFIGS: Record<AutonomousAgentType, {
-  systemPrompt: string;
-  tools: string[];
-  permissionMode: Options['permissionMode'];
-  defaultMaxTurns: number;
-  defaultBudget: number;
-}> = {
+const AGENT_CONFIGS: Record<
+  AutonomousAgentType,
+  {
+    systemPrompt: string;
+    tools: string[];
+    permissionMode: Options['permissionMode'];
+    defaultMaxTurns: number;
+    defaultBudget: number;
+  }
+> = {
   research: {
     systemPrompt: `You are a research agent. Investigate the codebase thoroughly to answer the user's question.
 Use RAG tools (search_codebase, recall, get_patterns, get_adrs) to find relevant code and context.
@@ -144,11 +154,15 @@ class ClaudeAgentService {
    * Run an autonomous Claude agent.
    */
   async run(options: AutonomousAgentOptions): Promise<AutonomousAgentResult> {
-    return withSpan('claude_agent.run', {
-      type: options.type,
-      project: options.projectName,
-      task: options.task.slice(0, 100),
-    }, async () => this._run(options));
+    return withSpan(
+      'claude_agent.run',
+      {
+        type: options.type,
+        project: options.projectName,
+        task: options.task.slice(0, 100),
+      },
+      async () => this._run(options)
+    );
   }
 
   private async _run(options: AutonomousAgentOptions): Promise<AutonomousAgentResult> {
@@ -198,7 +212,7 @@ class ClaudeAgentService {
       const queryOptions: Options = {
         abortController,
         cwd: options.projectPath,
-        tools: allowedTools.filter(t => !t.startsWith('mcp__')),
+        tools: allowedTools.filter((t) => !t.startsWith('mcp__')),
         allowedTools,
         permissionMode: agentConfig.permissionMode,
         mcpServers,
@@ -274,7 +288,7 @@ class ClaudeAgentService {
         result.messages = messages;
       }
 
-      result.durationMs = result.durationMs || (Date.now() - startTime);
+      result.durationMs = result.durationMs || Date.now() - startTime;
 
       logger.info('Autonomous agent completed', {
         agentId,
@@ -352,7 +366,11 @@ class ClaudeAgentService {
   /**
    * Get available autonomous agent types.
    */
-  getAgentTypes(): Array<{ type: AutonomousAgentType; description: string; defaultBudget: number }> {
+  getAgentTypes(): Array<{
+    type: AutonomousAgentType;
+    description: string;
+    defaultBudget: number;
+  }> {
     return Object.entries(AGENT_CONFIGS).map(([type, cfg]) => ({
       type: type as AutonomousAgentType,
       description: cfg.systemPrompt.split('\n')[0],
@@ -371,11 +389,15 @@ class ClaudeAgentService {
     projectPath: string;
     steps: WorkflowStep[];
   }): Promise<WorkflowResult> {
-    return withSpan('claude_agent.workflow', {
-      project: options.projectName,
-      step_count: options.steps.length,
-      steps: options.steps.map(s => s.id).join(','),
-    }, async () => this._runWorkflow(options));
+    return withSpan(
+      'claude_agent.workflow',
+      {
+        project: options.projectName,
+        step_count: options.steps.length,
+        steps: options.steps.map((s) => s.id).join(','),
+      },
+      async () => this._runWorkflow(options)
+    );
   }
 
   private async _runWorkflow(options: {
@@ -398,7 +420,7 @@ class ClaudeAgentService {
       id: workflowId,
       type: 'agent',
       projectName,
-      description: `Workflow: ${steps.map(s => s.id).join(' → ')}`,
+      description: `Workflow: ${steps.map((s) => s.id).join(' → ')}`,
       metadata: { stepCount: steps.length },
     });
 
@@ -410,15 +432,13 @@ class ClaudeAgentService {
 
       for (const group of groups) {
         // Filter out steps whose condition returns false
-        const runnableSteps = group.filter(
-          step => !step.condition || step.condition(context)
-        );
+        const runnableSteps = group.filter((step) => !step.condition || step.condition(context));
 
         if (runnableSteps.length === 0) continue;
 
         // Execute group in parallel
         const groupResults = await Promise.all(
-          runnableSteps.map(async step => {
+          runnableSteps.map(async (step) => {
             const stepStart = Date.now();
             const stepConfig = step.transform
               ? { ...step.config, ...step.transform(context) }
@@ -516,7 +536,7 @@ class ClaudeAgentService {
   private async executeWorkflowStep(
     type: WorkflowStep['type'],
     stepConfig: Record<string, unknown>,
-    context: WorkflowContext,
+    context: WorkflowContext
   ): Promise<unknown> {
     switch (type) {
       case 'smart_dispatch':
@@ -571,7 +591,7 @@ export interface WorkflowStep {
   id: string;
   type: 'smart_dispatch' | 'agent' | 'tribunal' | 'claude_agent';
   config: Record<string, unknown>;
-  parallel?: string;     // group ID — steps in same group run via Promise.all
+  parallel?: string; // group ID — steps in same group run via Promise.all
   condition?: (context: WorkflowContext) => boolean;
   transform?: (context: WorkflowContext) => Record<string, unknown>;
 }

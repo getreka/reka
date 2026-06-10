@@ -1,1 +1,24 @@
-{"eval_id":3,"eval_name":"session-end","prompt":"Все, закінчив роботу на сьогодні, зберіжи контекст","assertions":[{"type":"tool","text":"Calls summarize_changes to capture what was done"},{"type":"tool","text":"Calls end_session with a summary"},{"type":"outcome","text":"Presents a summary that mentions specific files or changes (not just generic 'session ended')"},{"type":"outcome","text":"Saves at least one memory with meaningful content (not empty or trivial)"},{"type":"outcome","text":"Summary is structured with clear sections (what was done, what was saved, next steps)"}]}
+{
+  "eval_id": 3,
+  "eval_name": "session-end",
+  "prompt": "Все, закінчив роботу на сьогодні, зберіжи контекст",
+  "assertions": [
+    {
+      "type": "tool",
+      "text": "Calls summarize_changes to capture what was done"
+    },
+    { "type": "tool", "text": "Calls end_session with a summary" },
+    {
+      "type": "outcome",
+      "text": "Presents a summary that mentions specific files or changes (not just generic 'session ended')"
+    },
+    {
+      "type": "outcome",
+      "text": "Saves at least one memory with meaningful content (not empty or trivial)"
+    },
+    {
+      "type": "outcome",
+      "text": "Summary is structured with clear sections (what was done, what was saved, next steps)"
+    }
+  ]
+}

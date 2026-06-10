@@ -51,12 +51,24 @@
   "workflow_steps": {
     "step_1_summarize_changes": {
       "status": "completed",
-      "tools_used": ["summarize_context", "list_memories", "summarize_changes", "get_session_context", "git status", "git diff", "git log"]
+      "tools_used": [
+        "summarize_context",
+        "list_memories",
+        "summarize_changes",
+        "get_session_context",
+        "git status",
+        "git diff",
+        "git log"
+      ]
     },
     "step_2_extract_learnings": {
       "status": "completed_with_retry",
       "note": "analyze_conversation and auto_remember timed out, fell back to remember tool",
-      "tools_used": ["analyze_conversation (timeout)", "auto_remember (timeout)", "remember x2"]
+      "tools_used": [
+        "analyze_conversation (timeout)",
+        "auto_remember (timeout)",
+        "remember x2"
+      ]
     },
     "step_3_architecture_capture": {
       "status": "skipped",

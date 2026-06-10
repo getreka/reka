@@ -1,0 +1,53 @@
+# Demo deployment - lightweight stack for hosted demo at getreka.dev
+# Usage: docker compose -f docker-compose.yml -f docker-compose.demo.yml up -d
+#
+# Excludes: ollama (uses Claude API), monitoring stack
+# Includes: qdrant, bge-m3, redis, rag-api, dashboard (demo nginx)
+
+services:
+  rag-api:
+    environment:
+      - NODE_ENV=production
+      - DEMO_MODE=true
+      - DEMO_DASHBOARD_URL=https://app.getreka.dev
+      - DEMO_API_URL=https://api.getreka.dev
+      - CORS_ORIGIN=https://app.getreka.dev,https://getreka.dev
+      - LLM_PROVIDER=anthropic
+      - LOG_LEVEL=info
+      - RATE_LIMIT_DEFAULT=30
+    restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
+
+  dashboard:
+    build:
+      context: ../dashboard
+      dockerfile: Dockerfile
+      args:
+        - NGINX_CONF=nginx.demo.conf
+    ports:
+      - "3001:3001"
+    environment:
+      - VITE_API_URL=https://api.getreka.dev
+    restart: always
+
+  qdrant:
+    restart: always
+    logging:
+      driver: json-file
+      options:
+        max-size: "20m"
+        max-file: "3"
+
+  bge-m3:
+    restart: always
+
+  redis:
+    restart: always
+
+  # Disable ollama for demo (uses Claude API)
+  ollama:
+    profiles: ["disabled"]

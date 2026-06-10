@@ -36,6 +36,9 @@ export const TOOL_TIMEOUTS: Record<string, number> = {
   grouped_search: 15_000,
   search_docs: 10_000,
   find_symbol: 10_000,
+  // Session lifecycle — consolidation can take up to 2 min
+  start_session: 15_000,
+  end_session: 120_000,
   // Memory / recall — 10 s
   recall: 10_000,
   remember: 10_000,
@@ -46,13 +49,13 @@ export const TOOL_TIMEOUTS: Record<string, number> = {
 async function withTimeout<T>(
   promise: Promise<T>,
   ms: number,
-  name: string
+  name: string,
 ): Promise<T> {
   let timer: ReturnType<typeof setTimeout>;
   const timeout = new Promise<never>((_, reject) => {
     timer = setTimeout(
       () => reject(new Error(`Tool '${name}' timed out after ${ms}ms`)),
-      ms
+      ms,
     );
   });
   try {
@@ -88,10 +91,15 @@ export const SESSION_TOOLS = new Set([
 /** Summarize tool args into a short string for analytics */
 export function summarizeInput(
   name: string,
-  args: Record<string, unknown>
+  args: Record<string, unknown>,
 ): string {
   const q =
-    args.query || args.question || args.feature || args.description || args.task || "";
+    args.query ||
+    args.question ||
+    args.feature ||
+    args.description ||
+    args.task ||
+    "";
   if (q && typeof q === "string") return q.slice(0, 200);
 
   const content = args.content || args.code || args.diff || "";
@@ -153,6 +161,7 @@ async function doAutoStartSession(ctx: ToolContext): Promise<void> {
     const sid = session?.sessionId || response.data?.sessionId;
     if (sid) {
       ctx.activeSessionId = sid;
+      clearFallbackSessionId();
     }
 
     // Fire-and-forget: ensure critical collections exist
@@ -174,7 +183,7 @@ export function trackUsage(
   success: boolean,
   result: string,
   errorMessage: string | undefined,
-  ctx: ToolContext
+  ctx: ToolContext,
 ): void {
   if (TRACKING_EXCLUDE.has(name)) return;
 
@@ -197,17 +206,36 @@ export function trackUsage(
 /** Extract file paths from tool args */
 function extractFiles(args: Record<string, unknown>): string[] {
   const files: string[] = [];
-  for (const key of ['file', 'filePath', 'currentFile', 'path']) {
+  for (const key of ["file", "filePath", "currentFile", "path"]) {
     const v = args[key];
-    if (typeof v === 'string' && v.length > 0) files.push(v);
+    if (typeof v === "string" && v.length > 0) files.push(v);
   }
   const arr = args.affectedFiles || args.files;
   if (Array.isArray(arr)) {
     for (const f of arr) {
-      if (typeof f === 'string') files.push(f);
+      if (typeof f === "string") files.push(f);
     }
   }
   return files.slice(0, 20);
+}
+
+/**
+ * Per-process fallback session ID.
+ * Used when start_session times out / fails so sensory events
+ * are still captured instead of silently dropped.
+ */
+let fallbackSessionId: string | null = null;
+
+function getFallbackSessionId(): string {
+  if (!fallbackSessionId) {
+    fallbackSessionId = `local-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
+  }
+  return fallbackSessionId;
+}
+
+/** Reset fallback when a real session is established */
+export function clearFallbackSessionId(): void {
+  fallbackSessionId = null;
 }
 
 /** Fire-and-forget: capture tool event in sensory buffer */
@@ -217,15 +245,16 @@ function appendToSensoryBuffer(
   startTime: number,
   success: boolean,
   resultText: string,
-  ctx: ToolContext
+  ctx: ToolContext,
 ): void {
-  if (!ctx.activeSessionId) return;
   if (TRACKING_EXCLUDE.has(name)) return;
+
+  const sessionId = ctx.activeSessionId || getFallbackSessionId();
 
   ctx.api
     .post("/api/sensory/append", {
       projectName: ctx.projectName,
-      sessionId: ctx.activeSessionId,
+      sessionId,
       toolName: name,
       inputSummary: summarizeInput(name, args).slice(0, 500),
       outputSummary: (resultText || "").slice(0, 500),
@@ -275,9 +304,12 @@ export interface MiddlewareDeps {
 export function wrapHandler(
   name: string,
   handler: ToolHandler,
-  deps: MiddlewareDeps
+  deps: MiddlewareDeps,
 ): ToolHandler {
-  return async (args: Record<string, unknown>, ctx: ToolContext): Promise<ToolHandlerResult> => {
+  return async (
+    args: Record<string, unknown>,
+    ctx: ToolContext,
+  ): Promise<ToolHandlerResult> => {
     // Auto-start session (skip for session management tools)
     if (!SESSION_TOOLS.has(name)) {
       await ensureSession(ctx);
@@ -289,12 +321,12 @@ export function wrapHandler(
       // Validate: run PreToolUse hooks
       const validation = await validationPipeline.validate(name, args, ctx);
       if (!validation.allowed) {
-        return `Blocked: ${validation.reason || 'validation failed'}`;
+        return `Blocked: ${validation.reason || "validation failed"}`;
       }
       const validatedArgs = validation.modifiedArgs || args;
       const warningPrefix = validation.warnings?.length
-        ? `⚠️ ${validation.warnings.join(' | ')}\n\n`
-        : '';
+        ? `⚠️ ${validation.warnings.join(" | ")}\n\n`
+        : "";
 
       // Before: auto-enrich context
       const contextPrefix =
@@ -304,7 +336,11 @@ export function wrapHandler(
 
       // Execute original handler (with timeout)
       const timeoutMs = TOOL_TIMEOUTS[name] ?? DEFAULT_TIMEOUT_MS;
-      const result = await withTimeout(handler(validatedArgs, ctx), timeoutMs, name);
+      const result = await withTimeout(
+        handler(validatedArgs, ctx),
+        timeoutMs,
+        name,
+      );
 
       // Extract text for tracking/enrichment
       const text = typeof result === "string" ? result : result.text;
@@ -321,7 +357,7 @@ export function wrapHandler(
       appendToSensoryBuffer(name, args, startTime, true, text, ctx);
 
       // Prepend context/warnings if available
-      const prefix = [warningPrefix, contextPrefix].filter(Boolean).join('');
+      const prefix = [warningPrefix, contextPrefix].filter(Boolean).join("");
       if (prefix) {
         if (typeof result === "string") {
           return prefix + result;

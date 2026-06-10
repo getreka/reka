@@ -16,6 +16,7 @@ import { v4 as uuidv4 } from 'uuid';
 import config from '../config';
 import { logger } from '../utils/logger';
 import { llm } from './llm';
+import { modelCostUsd } from './llm-usage-logger';
 import { embeddingService } from './embedding';
 import { vectorStore } from './vector-store';
 import { memoryService } from './memory';
@@ -28,14 +29,14 @@ import { withSpan } from '../utils/tracing';
 
 export interface TribunalConfig {
   topic: string;
-  positions: string[];           // 2-3 positions to debate
-  context?: string;              // Additional context provided by user
+  positions: string[]; // 2-3 positions to debate
+  context?: string; // Additional context provided by user
   projectName: string;
-  maxRounds?: number;            // Rebuttal rounds (default: 1)
-  useCodeContext?: boolean;      // Fetch RAG context before debate
-  autoRecord?: boolean;          // Save verdict as decision in memory
-  maxBudget?: number;            // Cost guard in USD (default: 0.50)
-  deepResearch?: boolean;        // Run research agents per position before arguments
+  maxRounds?: number; // Rebuttal rounds (default: 1)
+  useCodeContext?: boolean; // Fetch RAG context before debate
+  autoRecord?: boolean; // Save verdict as decision in memory
+  maxBudget?: number; // Cost guard in USD (default: 0.50)
+  deepResearch?: boolean; // Run research agents per position before arguments
 }
 
 export interface TribunalArgument {
@@ -46,7 +47,7 @@ export interface TribunalArgument {
 }
 
 export interface TribunalVerdict {
-  recommendation: string;        // Which position wins
+  recommendation: string; // Which position wins
   confidence: 'high' | 'medium' | 'low';
   reasoning: string;
   scores: Array<{ position: string; score: number; justification: string }>;
@@ -176,7 +177,83 @@ Render a verdict with this EXACT structure:
   return prompt;
 }
 
-// ── Verdict Parser ──────────────────────────────────────────
+// ── Verdict Structured Output Schema ────────────────────────
+
+// JSON schema for the judge's verdict — sent as output_config.format on the Anthropic path
+// so the verdict comes back as guaranteed-valid JSON (no brittle regex parsing).
+const VERDICT_JSON_SCHEMA: Record<string, unknown> = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    recommendation: { type: 'string', description: 'Which position wins' },
+    confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
+    reasoning: { type: 'string', description: '2-3 paragraphs explaining the decision' },
+    scores: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          position: { type: 'string' },
+          score: { type: 'integer' },
+          justification: { type: 'string' },
+        },
+        required: ['position', 'score', 'justification'],
+      },
+    },
+    tradeoffs: {
+      type: 'string',
+      description: 'What is sacrificed by choosing this recommendation',
+    },
+    dissent: { type: 'string', description: 'Strongest counter-argument from the losing side' },
+    conditions: { type: 'string', description: 'When this verdict should be revisited' },
+  },
+  required: [
+    'recommendation',
+    'confidence',
+    'reasoning',
+    'scores',
+    'tradeoffs',
+    'dissent',
+    'conditions',
+  ],
+};
+
+/**
+ * Parse a structured (json_schema) verdict response. Used on the Anthropic path where
+ * output_config.format guarantees valid JSON. Falls back to the regex parser on any
+ * parse failure so a malformed response never crashes the debate.
+ */
+function parseVerdictJson(text: string, positions: string[]): TribunalVerdict {
+  try {
+    const raw = JSON.parse(text) as Partial<TribunalVerdict>;
+    const confidence = (
+      ['high', 'medium', 'low'].includes(raw.confidence as string) ? raw.confidence : 'medium'
+    ) as 'high' | 'medium' | 'low';
+    const scores = Array.isArray(raw.scores)
+      ? raw.scores.map((s) => ({
+          position: String(s.position ?? ''),
+          score: Number.isFinite(s.score) ? Number(s.score) : 5,
+          justification: String(s.justification ?? ''),
+        }))
+      : positions.map((position) => ({ position, score: 5, justification: '' }));
+
+    return {
+      recommendation: String(raw.recommendation ?? ''),
+      confidence,
+      reasoning: String(raw.reasoning ?? ''),
+      scores,
+      tradeoffs: String(raw.tradeoffs ?? ''),
+      dissent: String(raw.dissent ?? ''),
+      conditions: String(raw.conditions ?? ''),
+    };
+  } catch {
+    // Structured output was expected but didn't parse — fall back to the regex parser.
+    return parseVerdict(text, positions);
+  }
+}
+
+// ── Verdict Parser (regex fallback, Ollama path) ────────────
 
 function parseVerdict(text: string, positions: string[]): TribunalVerdict {
   const get = (label: string): string => {
@@ -187,7 +264,9 @@ function parseVerdict(text: string, positions: string[]): TribunalVerdict {
 
   const recommendation = get('RECOMMENDATION');
   const confidenceRaw = get('CONFIDENCE').toLowerCase();
-  const confidence = (['high', 'medium', 'low'].includes(confidenceRaw) ? confidenceRaw : 'medium') as 'high' | 'medium' | 'low';
+  const confidence = (
+    ['high', 'medium', 'low'].includes(confidenceRaw) ? confidenceRaw : 'medium'
+  ) as 'high' | 'medium' | 'low';
   const reasoning = get('REASONING');
   const tradeoffs = get('TRADE-OFFS') || get('TRADEOFFS') || get('TRADE_OFFS');
   const dissent = get('DISSENT');
@@ -195,8 +274,10 @@ function parseVerdict(text: string, positions: string[]): TribunalVerdict {
 
   // Parse scores
   const scoringText = get('SCORING');
-  const scores = positions.map(position => {
-    const scoreMatch = scoringText.match(new RegExp(`${position.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[^0-9]*?(\\d+)`, 'i'));
+  const scores = positions.map((position) => {
+    const scoreMatch = scoringText.match(
+      new RegExp(`${position.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}[^0-9]*?(\\d+)`, 'i')
+    );
     return {
       position,
       score: scoreMatch ? parseInt(scoreMatch[1], 10) : 5,
@@ -208,15 +289,42 @@ function parseVerdict(text: string, positions: string[]): TribunalVerdict {
 }
 
 // ── Cost Estimation ─────────────────────────────────────────
+//
+// Model pricing knowledge lives in llm-usage-logger.modelCostUsd (single source of
+// truth, also prices prompt-cache tokens). Tribunal only tracks token tallies and
+// returns 0 for the local Ollama provider.
 
-function estimateCost(tokens: number): number {
-  // Conservative estimate based on Claude Sonnet pricing ($3/$15 per 1M tokens)
-  const inputCostPer1M = 3;
-  const outputCostPer1M = 15;
-  // Rough 60/40 split input/output
-  const inputTokens = tokens * 0.6;
-  const outputTokens = tokens * 0.4;
-  return (inputTokens / 1_000_000) * inputCostPer1M + (outputTokens / 1_000_000) * outputCostPer1M;
+// Running token tally for a debate, separated into input/output so cost is exact.
+interface CostAccumulator {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  cacheCreationTokens: number; // Anthropic prompt-cache write tokens (~1.25x input cost)
+  cacheReadTokens: number; // Anthropic prompt-cache read tokens (~0.1x input cost)
+  provider: string; // last provider that handled a call (e.g. 'anthropic', 'ollama')
+  model: string; // last model that handled a call
+}
+
+/**
+ * Provider/model-aware cost estimate using actual prompt/completion token counts.
+ * Returns 0 for Ollama (local, no marginal cost). Delegates pricing (incl. cache
+ * tokens) to llm-usage-logger.modelCostUsd; unknown Anthropic models fall back to
+ * Sonnet pricing there.
+ */
+function estimateCost(acc: CostAccumulator): number {
+  if (acc.provider === 'ollama') return 0;
+
+  // If we have a real input/output split, use it; otherwise fall back to a 60/40 estimate.
+  const hasSplit = acc.promptTokens > 0 || acc.completionTokens > 0;
+  const promptTokens = hasSplit ? acc.promptTokens : acc.totalTokens * 0.6;
+  const completionTokens = hasSplit ? acc.completionTokens : acc.totalTokens * 0.4;
+
+  return modelCostUsd(acc.model, {
+    promptTokens,
+    completionTokens,
+    cacheCreationTokens: acc.cacheCreationTokens,
+    cacheReadTokens: acc.cacheReadTokens,
+  });
 }
 
 // ── Debate Store (in-memory, TTL cleanup) ───────────────────
@@ -239,12 +347,15 @@ function getDebate(id: string): TribunalResult | undefined {
 }
 
 // Cleanup expired entries every 10 minutes
-setInterval(() => {
-  const now = Date.now();
-  for (const [id, entry] of debateStore) {
-    if (now > entry.expiresAt) debateStore.delete(id);
-  }
-}, 10 * 60 * 1000).unref();
+setInterval(
+  () => {
+    const now = Date.now();
+    for (const [id, entry] of debateStore) {
+      if (now > entry.expiresAt) debateStore.delete(id);
+    }
+  },
+  10 * 60 * 1000
+).unref();
 
 // ── Framing Cache Threshold ──────────────────────────────────
 
@@ -253,7 +364,6 @@ const FRAMING_CACHE_THRESHOLD = 0.9; // cosine similarity to reuse framing
 // ── Orchestrator ────────────────────────────────────────────
 
 class TribunalService {
-
   getDebate(id: string): TribunalResult | undefined {
     return getDebate(id);
   }
@@ -261,17 +371,23 @@ class TribunalService {
   /**
    * Search debate history for a project. Optionally filter by topic similarity.
    */
-  async getHistory(projectName: string, limit: number = 10, topic?: string): Promise<Array<{
-    id: string;
-    topic: string;
-    recommendation: string;
-    confidence: string;
-    positions: string[];
-    cost: number;
-    durationMs: number;
-    createdAt: string;
-    score?: number;
-  }>> {
+  async getHistory(
+    projectName: string,
+    limit: number = 10,
+    topic?: string
+  ): Promise<
+    Array<{
+      id: string;
+      topic: string;
+      recommendation: string;
+      confidence: string;
+      positions: string[];
+      cost: number;
+      durationMs: number;
+      createdAt: string;
+      score?: number;
+    }>
+  > {
     const collection = `${projectName}_tribunals`;
 
     try {
@@ -279,7 +395,7 @@ class TribunalService {
         // Semantic search by topic
         const embedding = await embeddingService.embed(topic);
         const results = await vectorStore.search(collection, embedding, limit);
-        return results.map(r => ({
+        return results.map((r) => ({
           id: r.id,
           topic: String(r.payload.topic || ''),
           recommendation: String(r.payload.recommendation || ''),
@@ -296,9 +412,9 @@ class TribunalService {
       const results = await vectorStore.search(
         collection,
         await embeddingService.embed('tribunal debate'),
-        limit,
+        limit
       );
-      return results.map(r => ({
+      return results.map((r) => ({
         id: r.id,
         topic: String(r.payload.topic || ''),
         recommendation: String(r.payload.recommendation || ''),
@@ -328,27 +444,29 @@ class TribunalService {
       await vectorStore.ensureCollection(collection);
 
       const embedding = await embeddingService.embed(result.topic);
-      await vectorStore.upsert(collection, [{
-        id: result.id,
-        vector: embedding,
-        payload: {
-          topic: result.topic,
-          positions: result.positions,
-          recommendation: result.verdict.recommendation,
-          confidence: result.verdict.confidence,
-          reasoning: result.verdict.reasoning,
-          tradeoffs: result.verdict.tradeoffs,
-          dissent: result.verdict.dissent,
-          conditions: result.verdict.conditions,
-          scores: result.verdict.scores,
-          framing: result.phases.find(p => p.name === 'framing')?.content || '',
-          cost: result.cost.estimatedUsd,
-          totalTokens: result.cost.totalTokens,
-          durationMs: result.durationMs,
-          status: result.status,
-          createdAt: new Date().toISOString(),
+      await vectorStore.upsert(collection, [
+        {
+          id: result.id,
+          vector: embedding,
+          payload: {
+            topic: result.topic,
+            positions: result.positions,
+            recommendation: result.verdict.recommendation,
+            confidence: result.verdict.confidence,
+            reasoning: result.verdict.reasoning,
+            tradeoffs: result.verdict.tradeoffs,
+            dissent: result.verdict.dissent,
+            conditions: result.verdict.conditions,
+            scores: result.verdict.scores,
+            framing: result.phases.find((p) => p.name === 'framing')?.content || '',
+            cost: result.cost.estimatedUsd,
+            totalTokens: result.cost.totalTokens,
+            durationMs: result.durationMs,
+            status: result.status,
+            createdAt: new Date().toISOString(),
+          },
         },
-      }]);
+      ]);
 
       logger.debug('Persisted debate to history', { id: result.id, collection });
     } catch (err: any) {
@@ -364,7 +482,13 @@ class TribunalService {
 
     try {
       const embedding = await embeddingService.embed(topic);
-      const results = await vectorStore.search(collection, embedding, 1, undefined, FRAMING_CACHE_THRESHOLD);
+      const results = await vectorStore.search(
+        collection,
+        embedding,
+        1,
+        undefined,
+        FRAMING_CACHE_THRESHOLD
+      );
 
       if (results.length > 0 && results[0].payload.framing) {
         logger.info('Tribunal framing cache hit', {
@@ -383,18 +507,25 @@ class TribunalService {
   }
 
   async debate(cfg: TribunalConfig & { debateId?: string }): Promise<TribunalResult> {
-    return withSpan('tribunal.debate', {
-      topic: cfg.topic.slice(0, 100),
-      positions: cfg.positions.join(','),
-      project: cfg.projectName,
-      deep_research: cfg.deepResearch || false,
-    }, async (span) => this._debate(cfg, span));
+    return withSpan(
+      'tribunal.debate',
+      {
+        topic: cfg.topic.slice(0, 100),
+        positions: cfg.positions.join(','),
+        project: cfg.projectName,
+        deep_research: cfg.deepResearch || false,
+      },
+      async (span) => this._debate(cfg, span)
+    );
   }
 
-  private async _debate(cfg: TribunalConfig & { debateId?: string }, span?: any): Promise<TribunalResult> {
+  private async _debate(
+    cfg: TribunalConfig & { debateId?: string },
+    span?: any
+  ): Promise<TribunalResult> {
     const id = cfg.debateId || uuidv4();
     const maxRounds = cfg.maxRounds ?? 1;
-    const maxBudget = cfg.maxBudget ?? 0.50;
+    const maxBudget = cfg.maxBudget ?? 0.5;
     const startTime = Date.now();
 
     const result: TribunalResult = {
@@ -415,6 +546,32 @@ class TribunalService {
       status: 'completed',
       cost: { totalTokens: 0, estimatedUsd: 0 },
       durationMs: 0,
+    };
+
+    // Accumulate actual input/output tokens + the provider/model that handled the calls
+    // so the final cost reflects real Anthropic pricing (or 0 for Ollama).
+    const costAcc: CostAccumulator = {
+      promptTokens: 0,
+      completionTokens: 0,
+      totalTokens: 0,
+      cacheCreationTokens: 0,
+      cacheReadTokens: 0,
+      provider: 'anthropic',
+      model: config.ANTHROPIC_MODEL,
+    };
+    const addUsage = (usage?: {
+      promptTokens?: number;
+      completionTokens?: number;
+      totalTokens?: number;
+      cacheCreationTokens?: number;
+      cacheReadTokens?: number;
+    }): void => {
+      if (!usage) return;
+      costAcc.promptTokens += usage.promptTokens || 0;
+      costAcc.completionTokens += usage.completionTokens || 0;
+      costAcc.totalTokens += usage.totalTokens || 0;
+      costAcc.cacheCreationTokens += usage.cacheCreationTokens || 0;
+      costAcc.cacheReadTokens += usage.cacheReadTokens || 0;
     };
 
     // Register in work registry
@@ -452,6 +609,8 @@ class TribunalService {
         });
         framingText = framingResult.text;
         framingTokens = framingResult.usage?.totalTokens || 0;
+        addUsage(framingResult.usage);
+        if (framingResult.provider) costAcc.provider = framingResult.provider;
       }
 
       result.cost.totalTokens += framingTokens;
@@ -463,7 +622,11 @@ class TribunalService {
       });
 
       workHandle.update({ progress: { current: 1, total: 4, percentage: 25 } });
-      eventBus.publish('tribunal:framing', { debateId: id, topic: cfg.topic, content: framingText });
+      eventBus.publish('tribunal:framing', {
+        debateId: id,
+        topic: cfg.topic,
+        content: framingText,
+      });
       storeDebate(result);
 
       // ── Deep Research (optional, before arguments) ──────
@@ -473,44 +636,72 @@ class TribunalService {
         positionResearch = new Map();
 
         // Run parallel research agents — one per position
-        const researchPromises = cfg.positions.map(async position => {
+        const researchPromises = cfg.positions.map(async (position) => {
           try {
-            const result = await agentRuntime.run({
+            const agentResult = await agentRuntime.run({
               projectName: cfg.projectName,
               agentType: 'research',
               task: `Research evidence for the position "${position}" in the context of: ${cfg.topic}. Focus on concrete data: existing code patterns, benchmarks, industry best practices, and trade-offs.`,
               maxIterations: 5,
               timeout: 60_000,
             });
-            return { position, evidence: result.result || '' };
+            return {
+              position,
+              evidence: agentResult.result || '',
+              tokens: agentResult.usage?.totalTokens || 0,
+            };
           } catch (err: any) {
-            logger.warn('Tribunal deep research failed for position', { position, error: err.message });
-            return { position, evidence: '' };
+            logger.warn('Tribunal deep research failed for position', {
+              position,
+              error: err.message,
+            });
+            return { position, evidence: '', tokens: 0 };
           }
         });
 
         const researchResults = await Promise.all(researchPromises);
         let researchTokens = 0;
-        for (const { position, evidence } of researchResults) {
+        for (const { position, evidence, tokens } of researchResults) {
           if (evidence) {
             positionResearch.set(position, evidence);
           }
+          // Count every research agent's token usage toward the debate cost — even
+          // failed runs may have spent tokens before erroring. agentRuntime only
+          // reports an aggregate total (no input/output split). Split it 60/40 here
+          // so the cost is reflected even when other phases already populated the
+          // accumulator's prompt/completion split (estimateCost's own 60/40 fallback
+          // only fires when BOTH are still zero, which research alone wouldn't satisfy).
+          researchTokens += tokens;
+          addUsage({
+            totalTokens: tokens,
+            promptTokens: Math.round(tokens * 0.6),
+            completionTokens: Math.round(tokens * 0.4),
+          });
         }
+        result.cost.totalTokens += researchTokens;
 
-        // Budget check after research
+        // Budget check after research (costAcc now includes deep-research cost, so this
+        // guard is no longer a no-op and estimatedUsd reflects research spend).
         const researchDurationMs = Date.now() - researchStart;
         logger.info('Tribunal deep research completed', {
-          id, positions: cfg.positions, durationMs: researchDurationMs,
+          id,
+          positions: cfg.positions,
+          researchTokens,
+          durationMs: researchDurationMs,
         });
 
-        if (estimateCost(result.cost.totalTokens) > maxBudget) {
-          logger.warn('Tribunal budget exceeded after deep research', { id });
+        if (estimateCost(costAcc) > maxBudget) {
+          logger.warn('Tribunal budget exceeded after deep research', {
+            id,
+            estimatedUsd: estimateCost(costAcc),
+            maxBudget,
+          });
         }
       }
 
       // ── Phase 2: Initial Arguments (parallel) ───────────
       const argsStart = Date.now();
-      const argPromises = cfg.positions.map(position => {
+      const argPromises = cfg.positions.map((position) => {
         // Inject research evidence if available
         const researchEvidence = positionResearch?.get(position);
         const enrichedRagContext = researchEvidence
@@ -522,36 +713,47 @@ class TribunalService {
           cfg.topic,
           framingText,
           enrichedRagContext,
-          undefined,  // no opponent args yet
-          0,
+          undefined, // no opponent args yet
+          0
         );
       });
 
-      const initialArgs = await Promise.all(argPromises);
+      const initialAdvocateResults = await Promise.all(argPromises);
+      const initialArgs = initialAdvocateResults.map((r) => r.argument);
       let argsTokens = 0;
-      for (const arg of initialArgs) {
-        argsTokens += arg.tokens;
-        result.arguments.push(arg);
+      for (const r of initialAdvocateResults) {
+        argsTokens += r.argument.tokens;
+        result.arguments.push(r.argument);
+        addUsage(r.usage);
+        if (r.provider) costAcc.provider = r.provider;
       }
       result.cost.totalTokens += argsTokens;
       result.phases.push({
         name: 'arguments',
         durationMs: Date.now() - argsStart,
         tokens: argsTokens,
-        content: initialArgs.map(a => `**${a.position}:** ${a.content.slice(0, 200)}...`).join('\n\n'),
+        content: initialArgs
+          .map((a) => `**${a.position}:** ${a.content.slice(0, 200)}...`)
+          .join('\n\n'),
       });
 
       workHandle.update({ progress: { current: 2, total: 4, percentage: 50 } });
       eventBus.publish('tribunal:argument', {
-        debateId: id, topic: cfg.topic,
-        arguments: initialArgs.map(a => ({ position: a.position, preview: a.content.slice(0, 200) })),
+        debateId: id,
+        topic: cfg.topic,
+        arguments: initialArgs.map((a) => ({
+          position: a.position,
+          preview: a.content.slice(0, 200),
+        })),
       });
       storeDebate(result);
 
       // Budget check
-      if (estimateCost(result.cost.totalTokens) > maxBudget) {
+      if (estimateCost(costAcc) > maxBudget) {
         logger.warn('Tribunal budget exceeded after arguments, skipping rebuttals', {
-          id, estimatedUsd: estimateCost(result.cost.totalTokens), maxBudget,
+          id,
+          estimatedUsd: estimateCost(costAcc),
+          maxBudget,
         });
       } else {
         // ── Phase 3: Rebuttals (parallel per round) ─────────
@@ -560,9 +762,9 @@ class TribunalService {
 
         for (let round = 1; round <= maxRounds; round++) {
           // Each advocate sees all other advocates' latest arguments
-          const rebuttalPromises = cfg.positions.map(position => {
+          const rebuttalPromises = cfg.positions.map((position) => {
             const opponentArgs = result.arguments.filter(
-              a => a.position !== position && a.round === round - 1
+              (a) => a.position !== position && a.round === round - 1
             );
             return this.runAdvocate(
               position,
@@ -570,18 +772,20 @@ class TribunalService {
               framingText,
               ragContext,
               opponentArgs,
-              round,
+              round
             );
           });
 
           const roundRebuttals = await Promise.all(rebuttalPromises);
-          for (const rebuttal of roundRebuttals) {
-            rebuttalTokens += rebuttal.tokens;
-            result.arguments.push(rebuttal);
+          for (const r of roundRebuttals) {
+            rebuttalTokens += r.argument.tokens;
+            result.arguments.push(r.argument);
+            addUsage(r.usage);
+            if (r.provider) costAcc.provider = r.provider;
           }
 
-          // Budget check between rounds
-          if (estimateCost(result.cost.totalTokens + rebuttalTokens) > maxBudget) {
+          // Budget check between rounds (costAcc already includes this round's usage)
+          if (estimateCost(costAcc) > maxBudget) {
             logger.warn('Tribunal budget exceeded during rebuttals', { id, round });
             break;
           }
@@ -592,30 +796,46 @@ class TribunalService {
           name: 'rebuttal',
           durationMs: Date.now() - rebuttalStart,
           tokens: rebuttalTokens,
-          content: `${maxRounds} round(s), ${result.arguments.filter(a => a.round > 0).length} rebuttals`,
+          content: `${maxRounds} round(s), ${result.arguments.filter((a) => a.round > 0).length} rebuttals`,
         });
       }
 
       workHandle.update({ progress: { current: 3, total: 4, percentage: 75 } });
       eventBus.publish('tribunal:rebuttal', {
-        debateId: id, topic: cfg.topic,
-        rebuttalCount: result.arguments.filter(a => a.round > 0).length,
+        debateId: id,
+        topic: cfg.topic,
+        rebuttalCount: result.arguments.filter((a) => a.round > 0).length,
       });
       storeDebate(result);
 
       // ── Phase 4: Verdict ────────────────────────────────
       const verdictStart = Date.now();
-      const verdictPrompt = judgeVerdictPrompt(cfg.topic, framingText, result.arguments, ragContext);
+      const verdictPrompt = judgeVerdictPrompt(
+        cfg.topic,
+        framingText,
+        result.arguments,
+        ragContext
+      );
       const verdictResult = await llm.completeWithBestProvider(verdictPrompt, {
         complexity: config.TRIBUNAL_JUDGE_COMPLEXITY,
         maxTokens: 4096,
         temperature: 0.2,
         think: config.TRIBUNAL_JUDGE_COMPLEXITY === 'complex',
+        // Structured outputs: enforced on the Anthropic path via output_config.format.
+        // Ignored by the Ollama path, which still emits the labelled-markdown verdict.
+        jsonSchema: VERDICT_JSON_SCHEMA,
       });
 
       const verdictTokens = verdictResult.usage?.totalTokens || 0;
       result.cost.totalTokens += verdictTokens;
-      result.verdict = parseVerdict(verdictResult.text, cfg.positions);
+      addUsage(verdictResult.usage);
+      if (verdictResult.provider) costAcc.provider = verdictResult.provider;
+      // Anthropic returns guaranteed-valid JSON (json_schema); Ollama returns the
+      // labelled-markdown format parsed by the regex fallback.
+      result.verdict =
+        verdictResult.provider === 'anthropic'
+          ? parseVerdictJson(verdictResult.text, cfg.positions)
+          : parseVerdict(verdictResult.text, cfg.positions);
       result.phases.push({
         name: 'verdict',
         durationMs: Date.now() - verdictStart,
@@ -625,7 +845,8 @@ class TribunalService {
 
       workHandle.update({ progress: { current: 4, total: 4, percentage: 100 } });
       eventBus.publish('tribunal:verdict', {
-        debateId: id, topic: cfg.topic,
+        debateId: id,
+        topic: cfg.topic,
         recommendation: result.verdict.recommendation,
         confidence: result.verdict.confidence,
       });
@@ -635,7 +856,8 @@ class TribunalService {
         try {
           await memoryService.remember({
             projectName: cfg.projectName,
-            content: `# Tribunal Decision: ${cfg.topic}\n\n` +
+            content:
+              `# Tribunal Decision: ${cfg.topic}\n\n` +
               `**Recommendation:** ${result.verdict.recommendation}\n` +
               `**Confidence:** ${result.verdict.confidence}\n\n` +
               `**Reasoning:**\n${result.verdict.reasoning}\n\n` +
@@ -643,7 +865,11 @@ class TribunalService {
               `**Dissent:**\n${result.verdict.dissent}\n\n` +
               `**Conditions:**\n${result.verdict.conditions}`,
             type: 'decision',
-            tags: ['tribunal', 'debate', ...cfg.positions.map(p => p.toLowerCase().replace(/\s+/g, '-'))],
+            tags: [
+              'tribunal',
+              'debate',
+              ...cfg.positions.map((p) => p.toLowerCase().replace(/\s+/g, '-')),
+            ],
             relatedTo: cfg.topic,
           });
         } catch (err: any) {
@@ -651,10 +877,13 @@ class TribunalService {
         }
       }
 
-      result.cost.estimatedUsd = estimateCost(result.cost.totalTokens);
+      result.cost.estimatedUsd = estimateCost(costAcc);
       result.durationMs = Date.now() - startTime;
       result.status = 'completed';
-      workHandle.complete({ verdict: result.verdict.recommendation, cost: result.cost.estimatedUsd });
+      workHandle.complete({
+        verdict: result.verdict.recommendation,
+        cost: result.cost.estimatedUsd,
+      });
 
       storeDebate(result);
 
@@ -662,7 +891,8 @@ class TribunalService {
       await this.persistDebate(cfg.projectName, result);
 
       eventBus.publish('tribunal:completed', {
-        debateId: id, topic: cfg.topic,
+        debateId: id,
+        topic: cfg.topic,
         recommendation: result.verdict.recommendation,
         confidence: result.verdict.confidence,
         cost: result.cost.estimatedUsd,
@@ -686,7 +916,6 @@ class TribunalService {
         estimatedUsd: result.cost.estimatedUsd,
         durationMs: result.durationMs,
       });
-
     } catch (error: any) {
       result.status = 'failed';
       result.error = error.message;
@@ -708,8 +937,18 @@ class TribunalService {
     framing: string,
     ragContext: string | undefined,
     opponentArgs: TribunalArgument[] | undefined,
-    round: number,
-  ): Promise<TribunalArgument> {
+    round: number
+  ): Promise<{
+    argument: TribunalArgument;
+    usage?: {
+      promptTokens?: number;
+      completionTokens?: number;
+      totalTokens?: number;
+      cacheCreationTokens?: number;
+      cacheReadTokens?: number;
+    };
+    provider?: string;
+  }> {
     let prompt = `## Debate Topic\n${topic}\n\n## Framing\n${framing}\n\n`;
 
     if (ragContext) {
@@ -734,10 +973,14 @@ class TribunalService {
     });
 
     return {
-      position,
-      content: result.text,
-      round,
-      tokens: result.usage?.totalTokens || 0,
+      argument: {
+        position,
+        content: result.text,
+        round,
+        tokens: result.usage?.totalTokens || 0,
+      },
+      usage: result.usage,
+      provider: result.provider,
     };
   }
 
@@ -746,7 +989,7 @@ class TribunalService {
   private async fetchRagContext(
     projectName: string,
     topic: string,
-    positions: string[],
+    positions: string[]
   ): Promise<string> {
     const parts: string[] = [];
 

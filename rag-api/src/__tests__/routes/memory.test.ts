@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 import request from 'supertest';
 import { createTestApp, withProject } from '../helpers/app-factory';
 
@@ -22,6 +22,7 @@ const mocks = vi.hoisted(() => ({
   runMaintenance: vi.fn(),
   analyze: vi.fn(),
   runGates: vi.fn(),
+  ltmRecall: vi.fn(),
 }));
 
 vi.mock('../../services/memory', () => ({
@@ -54,6 +55,14 @@ vi.mock('../../services/memory-governance', () => ({
   PromoteReason: {},
 }));
 
+vi.mock('../../services/memory-ltm', () => ({
+  memoryLtm: {
+    recall: mocks.ltmRecall,
+    list: vi.fn(),
+    getStats: vi.fn(),
+  },
+}));
+
 vi.mock('../../services/conversation-analyzer', () => ({
   conversationAnalyzer: { analyze: mocks.analyze },
 }));
@@ -71,6 +80,10 @@ vi.mock('../../services/usage-patterns', () => ({
 }));
 
 import memoryRoutes from '../../routes/memory';
+import { publishEvent } from '../../events/emitter';
+import config from '../../config';
+
+const mockedPublishEvent = vi.mocked(publishEvent);
 
 const app = createTestApp({ router: memoryRoutes });
 
@@ -84,8 +97,10 @@ describe('Memory Routes', () => {
       const fakeMemory = { id: 'mem-1', content: 'test decision', type: 'decision' };
       mocks.remember.mockResolvedValue(fakeMemory);
 
-      const res = await withProject(request(app).post('/api/memory'), 'testproject')
-        .send({ content: 'test decision', type: 'decision' });
+      const res = await withProject(request(app).post('/api/memory'), 'testproject').send({
+        content: 'test decision',
+        type: 'decision',
+      });
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
@@ -98,12 +113,11 @@ describe('Memory Routes', () => {
       const fakeMemory = { id: 'mem-2', content: 'auto insight', type: 'insight' };
       mocks.ingest.mockResolvedValue(fakeMemory);
 
-      const res = await withProject(request(app).post('/api/memory'), 'testproject')
-        .send({
-          content: 'auto insight',
-          type: 'insight',
-          metadata: { source: 'auto_conversation', confidence: 0.8 },
-        });
+      const res = await withProject(request(app).post('/api/memory'), 'testproject').send({
+        content: 'auto insight',
+        type: 'insight',
+        metadata: { source: 'auto_conversation', confidence: 0.8 },
+      });
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
@@ -112,18 +126,66 @@ describe('Memory Routes', () => {
       expect(mocks.remember).not.toHaveBeenCalled();
     });
 
+    it('signals non-persistence when governance drops the memory (skipped)', async () => {
+      // Governance ingested an auto-memory but dropped it below the adaptive
+      // threshold — it set metadata.skipped. The route must NOT report success,
+      // so callers using `if (res.success)` don't treat a dropped memory as saved.
+      const skippedMemory = {
+        id: 'mem-skip',
+        content: 'low-confidence auto note',
+        type: 'note',
+        metadata: { skipped: true },
+      };
+      mocks.ingest.mockResolvedValue(skippedMemory);
+
+      const res = await withProject(request(app).post('/api/memory'), 'testproject').send({
+        content: 'low-confidence auto note',
+        type: 'note',
+        metadata: { source: 'auto_conversation', confidence: 0.1 },
+      });
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(false);
+      expect(res.body.persisted).toBe(false);
+      expect(res.body.skipped).toBe(true);
+      expect(typeof res.body.skipped).toBe('boolean');
+      expect(res.body.message).toMatch(/skipped/i);
+    });
+
+    it('reports success + skipped:false when governance persists the memory', async () => {
+      const persisted = {
+        id: 'mem-keep',
+        content: 'high-confidence auto note',
+        type: 'insight',
+        metadata: {},
+      };
+      mocks.ingest.mockResolvedValue(persisted);
+
+      const res = await withProject(request(app).post('/api/memory'), 'testproject').send({
+        content: 'high-confidence auto note',
+        type: 'insight',
+        metadata: { source: 'auto_conversation', confidence: 0.9 },
+      });
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.persisted).toBe(true);
+      // skipped must always be a real boolean, never undefined.
+      expect(res.body.skipped).toBe(false);
+      expect(typeof res.body.skipped).toBe('boolean');
+    });
+
     it('missing projectName returns 400', async () => {
-      const res = await request(app)
-        .post('/api/memory')
-        .send({ content: 'something' });
+      const res = await request(app).post('/api/memory').send({ content: 'something' });
 
       expect(res.status).toBe(400);
       expect(res.body.error).toMatch(/projectName/i);
     });
 
     it('missing content returns 400 validation error', async () => {
-      const res = await withProject(request(app).post('/api/memory'), 'testproject')
-        .send({ type: 'note' });
+      const res = await withProject(request(app).post('/api/memory'), 'testproject').send({
+        type: 'note',
+      });
 
       expect(res.status).toBe(400);
       expect(res.body.error).toBeDefined();
@@ -132,13 +194,12 @@ describe('Memory Routes', () => {
 
   describe('POST /api/memory/recall', () => {
     it('returns recall results', async () => {
-      const fakeResults = [
-        { memory: { id: 'mem-1', content: 'a decision' }, score: 0.9 },
-      ];
+      const fakeResults = [{ memory: { id: 'mem-1', content: 'a decision' }, score: 0.9 }];
       mocks.recall.mockResolvedValue(fakeResults);
 
-      const res = await withProject(request(app).post('/api/memory/recall'), 'testproject')
-        .send({ query: 'some query' });
+      const res = await withProject(request(app).post('/api/memory/recall'), 'testproject').send({
+        query: 'some query',
+      });
 
       expect(res.status).toBe(200);
       expect(res.body.results).toEqual(fakeResults);
@@ -146,10 +207,97 @@ describe('Memory Routes', () => {
     });
 
     it('empty query returns 400', async () => {
-      const res = await withProject(request(app).post('/api/memory/recall'), 'testproject')
-        .send({ query: '' });
+      const res = await withProject(request(app).post('/api/memory/recall'), 'testproject').send({
+        query: '',
+      });
 
       expect(res.status).toBe(400);
+    });
+  });
+
+  describe('POST /api/memory/recall — LTM strengthen publish scope', () => {
+    // Toggle the (globally mocked) config flags so the recall handler runs the
+    // LTM merge branch and the reconsolidation publish. Restore after.
+    let prevConsolidation: any;
+    let prevReconsolidation: any;
+
+    beforeEach(() => {
+      prevConsolidation = (config as any).CONSOLIDATION_ENABLED;
+      prevReconsolidation = (config as any).RECONSOLIDATION_ENABLED;
+      (config as any).CONSOLIDATION_ENABLED = true;
+      (config as any).RECONSOLIDATION_ENABLED = true;
+      // The outer beforeEach calls vi.resetAllMocks(), which strips the global
+      // publishEvent mock's resolved value. The handler does
+      // `publishEvent(...).catch(...)`, so it must return a thenable.
+      mockedPublishEvent.mockResolvedValue(undefined);
+    });
+
+    afterEach(() => {
+      (config as any).CONSOLIDATION_ENABLED = prevConsolidation;
+      (config as any).RECONSOLIDATION_ENABLED = prevReconsolidation;
+    });
+
+    it('publishes memory:recalled ONLY for LTM memories in the final returned set', async () => {
+      // Durable returns d1 (also present in LTM → a dup). LTM returns the dup d1,
+      // a high-scoring survivor l1, and a low-scoring l2 that gets spliced off at
+      // limit=1. The final response is [l1]. The strengthen event must therefore
+      // cover ONLY l1 — never the durable dup d1 (its recall was already published
+      // by memoryService.recall) and never the spliced-off l2.
+      mocks.recall.mockResolvedValue([
+        { memory: { id: 'd1', content: 'durable + ltm dup' }, score: 0.9 },
+      ]);
+      mocks.ltmRecall.mockResolvedValue([
+        { memory: { id: 'd1', content: 'durable + ltm dup' }, score: 0.92, collection: 'semantic' },
+        { memory: { id: 'l1', content: 'ltm survivor' }, score: 0.95, collection: 'episodic' },
+        { memory: { id: 'l2', content: 'ltm spliced off' }, score: 0.2, collection: 'episodic' },
+      ]);
+
+      const res = await withProject(request(app).post('/api/memory/recall'), 'testproject').send({
+        query: 'recent work',
+        limit: 1,
+      });
+
+      expect(res.status).toBe(200);
+      // Final set is a single highest-scoring LTM survivor.
+      expect(res.body.results).toHaveLength(1);
+      expect(res.body.results[0].memory.id).toBe('l1');
+
+      // Exactly one strengthen publish, scoped to the returned LTM set only.
+      const recalledCalls = mockedPublishEvent.mock.calls.filter((c) => c[0] === 'memory:recalled');
+      expect(recalledCalls).toHaveLength(1);
+      const payload: any = recalledCalls[0][1];
+      expect(payload.memoryIds).toEqual(['l1']);
+      expect(payload.resultCount).toBe(1);
+      expect(payload.recalledMemories).toHaveLength(1);
+      expect(payload.recalledMemories[0].id).toBe('l1');
+      // Preserves the true per-result collection label (bug-1 fix).
+      expect(payload.recalledMemories[0].collection).toBe('episodic');
+      // The durable dup and the spliced-off LTM result must NOT be published.
+      expect(payload.memoryIds).not.toContain('d1');
+      expect(payload.memoryIds).not.toContain('l2');
+    });
+
+    it('does NOT publish when no LTM-origin memory survives into the response', async () => {
+      // Durable fully fills the limit; the only LTM hit is a dup of durable and is
+      // spliced off. No NEW LTM memory reaches the caller → no strengthen event.
+      mocks.recall.mockResolvedValue([
+        { memory: { id: 'd1', content: 'durable winner' }, score: 0.99 },
+      ]);
+      mocks.ltmRecall.mockResolvedValue([
+        { memory: { id: 'd1', content: 'durable winner' }, score: 0.5, collection: 'semantic' },
+      ]);
+
+      const res = await withProject(request(app).post('/api/memory/recall'), 'testproject').send({
+        query: 'recent work',
+        limit: 1,
+      });
+
+      expect(res.status).toBe(200);
+      expect(res.body.results).toHaveLength(1);
+      expect(res.body.results[0].memory.id).toBe('d1');
+
+      const recalledCalls = mockedPublishEvent.mock.calls.filter((c) => c[0] === 'memory:recalled');
+      expect(recalledCalls).toHaveLength(0);
     });
   });
 
@@ -157,8 +305,9 @@ describe('Memory Routes', () => {
     it('returns success on delete', async () => {
       mocks.forget.mockResolvedValue(true);
 
-      const res = await withProject(request(app).delete('/api/memory/abc-123'), 'testproject')
-        .send({});
+      const res = await withProject(request(app).delete('/api/memory/abc-123'), 'testproject').send(
+        {}
+      );
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
@@ -171,8 +320,10 @@ describe('Memory Routes', () => {
       const fakeMemory = { id: 'mem-3', content: 'validated insight', type: 'insight' };
       mocks.promote.mockResolvedValue(fakeMemory);
 
-      const res = await withProject(request(app).post('/api/memory/promote'), 'testproject')
-        .send({ memoryId: 'mem-3', reason: 'human_validated' });
+      const res = await withProject(request(app).post('/api/memory/promote'), 'testproject').send({
+        memoryId: 'mem-3',
+        reason: 'human_validated',
+      });
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
@@ -205,8 +356,17 @@ describe('Memory Routes', () => {
       const fakeResult = { quarantineDeleted: 3, compactionRuns: 0 };
       mocks.runMaintenance.mockResolvedValue(fakeResult);
 
-      const res = await withProject(request(app).post('/api/memory/maintenance'), 'testproject')
-        .send({ operations: { quarantine_cleanup: true, feedback_maintenance: false, compaction: false, compaction_dry_run: true } });
+      const res = await withProject(
+        request(app).post('/api/memory/maintenance'),
+        'testproject'
+      ).send({
+        operations: {
+          quarantine_cleanup: true,
+          feedback_maintenance: false,
+          compaction: false,
+          compaction_dry_run: true,
+        },
+      });
 
       expect(res.status).toBe(200);
       expect(res.body).toEqual(fakeResult);
@@ -218,8 +378,10 @@ describe('Memory Routes', () => {
     it('happy path returns deletion counts', async () => {
       mocks.forgetOlderThan.mockResolvedValueOnce(5).mockResolvedValueOnce(2);
 
-      const res = await withProject(request(app).post('/api/memory/forget-older'), 'testproject')
-        .send({ olderThanDays: 30 });
+      const res = await withProject(
+        request(app).post('/api/memory/forget-older'),
+        'testproject'
+      ).send({ olderThanDays: 30 });
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
@@ -230,8 +392,10 @@ describe('Memory Routes', () => {
     });
 
     it('olderThanDays less than 1 returns 400', async () => {
-      const res = await withProject(request(app).post('/api/memory/forget-older'), 'testproject')
-        .send({ olderThanDays: 0 });
+      const res = await withProject(
+        request(app).post('/api/memory/forget-older'),
+        'testproject'
+      ).send({ olderThanDays: 0 });
 
       expect(res.status).toBe(400);
     });
@@ -242,8 +406,9 @@ describe('Memory Routes', () => {
       const fakeResult = { totalMerged: 3, clusters: [] };
       mocks.mergeMemories.mockResolvedValue(fakeResult);
 
-      const res = await withProject(request(app).post('/api/memory/merge'), 'testproject')
-        .send({ dryRun: true });
+      const res = await withProject(request(app).post('/api/memory/merge'), 'testproject').send({
+        dryRun: true,
+      });
 
       expect(res.status).toBe(200);
       expect(res.body.totalMerged).toBe(3);
@@ -261,8 +426,9 @@ describe('Memory Routes', () => {
       };
       mocks.analyze.mockResolvedValue(fakeAnalysis);
 
-      const res = await withProject(request(app).post('/api/memory/extract'), 'testproject')
-        .send({ conversation: 'User: Hello. Assistant: Hi there.' });
+      const res = await withProject(request(app).post('/api/memory/extract'), 'testproject').send({
+        conversation: 'User: Hello. Assistant: Hi there.',
+      });
 
       expect(res.status).toBe(200);
       expect(res.body.learnings).toEqual(fakeAnalysis.learnings);

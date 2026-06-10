@@ -88,7 +88,9 @@
   "user_notes_summary": {
     "uncertainties": [],
     "needs_review": [],
-    "workarounds": ["Used Glob+Grep+Read to trace code instead of RAG graph/symbol tools; read node_modules library source to compensate for lack of symbol tracing tools"]
+    "workarounds": [
+      "Used Glob+Grep+Read to trace code instead of RAG graph/symbol tools; read node_modules library source to compensate for lack of symbol tracing tools"
+    ]
   },
   "eval_feedback": {
     "suggestions": [

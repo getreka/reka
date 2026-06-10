@@ -160,7 +160,11 @@ describe('AgentRuntime', () => {
         {
           name: 'search_codebase',
           description: 'Search codebase',
-          input_schema: { type: 'object', properties: { query: { type: 'string' } }, required: ['query'] },
+          input_schema: {
+            type: 'object',
+            properties: { query: { type: 'string' } },
+            required: ['query'],
+          },
         },
       ]);
     });
@@ -241,6 +245,59 @@ describe('AgentRuntime', () => {
 
       expect(result.status).toBe('completed');
       expect(result.steps[0].observation?.result).toContain('not allowed');
+    });
+
+    it('keeps at most ONE conversation cache_control breakpoint across tool iterations', async () => {
+      // Force several tool iterations: each turn issues a tool call, except the last
+      // which returns a final text answer. Without the strip-the-previous-breakpoint
+      // fix, every iteration's tool_result turn keeps its cache_control, and combined
+      // with the system + last-tool breakpoints the request would exceed Anthropic's
+      // hard limit of 4 and 400 by the ~3rd iteration.
+      mocks.search.mockResolvedValue([
+        { id: '1', score: 0.9, payload: { file: 'auth.ts', content: 'export class Auth {}' } },
+      ]);
+      for (let i = 0; i < 4; i++) {
+        mocks.chat.mockResolvedValueOnce({
+          text: `searching round ${i}`,
+          toolUse: [{ id: `call_${i}`, name: 'search_codebase', input: { query: 'auth' } }],
+          rawContent: [{ type: 'text', text: `searching round ${i}` }],
+          promptTokens: 100,
+          completionTokens: 50,
+        });
+      }
+      // Final turn: no tool calls → loop returns.
+      mocks.chat.mockResolvedValueOnce({
+        text: 'Done. Auth is in auth.ts.',
+        toolUse: undefined,
+        promptTokens: 100,
+        completionTokens: 30,
+      });
+
+      await agentRuntime.run({
+        projectName: 'test',
+        agentType: 'research',
+        task: 'find auth',
+        maxIterations: 6,
+      });
+
+      // Inspect the messages array passed to the LAST llm.chat() call — by then several
+      // tool_result turns have accumulated. Exactly one user turn may carry a
+      // cache_control breakpoint on its last tool_result block.
+      const lastCall = mocks.chat.mock.calls[mocks.chat.mock.calls.length - 1];
+      const messages = lastCall[0] as Array<{ role: string; content: any }>;
+
+      let breakpointTurns = 0;
+      for (const msg of messages) {
+        if (msg.role !== 'user' || !Array.isArray(msg.content)) continue;
+        const carriesBreakpoint = msg.content.some(
+          (b: any) => b && b.type === 'tool_result' && b.cache_control
+        );
+        if (carriesBreakpoint) breakpointTurns++;
+      }
+
+      expect(breakpointTurns).toBeLessThanOrEqual(1);
+      // And it should be exactly the newest tool_result turn that keeps it.
+      expect(breakpointTurns).toBe(1);
     });
 
     it('passes tools to llm.chat()', async () => {

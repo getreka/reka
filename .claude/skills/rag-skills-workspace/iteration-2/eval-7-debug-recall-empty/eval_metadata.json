@@ -1,1 +1,27 @@
-{"eval_id":7,"eval_name":"debug-recall-empty","prompt":"recall повертає порожній масив навіть коли є memories в колекції. Помилок в логах немає.","assertions":[{"type":"tool","text":"Calls context_briefing with debug task description"},{"type":"tool","text":"Uses search_graph or find_symbol to trace the recall implementation"},{"type":"outcome","text":"Identifies the specific files in the recall chain (e.g., memory.ts, vector-store.ts, routes)"},{"type":"outcome","text":"Proposes at least one plausible root cause with evidence from code"},{"type":"outcome","text":"Suggests a specific code fix (not just 'add logging')"}]}
+{
+  "eval_id": 7,
+  "eval_name": "debug-recall-empty",
+  "prompt": "recall повертає порожній масив навіть коли є memories в колекції. Помилок в логах немає.",
+  "assertions": [
+    {
+      "type": "tool",
+      "text": "Calls context_briefing with debug task description"
+    },
+    {
+      "type": "tool",
+      "text": "Uses search_graph or find_symbol to trace the recall implementation"
+    },
+    {
+      "type": "outcome",
+      "text": "Identifies the specific files in the recall chain (e.g., memory.ts, vector-store.ts, routes)"
+    },
+    {
+      "type": "outcome",
+      "text": "Proposes at least one plausible root cause with evidence from code"
+    },
+    {
+      "type": "outcome",
+      "text": "Suggests a specific code fix (not just 'add logging')"
+    }
+  ]
+}

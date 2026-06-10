@@ -1,12 +1,12 @@
-import { defineConfig } from 'vitest/config';
+import { defineConfig } from "vitest/config";
 
 export default defineConfig({
   resolve: {
-    extensions: ['.ts', '.js', '.mjs', '.mts'],
+    extensions: [".ts", ".js", ".mjs", ".mts"],
   },
   test: {
     globals: true,
-    environment: 'node',
-    include: ['src/**/*.test.ts'],
+    environment: "node",
+    include: ["src/**/*.test.ts"],
   },
 });

@@ -50,26 +50,52 @@ import { createAgentTools } from "./tools/agents.js";
 import { createQualityTools } from "./tools/quality.js";
 
 // Configuration from environment
-const PROJECT_NAME = process.env.PROJECT_NAME || "default";
+// Priority: REKA_API_KEY (new) > RAG_API_KEY (legacy)
+const API_KEY = process.env.REKA_API_KEY || process.env.RAG_API_KEY;
+const RAG_API_URL =
+  process.env.REKA_API_URL ||
+  process.env.RAG_API_URL ||
+  "http://localhost:3100";
 const PROJECT_PATH = process.env.PROJECT_PATH || process.cwd();
-const RAG_API_URL = process.env.RAG_API_URL || "http://localhost:3100";
-const RAG_API_KEY = process.env.RAG_API_KEY;
-const COLLECTION_PREFIX = `${PROJECT_NAME}_`;
 
-// API client
+// Project name: resolved from API key via /api/whoami, fallback to env/dirname
+let PROJECT_NAME = process.env.PROJECT_NAME || "";
+const COLLECTION_PREFIX_FN = () => `${PROJECT_NAME}_`;
+
+// API client (PROJECT_NAME may be empty initially, resolved after whoami)
 const api = createApiClient(
   RAG_API_URL,
-  PROJECT_NAME,
+  PROJECT_NAME || "resolving",
   PROJECT_PATH,
-  RAG_API_KEY,
+  API_KEY,
 );
+
+// Resolve project name from API key
+async function resolveProject(): Promise<void> {
+  if (PROJECT_NAME) return; // already set via env
+  if (!API_KEY) {
+    PROJECT_NAME = "default";
+    return;
+  }
+  try {
+    const res = await api.get<{ projectName: string }>("/api/whoami");
+    if (res.data?.projectName) {
+      PROJECT_NAME = res.data.projectName;
+      api.setProjectName(PROJECT_NAME);
+    }
+  } catch {
+    // Fallback to directory name
+    const path = await import("path");
+    PROJECT_NAME = path.basename(PROJECT_PATH);
+  }
+}
 
 // Mutable tool context shared by all handlers (session state updates in-place)
 const ctx: ToolContext = {
   api,
-  projectName: PROJECT_NAME,
+  projectName: PROJECT_NAME || "resolving",
   projectPath: PROJECT_PATH,
-  collectionPrefix: COLLECTION_PREFIX,
+  collectionPrefix: COLLECTION_PREFIX_FN(),
   enrichmentEnabled: true,
 };
 
@@ -160,7 +186,68 @@ const CORE_TOOLS = new Set([
   "run_agent",
 ]);
 
-const coreSpecs = allSpecs.filter((s) => CORE_TOOLS.has(s.name));
+// LITE PROFILE (~6 tools): the highest-frequency tools registered eagerly.
+// Rationale: the Claude host now supports ToolSearch / deferred tool-schema
+// loading (~85% token reduction with accuracy UP), which makes the older
+// Hick's-law CORE_TOOLS allowlist largely obsolete. The installed MCP SDK
+// (@modelcontextprotocol/sdk 1.25.x) exposes NO per-tool defer/lazy-loading
+// flag on registerTool (only enable()/disable() visibility toggles), so we
+// cannot ask the server to defer schemas. Deferred loading is a CLIENT-side
+// (host) capability. Therefore 'lite' simply registers this minimal set and
+// the remaining tools stay reachable via run_agent (the agent runtime calls
+// the RAG API directly), exactly like hidden tools under 'core'.
+const LITE_TOOLS = new Set([
+  "search_codebase",
+  "hybrid_search",
+  "find_symbol",
+  "context_briefing",
+  "remember",
+  "recall",
+  // run_agent kept so everything else stays reachable in lite mode.
+  "run_agent",
+]);
+
+// Search-friendly, prescriptive descriptions for the lite set ("Call this
+// when…") so ToolSearch / the host ranks them well. Only overrides the lite
+// tools; all other tools keep their module-defined descriptions.
+const LITE_DESCRIPTIONS: Record<string, string> = {
+  search_codebase:
+    "Call this when you need to find code by meaning across the codebase (functions, classes, where a feature lives). Semantic + keyword search over indexed source.",
+  hybrid_search:
+    "Call this when a question is conceptual ('how does X work', 'where is auth handled') — runs dense + sparse hybrid retrieval with reranking for the best matches.",
+  find_symbol:
+    "Call this when you know a function/class/type NAME and want its exact definition and location. Fast symbol-index lookup, faster and more precise than search.",
+  context_briefing:
+    "Call this BEFORE making any code change: it runs codebase search, symbol lookup, graph (blast radius) and memory recall in parallel and returns a single briefing.",
+  remember:
+    "Call this AFTER you make a decision, learn something, or finish a change — persists it to durable project memory so future sessions recall it.",
+  recall:
+    "Call this when you need past decisions, insights, ADRs, or notes about this project — semantic search over agent memory.",
+};
+
+// Profile selection. Default 'core' preserves CURRENT behavior so nothing breaks.
+type McpProfile = "lite" | "core" | "full";
+const MCP_PROFILE = (
+  process.env.MCP_PROFILE || "core"
+).toLowerCase() as McpProfile;
+
+let activeSpecs: ToolSpec[];
+if (MCP_PROFILE === "full") {
+  activeSpecs = allSpecs;
+} else if (MCP_PROFILE === "lite") {
+  activeSpecs = allSpecs
+    .filter((s) => LITE_TOOLS.has(s.name))
+    .map((s) =>
+      LITE_DESCRIPTIONS[s.name]
+        ? { ...s, description: LITE_DESCRIPTIONS[s.name] }
+        : s,
+    );
+} else {
+  // 'core' (default) — unchanged ~35-tool allowlist.
+  activeSpecs = allSpecs.filter((s) => CORE_TOOLS.has(s.name));
+}
+
+const coreSpecs = activeSpecs;
 
 // MCP Server (modern McpServer API with native Zod validation)
 const server = new McpServer(
@@ -216,6 +303,11 @@ const MCP_TRANSPORT = process.env.MCP_TRANSPORT || "stdio";
 const MCP_HTTP_PORT = parseInt(process.env.MCP_HTTP_PORT || "3101");
 
 async function main() {
+  // Resolve project name from API key before starting
+  await resolveProject();
+  ctx.projectName = PROJECT_NAME;
+  ctx.collectionPrefix = COLLECTION_PREFIX_FN();
+
   if (MCP_TRANSPORT === "stdio" || MCP_TRANSPORT === "both") {
     const transport = new StdioServerTransport();
     await server.connect(transport);
@@ -224,15 +316,15 @@ async function main() {
   if (MCP_TRANSPORT === "http" || MCP_TRANSPORT === "both") {
     await startHttpTransport(server, {
       port: MCP_HTTP_PORT,
-      apiKey: RAG_API_KEY,
+      apiKey: API_KEY,
     });
   }
 
   console.error(
-    `${PROJECT_NAME} RAG MCP server running (transport: ${MCP_TRANSPORT}, prefix: ${COLLECTION_PREFIX})`,
+    `${PROJECT_NAME} RAG MCP server running (transport: ${MCP_TRANSPORT}, prefix: ${COLLECTION_PREFIX_FN()})`,
   );
   console.error(
-    `Registered ${coreSpecs.length}/${allSpecs.length} core tools (${allSpecs.length - coreSpecs.length} hidden, accessible via run_agent)`,
+    `Registered ${coreSpecs.length}/${allSpecs.length} tools [profile: ${MCP_PROFILE}] (${allSpecs.length - coreSpecs.length} hidden, accessible via run_agent)`,
   );
 }
 

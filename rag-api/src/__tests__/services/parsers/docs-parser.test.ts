@@ -10,12 +10,9 @@ describe('DocsParser', () => {
   });
 
   describe('canParse()', () => {
-    it.each(['.md', '.mdx', '.rst', '.txt'])(
-      'returns true for %s files',
-      (ext) => {
-        expect(parser.canParse(`docs/file${ext}`)).toBe(true);
-      }
-    );
+    it.each(['.md', '.mdx', '.rst', '.txt'])('returns true for %s files', (ext) => {
+      expect(parser.canParse(`docs/file${ext}`)).toBe(true);
+    });
 
     it.each(['.ts', '.js', '.json', '.yaml', '.html', '.py'])(
       'returns false for %s files',
@@ -147,10 +144,10 @@ This section has enough content to be included as a chunk.`;
       const chunks = parser.parse(content, 'docs/guide.md');
 
       // "# AB" alone is 4 chars — trimmed chunk is "# AB" (4 chars < 10) → skipped
-      const shortChunk = chunks.find(c => c.symbols?.includes('AB'));
+      const shortChunk = chunks.find((c) => c.symbols?.includes('AB'));
       expect(shortChunk).toBeUndefined();
 
-      const longChunk = chunks.find(c => c.symbols?.includes('Long Section'));
+      const longChunk = chunks.find((c) => c.symbols?.includes('Long Section'));
       expect(longChunk).toBeDefined();
     });
 
@@ -164,7 +161,7 @@ Content for level two.
 Content for level three.`;
       const chunks = parser.parse(content, 'docs/guide.md');
 
-      const symbols = chunks.flatMap(c => c.symbols ?? []);
+      const symbols = chunks.flatMap((c) => c.symbols ?? []);
       expect(symbols).toContain('Level Two Heading');
       expect(symbols).toContain('Level Three Heading');
     });
@@ -200,7 +197,7 @@ This is the usage section.`;
       const chunks = parser.parse(content, 'docs/guide.rst');
 
       expect(chunks.length).toBeGreaterThanOrEqual(1);
-      const rstChunks = chunks.filter(c => c.language === 'rst');
+      const rstChunks = chunks.filter((c) => c.language === 'rst');
       expect(rstChunks.length).toBeGreaterThanOrEqual(1);
     });
 

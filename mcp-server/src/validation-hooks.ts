@@ -29,17 +29,19 @@ export type ValidationHook = (
  * Blocks: index_codebase with force=true, forget (memory deletion).
  */
 export const destructiveGuard: ValidationHook = (toolName, args) => {
-  if (toolName === 'index_codebase' && args.force === true) {
+  if (toolName === "index_codebase" && args.force === true) {
     return {
       allowed: true,
-      warnings: ['Force reindex will delete and rebuild the entire index. This may take several minutes.'],
+      warnings: [
+        "Force reindex will delete and rebuild the entire index. This may take several minutes.",
+      ],
     };
   }
 
-  if (toolName === 'forget') {
+  if (toolName === "forget") {
     return {
       allowed: true,
-      warnings: ['This will permanently delete a memory entry.'],
+      warnings: ["This will permanently delete a memory entry."],
     };
   }
 
@@ -51,17 +53,33 @@ export const destructiveGuard: ValidationHook = (toolName, args) => {
  */
 export const requiredFieldsValidator: ValidationHook = (toolName, args) => {
   // Search tools must have a query
-  const searchTools = ['search_codebase', 'hybrid_search', 'search_docs', 'find_feature', 'ask_codebase'];
+  const searchTools = [
+    "search_codebase",
+    "hybrid_search",
+    "search_docs",
+    "find_feature",
+    "ask_codebase",
+  ];
   if (searchTools.includes(toolName)) {
     const query = args.query || args.question;
-    if (!query || (typeof query === 'string' && query.trim().length < 3)) {
-      return { allowed: false, reason: `${toolName} requires a query of at least 3 characters` };
+    if (!query || (typeof query === "string" && query.trim().length < 3)) {
+      return {
+        allowed: false,
+        reason: `${toolName} requires a query of at least 3 characters`,
+      };
     }
   }
 
   // Memory tools must have content
-  if (toolName === 'remember' && (!args.content || (typeof args.content === 'string' && args.content.trim().length < 10))) {
-    return { allowed: false, reason: 'remember requires content of at least 10 characters' };
+  if (
+    toolName === "remember" &&
+    (!args.content ||
+      (typeof args.content === "string" && args.content.trim().length < 10))
+  ) {
+    return {
+      allowed: false,
+      reason: "remember requires content of at least 10 characters",
+    };
   }
 
   return { allowed: true };
@@ -76,14 +94,14 @@ export const inputSanitizer: ValidationHook = (toolName, args) => {
 
   // Trim string values
   for (const [key, value] of Object.entries(modified)) {
-    if (typeof value === 'string' && value !== value.trim()) {
+    if (typeof value === "string" && value !== value.trim()) {
       modified[key] = value.trim();
       changed = true;
     }
   }
 
   // Cap limit params to prevent excessive results
-  if (typeof modified.limit === 'number' && modified.limit > 50) {
+  if (typeof modified.limit === "number" && modified.limit > 50) {
     modified.limit = 50;
     changed = true;
   }

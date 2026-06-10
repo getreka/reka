@@ -104,8 +104,12 @@
   ],
   "user_notes_summary": {
     "uncertainties": [],
-    "needs_review": ["review_code timed out — LLM-based code review did not complete, only check_architecture succeeded"],
-    "workarounds": ["suggest_implementation returned 400 error (targetCode is required), fell back to suggest_architecture and get_patterns"]
+    "needs_review": [
+      "review_code timed out — LLM-based code review did not complete, only check_architecture succeeded"
+    ],
+    "workarounds": [
+      "suggest_implementation returned 400 error (targetCode is required), fell back to suggest_architecture and get_patterns"
+    ]
   },
   "eval_feedback": {
     "suggestions": [

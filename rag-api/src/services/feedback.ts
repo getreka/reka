@@ -157,15 +157,8 @@ class FeedbackService {
     comment?: string;
     sessionId?: string;
   }): Promise<MemoryFeedback> {
-    const {
-      projectName,
-      memoryId,
-      memoryContent,
-      feedbackType,
-      correction,
-      comment,
-      sessionId,
-    } = options;
+    const { projectName, memoryId, memoryContent, feedbackType, correction, comment, sessionId } =
+      options;
 
     const collection = this.getMemoryFeedbackCollection(projectName);
 
@@ -221,7 +214,7 @@ class FeedbackService {
       // Get search feedback
       const searchFeedback = await this.scrollFeedback(searchCollection, cutoffDate);
       totalSearchFeedback = searchFeedback.length;
-      helpfulCount = searchFeedback.filter(f => f.feedbackType === 'helpful').length;
+      helpfulCount = searchFeedback.filter((f) => f.feedbackType === 'helpful').length;
 
       for (const f of searchFeedback) {
         if (f.feedbackType === 'not_helpful') {
@@ -232,7 +225,7 @@ class FeedbackService {
       // Get memory feedback
       const memoryFeedback = await this.scrollFeedback(memoryCollection, cutoffDate);
       totalMemoryFeedback = memoryFeedback.length;
-      accurateCount = memoryFeedback.filter(f => f.feedbackType === 'accurate').length;
+      accurateCount = memoryFeedback.filter((f) => f.feedbackType === 'accurate').length;
 
       for (const f of memoryFeedback) {
         if (f.feedbackType === 'outdated') {
@@ -246,8 +239,8 @@ class FeedbackService {
       // Calculate trend (compare last 7 days to previous 7 days)
       const recentDate = new Date();
       recentDate.setDate(recentDate.getDate() - 7);
-      const recentSearch = searchFeedback.filter(f => new Date(f.timestamp) >= recentDate);
-      const recentHelpful = recentSearch.filter(f => f.feedbackType === 'helpful').length;
+      const recentSearch = searchFeedback.filter((f) => new Date(f.timestamp) >= recentDate);
+      const recentHelpful = recentSearch.filter((f) => f.feedbackType === 'helpful').length;
       const recentRate = recentSearch.length > 0 ? recentHelpful / recentSearch.length : 0;
       const overallRate = totalSearchFeedback > 0 ? helpfulCount / totalSearchFeedback : 0;
 
@@ -297,27 +290,33 @@ class FeedbackService {
       const memoryFeedback = await this.scrollFeedback(memoryCollection, date90Days);
 
       // Search quality metrics
-      const helpful = searchFeedback.filter(f => f.feedbackType === 'helpful').length;
-      const partial = searchFeedback.filter(f => f.feedbackType === 'partially_helpful').length;
-      const notHelpful = searchFeedback.filter(f => f.feedbackType === 'not_helpful').length;
+      const helpful = searchFeedback.filter((f) => f.feedbackType === 'helpful').length;
+      const partial = searchFeedback.filter((f) => f.feedbackType === 'partially_helpful').length;
+      const notHelpful = searchFeedback.filter((f) => f.feedbackType === 'not_helpful').length;
       const totalSearch = searchFeedback.length;
 
       // Memory quality metrics
-      const accurate = memoryFeedback.filter(f => f.feedbackType === 'accurate').length;
-      const outdated = memoryFeedback.filter(f => f.feedbackType === 'outdated').length;
-      const incorrect = memoryFeedback.filter(f => f.feedbackType === 'incorrect').length;
+      const accurate = memoryFeedback.filter((f) => f.feedbackType === 'accurate').length;
+      const outdated = memoryFeedback.filter((f) => f.feedbackType === 'outdated').length;
+      const incorrect = memoryFeedback.filter((f) => f.feedbackType === 'incorrect').length;
       const totalMemory = memoryFeedback.length;
 
       // Trends
-      const last7 = searchFeedback.filter(f => new Date(f.timestamp) >= date7Days).length;
-      const last30 = searchFeedback.filter(f => new Date(f.timestamp) >= date30Days).length;
+      const last7 = searchFeedback.filter((f) => new Date(f.timestamp) >= date7Days).length;
+      const last30 = searchFeedback.filter((f) => new Date(f.timestamp) >= date30Days).length;
 
-      const rate7 = last7 > 0
-        ? searchFeedback.filter(f => new Date(f.timestamp) >= date7Days && f.feedbackType === 'helpful').length / last7
-        : 0;
-      const rate30 = last30 > 0
-        ? searchFeedback.filter(f => new Date(f.timestamp) >= date30Days && f.feedbackType === 'helpful').length / last30
-        : 0;
+      const rate7 =
+        last7 > 0
+          ? searchFeedback.filter(
+              (f) => new Date(f.timestamp) >= date7Days && f.feedbackType === 'helpful'
+            ).length / last7
+          : 0;
+      const rate30 =
+        last30 > 0
+          ? searchFeedback.filter(
+              (f) => new Date(f.timestamp) >= date30Days && f.feedbackType === 'helpful'
+            ).length / last30
+          : 0;
 
       // Top problematic queries
       const queryIssues: Record<string, number> = {};
@@ -354,7 +353,12 @@ class FeedbackService {
     } catch (error: any) {
       logger.error('Failed to get quality metrics', { error: error.message });
       return {
-        searchQuality: { helpfulRate: 0, partiallyHelpfulRate: 0, notHelpfulRate: 0, totalFeedback: 0 },
+        searchQuality: {
+          helpfulRate: 0,
+          partiallyHelpfulRate: 0,
+          notHelpfulRate: 0,
+          totalFeedback: 0,
+        },
         memoryQuality: { accuracyRate: 0, outdatedRate: 0, incorrectRate: 0, totalFeedback: 0 },
         trends: { last7Days: 0, last30Days: 0, trend: 'stable' },
         topProblematicQueries: [],
@@ -376,9 +380,7 @@ class FeedbackService {
       // Find similar queries that have better alternatives
       const embedding = await embeddingService.embed(query);
       const results = await vectorStore.search(collection, embedding, limit * 2, {
-        must: [
-          { key: 'feedbackType', match: { value: 'not_helpful' } },
-        ],
+        must: [{ key: 'feedbackType', match: { value: 'not_helpful' } }],
       });
 
       const suggestions: Array<{ betterQuery: string; score: number }> = [];
@@ -403,10 +405,7 @@ class FeedbackService {
    * Get feedback-based score adjustments for search results.
    * Returns a map of filePath → boost multiplier (>1 = boost, <1 = penalty).
    */
-  async getFileBoostScores(
-    projectName: string,
-    query: string
-  ): Promise<Map<string, number>> {
+  async getFileBoostScores(projectName: string, query: string): Promise<Map<string, number>> {
     const collection = this.getSearchFeedbackCollection(projectName);
     const boosts = new Map<string, number>();
 
@@ -499,10 +498,12 @@ class FeedbackService {
           with_payload: true,
           with_vector: false,
           filter: {
-            must: [{
-              key: 'timestamp',
-              range: { gte: cutoffDate.toISOString() },
-            }],
+            must: [
+              {
+                key: 'timestamp',
+                range: { gte: cutoffDate.toISOString() },
+              },
+            ],
           },
         });
 

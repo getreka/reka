@@ -52,7 +52,7 @@ function deduplicateByFile<T extends { payload: Record<string, unknown>; score: 
 /**
  * Apply code-type boosting — give a small score boost to code chunks over docs.
  */
-const CODE_BOOST = 1.05;
+const CODE_BOOST = config.CODE_BOOST;
 function applyChunkTypeBoost<T extends { payload: Record<string, unknown>; score: number }>(
   results: T[]
 ): T[] {
@@ -93,7 +93,7 @@ async function expandWithGraph(
     const fileResults = await vectorStore.search(collection, queryEmbedding, 1, {
       must: [{ key: 'file', match: { value: file } }],
     });
-    if (fileResults.length > 0 && fileResults[0].score > 0.3) {
+    if (fileResults.length > 0 && fileResults[0].score > config.GRAPH_EXPAND_SCORE_THRESHOLD) {
       neighborResults.push({
         ...fileResults[0],
         payload: { ...fileResults[0].payload, graphExpanded: true },

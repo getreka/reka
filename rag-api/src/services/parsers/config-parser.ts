@@ -6,8 +6,15 @@ import * as path from 'path';
 import type { FileParser, ParsedChunk } from './base-parser';
 
 const CONFIG_EXTENSIONS = new Set([
-  '.yaml', '.yml', '.json', '.toml', '.env', '.hcl',
-  '.ini', '.cfg', '.conf',
+  '.yaml',
+  '.yml',
+  '.json',
+  '.toml',
+  '.env',
+  '.hcl',
+  '.ini',
+  '.cfg',
+  '.conf',
 ]);
 
 export class ConfigParser implements FileParser {
@@ -41,7 +48,7 @@ export class ConfigParser implements FileParser {
       for (const key of Object.keys(parsed)) {
         const keyStr = JSON.stringify({ [key]: parsed[key] }, null, 2);
         // Find approximate line number
-        const lineIdx = lines.findIndex(l => l.includes(`"${key}"`));
+        const lineIdx = lines.findIndex((l) => l.includes(`"${key}"`));
 
         chunks.push({
           content: keyStr,
@@ -152,18 +159,26 @@ export class ConfigParser implements FileParser {
 
   private singleChunk(content: string, filePath: string, ext: string): ParsedChunk[] {
     const langMap: Record<string, string> = {
-      '.yaml': 'yaml', '.yml': 'yaml', '.json': 'json',
-      '.toml': 'toml', '.env': 'env', '.hcl': 'hcl',
-      '.ini': 'ini', '.cfg': 'config', '.conf': 'config',
+      '.yaml': 'yaml',
+      '.yml': 'yaml',
+      '.json': 'json',
+      '.toml': 'toml',
+      '.env': 'env',
+      '.hcl': 'hcl',
+      '.ini': 'ini',
+      '.cfg': 'config',
+      '.conf': 'config',
     };
 
-    return [{
-      content,
-      startLine: 1,
-      endLine: content.split('\n').length,
-      language: langMap[ext] || 'config',
-      type: 'config',
-    }];
+    return [
+      {
+        content,
+        startLine: 1,
+        endLine: content.split('\n').length,
+        language: langMap[ext] || 'config',
+        type: 'config',
+      },
+    ];
   }
 }
 

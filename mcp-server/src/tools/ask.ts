@@ -20,7 +20,10 @@ export function createAskTools(projectName: string): ToolSpec[] {
         question: z.string().describe("Question about the codebase"),
       }),
       annotations: TOOL_ANNOTATIONS["ask_codebase"],
-      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
+      handler: async (
+        args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
         const { question } = args as { question: string };
         const response = await ctx.api.post("/api/ask", {
           collection: `${ctx.collectionPrefix}codebase`,
@@ -34,10 +37,16 @@ export function createAskTools(projectName: string): ToolSpec[] {
       description: "Get a detailed explanation of a code snippet.",
       schema: z.object({
         code: z.string().describe("Code snippet to explain"),
-        filePath: z.string().optional().describe("Optional file path for context"),
+        filePath: z
+          .string()
+          .optional()
+          .describe("Optional file path for context"),
       }),
       annotations: TOOL_ANNOTATIONS["explain_code"],
-      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
+      handler: async (
+        args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
         const { code, filePath } = args as { code: string; filePath?: string };
         const response = await ctx.api.post("/api/explain", {
           collection: `${ctx.collectionPrefix}codebase`,
@@ -74,7 +83,10 @@ export function createAskTools(projectName: string): ToolSpec[] {
         description: z.string().describe("Description of the feature to find"),
       }),
       annotations: TOOL_ANNOTATIONS["find_feature"],
-      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
+      handler: async (
+        args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
         const { description } = args as { description: string };
         const response = await ctx.api.post("/api/find-feature", {
           collection: `${ctx.collectionPrefix}codebase`,
@@ -108,13 +120,32 @@ export function createAskTools(projectName: string): ToolSpec[] {
       description: `Analyze a conversation to extract learnings, decisions, and insights for ${projectName}.`,
       schema: z.object({
         conversation: z.string().describe("The conversation text to analyze"),
-        context: z.string().optional().describe("Additional context about the conversation"),
-        autoSave: z.boolean().optional().describe("Automatically save extracted learnings (default: false)"),
-        minConfidence: z.coerce.number().optional().describe("Minimum confidence threshold for learnings (0-1, default: 0.7)"),
+        context: z
+          .string()
+          .optional()
+          .describe("Additional context about the conversation"),
+        autoSave: z
+          .boolean()
+          .optional()
+          .describe("Automatically save extracted learnings (default: false)"),
+        minConfidence: z.coerce
+          .number()
+          .optional()
+          .describe(
+            "Minimum confidence threshold for learnings (0-1, default: 0.7)",
+          ),
       }),
       annotations: TOOL_ANNOTATIONS["analyze_conversation"],
-      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
-        const { conversation, context, autoSave = false, minConfidence = 0.7 } = args as {
+      handler: async (
+        args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
+        const {
+          conversation,
+          context,
+          autoSave = false,
+          minConfidence = 0.7,
+        } = args as {
           conversation: string;
           context?: string;
           autoSave?: boolean;
@@ -174,10 +205,16 @@ export function createAskTools(projectName: string): ToolSpec[] {
         content: z.string().describe("Content to analyze and remember"),
         context: z.string().optional().describe("Additional context"),
         relatedTo: z.string().optional().describe("Related feature or topic"),
-        tags: z.array(z.string()).optional().describe("Tags for categorization"),
+        tags: z
+          .array(z.string())
+          .optional()
+          .describe("Tags for categorization"),
       }),
       annotations: TOOL_ANNOTATIONS["auto_remember"],
-      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
+      handler: async (
+        args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
         const { content, context, relatedTo, tags } = args as {
           content: string;
           context?: string;
@@ -186,13 +223,16 @@ export function createAskTools(projectName: string): ToolSpec[] {
         };
 
         // First, analyze the content to classify it
-        const analyzeResponse = await ctx.api.post("/api/analyze-conversation", {
-          projectName: ctx.projectName,
-          conversation: content,
-          context,
-          autoSave: false,
-          minConfidence: 0.5,
-        });
+        const analyzeResponse = await ctx.api.post(
+          "/api/analyze-conversation",
+          {
+            projectName: ctx.projectName,
+            conversation: content,
+            context,
+            autoSave: false,
+            minConfidence: 0.5,
+          },
+        );
         const analysis = analyzeResponse.data;
 
         let memoryType = "note";
@@ -210,9 +250,9 @@ export function createAskTools(projectName: string): ToolSpec[] {
           type: memoryType,
           content,
           relatedTo,
-          tags: tags || (analysis.learnings?.[0]?.tags),
+          tags: tags || analysis.learnings?.[0]?.tags,
           metadata: {
-            source: 'auto_pattern',
+            source: "auto_pattern",
             confidence,
           },
         });

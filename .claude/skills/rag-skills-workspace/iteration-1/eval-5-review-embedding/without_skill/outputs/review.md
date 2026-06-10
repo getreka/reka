@@ -44,7 +44,7 @@ None of the public methods validate their input. An empty string, extremely long
 ```typescript
 // Should validate at entry point:
 if (!text || text.trim().length === 0) {
-  throw new Error('Embedding text must be non-empty');
+  throw new Error("Embedding text must be non-empty");
 }
 ```
 
@@ -193,6 +193,7 @@ If `texts` is an empty array, the method creates `new Array(0)`, skips the loop,
 ## Test Coverage Assessment
 
 The existing test file (`rag-api/src/__tests__/services/embedding.test.ts`, 175 lines) covers:
+
 - Basic cache hit/miss for `embed()`
 - Session-aware caching for `embed()`
 - Batch embedding with partial cache hits
@@ -200,6 +201,7 @@ The existing test file (`rag-api/src/__tests__/services/embedding.test.ts`, 175 
 - Error handling (network failure)
 
 **Missing test coverage:**
+
 - `embedWithDetails()` (though it may be dead code)
 - `embedBatchFull()`
 - Ollama and OpenAI provider paths

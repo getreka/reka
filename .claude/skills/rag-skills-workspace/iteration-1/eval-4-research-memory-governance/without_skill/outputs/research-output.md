@@ -12,10 +12,10 @@ The Memory Governance system is a two-tier storage architecture that separates a
 
 ### Two Collections per Project
 
-| Collection | Purpose | Source |
-|---|---|---|
-| `{project}_agent_memory` | Durable storage. Used by `recall`, context enrichment, and briefings. | Manual `remember()`, promoted memories |
-| `{project}_memory_pending` | Quarantine. Holds auto-generated memories awaiting review. | `auto_remember`, `fact_extractor`, conversation analysis |
+| Collection                 | Purpose                                                               | Source                                                   |
+| -------------------------- | --------------------------------------------------------------------- | -------------------------------------------------------- |
+| `{project}_agent_memory`   | Durable storage. Used by `recall`, context enrichment, and briefings. | Manual `remember()`, promoted memories                   |
+| `{project}_memory_pending` | Quarantine. Holds auto-generated memories awaiting review.            | `auto_remember`, `fact_extractor`, conversation analysis |
 
 ### Data Flow
 
@@ -53,10 +53,11 @@ Auto memory (auto_remember, fact_extractor, conversation analysis)
 ### Core Governance Logic
 
 **`/home/ake/shared-ai-infra/rag-api/src/services/memory-governance.ts`** (430 lines)
+
 - `MemoryGovernanceService` class (singleton exported as `memoryGovernance`)
 - Central decision point: routes memories to durable or quarantine based on `source` field
 - Methods:
-  - `ingest()` - Routes memory based on source (manual vs auto_*)
+  - `ingest()` - Routes memory based on source (manual vs auto\_\*)
   - `promote()` - Moves memory from quarantine to durable with metadata
   - `reject()` - Deletes memory from quarantine
   - `recallDurable()` - Search only durable storage (for enrichment)
@@ -70,6 +71,7 @@ Auto memory (auto_remember, fact_extractor, conversation analysis)
 ### Base Memory Service
 
 **`/home/ake/shared-ai-infra/rag-api/src/services/memory.ts`** (845 lines)
+
 - `MemoryService` class (singleton exported as `memoryService`)
 - Handles the actual storage in `{project}_agent_memory` collection
 - Key features in `recall()`:
@@ -80,6 +82,7 @@ Auto memory (auto_remember, fact_extractor, conversation analysis)
 ### API Routes
 
 **`/home/ake/shared-ai-infra/rag-api/src/routes/memory.ts`** (376 lines)
+
 - `POST /api/memory` - Routes auto-source memories through governance
 - `POST /api/memory/recall` - Standard recall from durable
 - `POST /api/memory/recall-durable` - Recall only from durable (for enrichment)
@@ -90,6 +93,7 @@ Auto memory (auto_remember, fact_extractor, conversation analysis)
 ### MCP Tools (client-facing)
 
 **`/home/ake/shared-ai-infra/mcp-server/src/tools/memory.ts`** (487 lines)
+
 - `remember` - Stores manual memory (goes to durable directly)
 - `recall` - Searches durable storage
 - `review_memories` - Lists quarantine memories for human review
@@ -99,11 +103,13 @@ Auto memory (auto_remember, fact_extractor, conversation analysis)
 - `run_quality_gates` - Runs tsc + tests + blast radius analysis
 
 **`/home/ake/shared-ai-infra/mcp-server/src/tools/ask.ts`** (233 lines)
+
 - `auto_remember` - Classifies content via LLM, saves with `source: 'auto_pattern'` and confidence score, which triggers governance routing through /api/memory endpoint
 
 ### Quality Gates
 
 **`/home/ake/shared-ai-infra/rag-api/src/services/quality-gates.ts`** (279 lines)
+
 - `QualityGateService` class
 - Three gates run before optional gated promotion:
   1. **typeCheckGate**: `tsc --noEmit` (30s timeout)
@@ -113,6 +119,7 @@ Auto memory (auto_remember, fact_extractor, conversation analysis)
 ### Fact Extractor
 
 **`/home/ake/shared-ai-infra/rag-api/src/services/fact-extractor.ts`** (186 lines)
+
 - Extracts structured facts from agent ReAct traces (observations only, not thoughts)
 - Calls `memoryGovernance.ingest()` with `source: 'auto_pattern'` and confidence scores
 - Facts are classified as: finding, dependency, pattern, issue
@@ -121,6 +128,7 @@ Auto memory (auto_remember, fact_extractor, conversation analysis)
 ### Context Enrichment
 
 **`/home/ake/shared-ai-infra/mcp-server/src/context-enrichment.ts`** (269 lines)
+
 - Uses `/api/memory/recall-durable` endpoint (durable only)
 - This ensures only validated/promoted memories are used to enrich tool responses
 - Quarantine memories never leak into context enrichment
@@ -128,6 +136,7 @@ Auto memory (auto_remember, fact_extractor, conversation analysis)
 ### Tests
 
 **`/home/ake/shared-ai-infra/rag-api/src/__tests__/services/memory-governance.test.ts`** (295 lines)
+
 - Tests for all key flows:
   - Manual memory routes to durable via memoryService.remember
   - Auto memory routes to quarantine collection
@@ -140,6 +149,7 @@ Auto memory (auto_remember, fact_extractor, conversation analysis)
 ### Metrics
 
 **`/home/ake/shared-ai-infra/rag-api/src/utils/metrics.ts`**
+
 - Prometheus counter: `memory_governance_total`
 - Labels: `operation` (ingest/promote/reject/prune), `tier` (durable/quarantine), `project`
 
@@ -223,6 +233,7 @@ Automated maintenance based on accumulated user feedback:
 ### 5. Memory Aging (memory.ts, lines 167-189)
 
 In `recall()`, unvalidated/unpromoted memories older than 30 days receive score decay:
+
 - 5% penalty per 30-day period past the first 30 days
 - Maximum 25% total penalty
 - Validated (`validated: true`) or promoted (`metadata.promotedAt`) memories are exempt
@@ -230,6 +241,7 @@ In `recall()`, unvalidated/unpromoted memories older than 30 days receive score 
 ### 6. Relationship Detection (memory.ts, lines 728-778)
 
 When a new memory is stored via `memoryService.remember()`:
+
 - Searches for semantically similar existing memories (score > 0.75)
 - Classifies relationships:
   - `supersedes`: same type + score > 0.85

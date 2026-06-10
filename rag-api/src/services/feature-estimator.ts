@@ -81,8 +81,7 @@ function detectIntegrations(content: string): {
   if (dbOps.length > 0) integrations.add('Database operations');
   if (externalServices.length > 0) integrations.add('External services (cache/queue)');
 
-  const integrationPointCount =
-    imports.length + requires.length + apiCalls.length + dbOps.length;
+  const integrationPointCount = imports.length + requires.length + apiCalls.length + dbOps.length;
 
   return { integrations, integrationPointCount };
 }
@@ -92,7 +91,7 @@ function computeComplexityScore(
   fileCount: number,
   avgComplexity: number,
   integrationCount: number,
-  testRatio: number,
+  testRatio: number
 ): { score: number; label: string } {
   let score = 0;
 
@@ -236,21 +235,21 @@ export async function estimateFeature(input: EstimateInput): Promise<EstimateRes
   const [reqResults, codeResults, testResults] = await Promise.all([
     vectorStore.search(`${prefix}confluence`, reqEmbedding, 5).catch(() => []),
     vectorStore.search(`${prefix}codebase`, codeEmbedding, 15),
-    vectorStore.search(`${prefix}codebase`, testEmbedding, 10, {
-      must: [{ key: 'file', match: { text: 'test' } }],
-    }).catch(() => []),
+    vectorStore
+      .search(`${prefix}codebase`, testEmbedding, 10, {
+        must: [{ key: 'file', match: { text: 'test' } }],
+      })
+      .catch(() => []),
   ]);
 
   const hasRequirements = reqResults.length > 0;
   const hasExistingCode = codeResults.length > 0;
   const hasTests = testResults.length > 0;
 
-  const affectedFiles = [...new Set(
-    codeResults.map(r => r.payload.file as string).filter(Boolean),
-  )];
-  const testFiles = [...new Set(
-    testResults.map(r => r.payload.file as string).filter(Boolean),
-  )];
+  const affectedFiles = [
+    ...new Set(codeResults.map((r) => r.payload.file as string).filter(Boolean)),
+  ];
+  const testFiles = [...new Set(testResults.map((r) => r.payload.file as string).filter(Boolean))];
 
   // Analyze code complexity across all results
   let totalComplexityScore = 0;
@@ -267,7 +266,7 @@ export async function estimateFeature(input: EstimateInput): Promise<EstimateRes
       const funcMatch = content.match(/(?:function|const|async)\s+(\w+)/);
       if (funcMatch) {
         complexFunctions.push(
-          `${result.payload.file}: ${funcMatch[1]}() - complexity ~${cyclomaticComplexity}`,
+          `${result.payload.file}: ${funcMatch[1]}() - complexity ~${cyclomaticComplexity}`
         );
       }
     }
@@ -280,16 +279,15 @@ export async function estimateFeature(input: EstimateInput): Promise<EstimateRes
     }
   }
 
-  const avgComplexity = codeResults.length > 0
-    ? totalComplexityScore / codeResults.length
-    : 0;
+  const avgComplexity = codeResults.length > 0 ? totalComplexityScore / codeResults.length : 0;
 
-  const testRatio = affectedFiles.length > 0
-    ? testFiles.length / affectedFiles.length
-    : 0;
+  const testRatio = affectedFiles.length > 0 ? testFiles.length / affectedFiles.length : 0;
 
   const { score: complexityScore, label: complexity } = computeComplexityScore(
-    affectedFiles.length, avgComplexity, allIntegrations.size, testRatio,
+    affectedFiles.length,
+    avgComplexity,
+    allIntegrations.size,
+    testRatio
   );
 
   const { riskFactors, riskScore, riskLevel } = assessRisk({

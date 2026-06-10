@@ -127,6 +127,8 @@ export const memoryTypeSchema = z.enum([
 
 export const todoStatusSchema = z.enum(['pending', 'in_progress', 'done', 'cancelled']);
 
+export const pinScopeSchema = z.enum(['repo', 'all', 'unpinned']);
+
 export const createMemorySchema = z.object({
   projectName: projectNameSchema.optional(),
   content: z.string().min(1).max(50000),
@@ -134,6 +136,39 @@ export const createMemorySchema = z.object({
   tags: z.array(z.string().max(50)).max(20).optional(),
   relatedTo: z.string().max(200).optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
+  // Trigger descriptions: separate "what to recall" (content) from
+  // "when to recall it" (triggerDescription). When present, the trigger cue is
+  // embedded/indexed so recall can match the QUERY against it too.
+  triggerDescription: z.string().max(2000).optional(),
+  // Optional pin scope controlling which surfaces this memory always loads in.
+  pin: pinScopeSchema.optional(),
+});
+
+export const factCategorySchema = z.enum([
+  'personal_info',
+  'preference',
+  'event',
+  'temporal',
+  'update',
+  'plan',
+]);
+
+export const batchItemSchema = z.object({
+  content: z.string().min(1).max(50000),
+  type: memoryTypeSchema.optional().default('note'),
+  tags: z.array(z.string().max(50)).max(20).optional(),
+  relatedTo: z.string().max(200).optional(),
+  metadata: z.record(z.string(), z.unknown()).optional(),
+  factCategory: factCategorySchema.optional(),
+  factEntities: z.array(z.string().max(200)).max(50).optional(),
+  factDateTs: z.number().optional(),
+  triggerDescription: z.string().max(2000).optional(),
+  pin: pinScopeSchema.optional(),
+});
+
+export const batchCreateMemorySchema = z.object({
+  projectName: projectNameSchema.optional(),
+  items: z.array(batchItemSchema).min(1).max(100),
 });
 
 export const recallMemorySchema = z.object({
@@ -169,6 +204,24 @@ export const updateTodoSchema = z.object({
   projectName: projectNameSchema.optional(),
   status: todoStatusSchema,
   note: z.string().max(1000).optional(),
+});
+
+// ============================================
+// Memory Versioning Schemas
+// ============================================
+
+export const listMemoryVersionsSchema = z.object({
+  projectName: projectNameSchema.optional(),
+  memoryId: z.string().min(1).optional(),
+  limit: z.number().int().min(1).max(500).default(100),
+});
+
+export const rollbackMemoryVersionSchema = z.object({
+  projectName: projectNameSchema.optional(),
+});
+
+export const redactMemoryVersionSchema = z.object({
+  projectName: projectNameSchema.optional(),
 });
 
 // ============================================

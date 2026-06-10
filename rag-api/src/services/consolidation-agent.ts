@@ -18,10 +18,11 @@
 import { llm } from './llm';
 import { sensoryBuffer, type SensoryEvent } from './sensory-buffer';
 import { workingMemory, type WorkingMemorySlot } from './working-memory';
-import { memoryLtm, type SemanticSubtype, type Anchor, type StoreEpisodicOptions, type StoreSemanticOptions } from './memory-ltm';
+import { memoryLtm, type SemanticSubtype, type Anchor } from './memory-ltm';
 import { relationshipClassifier, type ClassifiedRelation } from './relationship-classifier';
 import { vectorStore } from './vector-store';
 import { embeddingService } from './embedding';
+import { graphStore } from './graph-store';
 import { logger } from '../utils/logger';
 import config from '../config';
 import type { MemoryRelation } from './memory';
@@ -41,9 +42,9 @@ export interface ConsolidationResult {
 interface ExtractedPattern {
   type: 'repeated_query' | 'error_chain' | 'file_cluster' | 'decision_point';
   description: string;
-  events: string[];        // event summaries
+  events: string[]; // event summaries
   files: string[];
-  significance: number;    // 0-1
+  significance: number; // 0-1
 }
 
 interface AbstractedMemory {
@@ -52,7 +53,19 @@ interface AbstractedMemory {
   confidence: number;
   tags: string[];
   files: string[];
-  isEpisodic: boolean;     // true = store as episodic, false = semantic
+  isEpisodic: boolean; // true = store as episodic, false = semantic
+}
+
+/**
+ * Raised when an LLM step (pattern detection / abstraction) fails or times out.
+ * Propagated out of consolidate() so the BullMQ job fails and is retried,
+ * rather than reporting a fake "success" with zero output.
+ */
+export class ConsolidationFailedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ConsolidationFailedError';
+  }
 }
 
 // ── Prompts ───────────────────────────────────────────────
@@ -130,20 +143,28 @@ class ConsolidationAgentService {
       }
 
       // Step 2: PATTERN DETECTION
-      const patterns = await this.detectPatterns(wmSlots, events, timeout - (Date.now() - startTime));
+      const patterns = await this.detectPatterns(
+        wmSlots,
+        events,
+        timeout - (Date.now() - startTime)
+      );
       result.patternsDetected = patterns.length;
 
-      if (Date.now() - startTime > timeout) return this.finalize(result, startTime);
+      if (Date.now() - startTime > timeout)
+        return this.finalize(result, startTime, projectName, sessionId);
 
       // Step 3: SIGNIFICANCE TAGGING (implicit in pattern detection scores)
-      const significantPatterns = patterns.filter(p => p.significance >= 0.5);
+      const significantPatterns = patterns.filter((p) => p.significance >= 0.5);
 
       // Step 4: ABSTRACTION — convert patterns + WM slots to memories
       const abstracted = await this.abstract(
-        wmSlots, significantPatterns, timeout - (Date.now() - startTime)
+        wmSlots,
+        significantPatterns,
+        timeout - (Date.now() - startTime)
       );
 
-      if (Date.now() - startTime > timeout) return this.finalize(result, startTime);
+      if (Date.now() - startTime > timeout)
+        return this.finalize(result, startTime, projectName, sessionId);
 
       // Step 5 & 6 & 7: Store memories with relationships and anchors
       for (const mem of abstracted) {
@@ -153,6 +174,9 @@ class ConsolidationAgentService {
           // Step 7: ANCHORING — extract file/symbol references
           const anchors = this.extractAnchors(mem.content, mem.files);
           result.anchors.push(...anchors);
+
+          // File paths from anchors for graph cross-linking
+          const anchorFiles = anchors.filter((a) => a.type === 'file').map((a) => a.path);
 
           if (mem.isEpisodic) {
             // Store as episodic
@@ -165,22 +189,29 @@ class ConsolidationAgentService {
               anchors,
             });
             result.episodic.push({ id: stored.id, content: stored.content });
+
+            // Cross-link memory → files in graph
+            await graphStore.indexMemoryEdges(projectName, stored.id, 'episodic', anchorFiles);
           } else {
             // Step 5 & 6: Classify relationships with existing semantic memories
             let relationships: MemoryRelation[] = [];
             try {
               relationships = await this.classifyWithExisting(
-                projectName, mem.content, mem.subtype
+                projectName,
+                mem.content,
+                mem.subtype
               );
               result.relationships.push(
-                ...relationships.map(r => ({
+                ...relationships.map((r) => ({
                   targetId: r.targetId,
                   type: r.type as any,
                   reason: r.reason ?? '',
                   confidence: 0.7,
                 }))
               );
-            } catch { /* non-critical */ }
+            } catch {
+              /* non-critical */
+            }
 
             // Store as semantic
             const stored = await memoryLtm.storeSemantic({
@@ -194,17 +225,27 @@ class ConsolidationAgentService {
               source: 'consolidation',
             });
             result.semantic.push({ id: stored.id, content: stored.content, subtype: mem.subtype });
+
+            // Cross-link memory → files in graph
+            await graphStore.indexMemoryEdges(projectName, stored.id, mem.subtype, anchorFiles);
           }
         } catch (error: any) {
           logger.debug('Failed to store consolidated memory', { error: error.message });
         }
       }
 
-      return this.finalize(result, startTime);
+      return this.finalize(result, startTime, projectName, sessionId);
     } catch (error: any) {
       logger.warn('Consolidation failed', { error: error.message, projectName, sessionId });
       result.durationMs = Date.now() - startTime;
-      return result;
+      // Ingest consolidation failure into sensory buffer (best-effort observability).
+      this.ingestConsolidationEvent(projectName, sessionId, result, false, error.message);
+      // THROW instead of returning a partial "success": this fails the BullMQ job so
+      // it retries, and lets callers guard workingMemory.clear() (don't wipe the 24h
+      // buffer on a failed/empty run).
+      throw error instanceof ConsolidationFailedError
+        ? error
+        : new ConsolidationFailedError(`Consolidation failed: ${error.message}`);
     }
   }
 
@@ -219,22 +260,43 @@ class ConsolidationAgentService {
 
     // Build event summary for LLM
     const eventSummary = [
-      ...wmSlots.map(s => `[WM] ${s.toolName}: ${s.content} (salience=${s.salience.toFixed(1)}, files=${s.files.join(',')})`),
-      ...events.slice(-50).map(e => `[${e.success ? 'OK' : 'ERR'}] ${e.toolName}: ${e.inputSummary} (${e.durationMs}ms)`),
+      ...wmSlots.map(
+        (s) =>
+          `[WM] ${s.toolName}: ${s.content} (salience=${s.salience.toFixed(1)}, files=${s.files.join(',')})`
+      ),
+      ...events
+        .slice(-50)
+        .map(
+          (e) =>
+            `[${e.success ? 'OK' : 'ERR'}] ${e.toolName}: ${e.inputSummary} (${e.durationMs}ms)`
+        ),
     ].join('\n');
 
     try {
+      logger.debug('Consolidation REPLAY input', {
+        wmSlots: wmSlots.length,
+        events: events.length,
+        eventSummaryLen: eventSummary.length,
+        eventSummaryPreview: eventSummary.slice(0, 500),
+      });
+
       const result = await this.llmCall(
         `Session events:\n${eventSummary.slice(0, 3000)}`,
         PATTERN_DETECTION_PROMPT,
         Math.min(remainingMs, config.CONSOLIDATION_LLM_TIMEOUT_MS)
       );
 
+      logger.debug('Consolidation PATTERN_DETECTION output', {
+        rawLen: result.length,
+        rawPreview: result.slice(0, 500),
+      });
+
       const parsed = this.parseJson<{ patterns: ExtractedPattern[] }>(result);
       return parsed?.patterns ?? [];
-    } catch (error) {
-      logger.debug('Pattern detection LLM call failed', { error });
-      return [];
+    } catch (error: any) {
+      logger.warn('Pattern detection LLM call failed', { error: error.message });
+      // Surface as a failure so consolidate() can fail the job (BullMQ retry).
+      throw new ConsolidationFailedError(`Pattern detection failed: ${error.message}`);
     }
   }
 
@@ -248,11 +310,25 @@ class ConsolidationAgentService {
     if (wmSlots.length === 0 && patterns.length === 0) return [];
 
     const observations = [
-      ...patterns.map(p => `[PATTERN: ${p.type}] ${p.description} (files: ${p.files.join(', ')})`),
+      ...patterns.map(
+        (p) => `[PATTERN: ${p.type}] ${p.description} (files: ${p.files.join(', ')})`
+      ),
       ...wmSlots
-        .filter(s => s.salience >= 0.5)
-        .map(s => `[${s.toolName}] ${s.content} (files: ${s.files.join(', ')})`),
+        .filter((s) => s.salience >= 0.5)
+        .map((s) => `[${s.toolName}] ${s.content} (files: ${s.files.join(', ')})`),
     ].join('\n');
+
+    logger.debug('Consolidation ABSTRACTION input', {
+      patternsCount: patterns.length,
+      wmSlotsAboveThreshold: wmSlots.filter((s) => s.salience >= 0.5).length,
+      observationsLen: observations.length,
+      observationsPreview: observations.slice(0, 500),
+    });
+
+    if (!observations.trim()) {
+      logger.debug('Consolidation ABSTRACTION: empty observations, skipping LLM call');
+      return [];
+    }
 
     try {
       const result = await this.llmCall(
@@ -261,24 +337,31 @@ class ConsolidationAgentService {
         Math.min(remainingMs, config.CONSOLIDATION_LLM_TIMEOUT_MS)
       );
 
+      logger.debug('Consolidation ABSTRACTION output', {
+        rawLen: result.length,
+        rawPreview: result.slice(0, 500),
+      });
+
       const parsed = this.parseJson<{ memories: AbstractedMemory[] }>(result);
+      // A well-formed empty list is a legitimate "nothing worth storing" outcome.
       if (!parsed?.memories) return [];
 
       // Validate and normalize
       const validSubtypes = new Set<string>(['decision', 'insight', 'pattern', 'procedure']);
       return parsed.memories
-        .filter(m => m.content && m.content.length > 10)
-        .map(m => ({
+        .filter((m) => m.content && m.content.length > 10)
+        .map((m) => ({
           content: m.content.slice(0, 2000),
-          subtype: validSubtypes.has(m.subtype) ? m.subtype : 'insight' as SemanticSubtype,
+          subtype: validSubtypes.has(m.subtype) ? m.subtype : ('insight' as SemanticSubtype),
           confidence: Math.min(1, Math.max(0, m.confidence ?? 0.6)),
           tags: Array.isArray(m.tags) ? m.tags.slice(0, 10) : [],
           files: Array.isArray(m.files) ? m.files.slice(0, 20) : [],
           isEpisodic: m.isEpisodic ?? false,
         }));
-    } catch (error) {
+    } catch (error: any) {
       logger.debug('Abstraction LLM call failed', { error });
-      return [];
+      // Surface as a failure so consolidate() can fail the job (BullMQ retry).
+      throw new ConsolidationFailedError(`Abstraction failed: ${error?.message ?? error}`);
     }
   }
 
@@ -305,14 +388,14 @@ class ConsolidationAgentService {
     // Use LLM classifier
     const classified = await relationshipClassifier.classify(
       { content, type: subtype },
-      candidates.map(c => ({
+      candidates.map((c) => ({
         id: c.id,
         content: (c.payload.content as string) ?? '',
         type: (c.payload.subtype as string) ?? 'insight',
       }))
     );
 
-    return classified.map(c => ({
+    return classified.map((c) => ({
       targetId: c.targetId,
       type: c.type as any,
       reason: c.reason,
@@ -326,7 +409,7 @@ class ConsolidationAgentService {
 
     // File anchors from explicit file list
     for (const file of files) {
-      if (file && file.includes('/') || file.includes('.')) {
+      if ((file && file.includes('/')) || file.includes('.')) {
         anchors.push({ type: 'file', path: file });
       }
     }
@@ -335,7 +418,7 @@ class ConsolidationAgentService {
     const filePattern = /(?:[\w@/.-]+\/)?[\w.-]+\.(ts|js|tsx|jsx|py|go|rs|vue|json|yaml|yml)/g;
     const contentFiles = content.match(filePattern) ?? [];
     for (const f of contentFiles) {
-      if (!anchors.some(a => a.path === f)) {
+      if (!anchors.some((a) => a.path === f)) {
         anchors.push({ type: 'file', path: f });
       }
     }
@@ -353,21 +436,40 @@ class ConsolidationAgentService {
   // ── Helpers ───────────────────────────────────────────────
 
   private async llmCall(prompt: string, systemPrompt: string, timeoutMs: number): Promise<string> {
+    // Enforce CONSOLIDATION_LLM_TIMEOUT_MS by aborting the in-flight provider call:
+    // completeWithBestProvider now threads `signal` into the actual HTTP/SDK request
+    // (axios + Anthropic SDK both honor it), so controller.abort() truly cancels the
+    // call rather than leaking it. The Promise.race against the timer remains as a
+    // backstop so we reject promptly even if a provider ignores the signal.
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    let timer: NodeJS.Timeout | undefined;
 
-    try {
-      const result = await llm.completeWithBestProvider(prompt, {
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timer = setTimeout(
+        () => {
+          controller.abort();
+          reject(new Error(`Consolidation LLM call timed out after ${timeoutMs}ms`));
+        },
+        Math.max(1, timeoutMs)
+      );
+    });
+
+    const callPromise = llm
+      .completeWithBestProvider(prompt, {
         complexity: 'utility',
         systemPrompt,
-        format: 'json',
+        // Note: format:'json' causes empty responses on qwen3.5:9b — rely on prompt instruction instead
         maxTokens: 2000,
         temperature: 0.2,
         think: false,
-      });
-      return result.text;
+        signal: controller.signal,
+      })
+      .then((result) => result.text);
+
+    try {
+      return await Promise.race([callPromise, timeoutPromise]);
     } finally {
-      clearTimeout(timer);
+      if (timer) clearTimeout(timer);
     }
   }
 
@@ -382,7 +484,12 @@ class ConsolidationAgentService {
     }
   }
 
-  private finalize(result: ConsolidationResult, startTime: number): ConsolidationResult {
+  private finalize(
+    result: ConsolidationResult,
+    startTime: number,
+    projectName?: string,
+    sessionId?: string
+  ): ConsolidationResult {
     result.durationMs = Date.now() - startTime;
     logger.info('Consolidation complete', {
       episodic: result.episodic.length,
@@ -392,7 +499,47 @@ class ConsolidationAgentService {
       events: result.totalEventsProcessed,
       durationMs: result.durationMs,
     });
+
+    // Ingest consolidation result into sensory buffer
+    if (projectName && sessionId) {
+      this.ingestConsolidationEvent(projectName, sessionId, result, true);
+    }
+
     return result;
+  }
+
+  /** Fire-and-forget: capture consolidation result as sensory event */
+  private ingestConsolidationEvent(
+    projectName: string,
+    sessionId: string,
+    result: ConsolidationResult,
+    success: boolean,
+    errorMessage?: string
+  ): void {
+    const outputParts = [
+      `episodic: ${result.episodic.length}`,
+      `semantic: ${result.semantic.length}`,
+      `patterns: ${result.patternsDetected}`,
+      `events: ${result.totalEventsProcessed}`,
+      `duration: ${result.durationMs}ms`,
+    ];
+    if (errorMessage) outputParts.push(`error: ${errorMessage}`);
+
+    sensoryBuffer
+      .append(projectName, sessionId, {
+        toolName: 'consolidation',
+        inputSummary: `Consolidation for session ${sessionId}`,
+        outputSummary: outputParts.join(', '),
+        filesTouched: result.anchors
+          .filter((a) => a.type === 'file')
+          .map((a) => a.path)
+          .slice(0, 20),
+        success,
+        durationMs: result.durationMs,
+        salience: success ? 0.85 : 1.0,
+        timestamp: new Date().toISOString(),
+      })
+      .catch(() => {});
   }
 }
 

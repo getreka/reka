@@ -36,17 +36,19 @@ const STALE_AGE_MS = parseInt(process.env.STALE_MEMORY_AGE_DAYS || '30', 10) * 8
 const LOW_CONFIDENCE_THRESHOLD = 0.4;
 
 class StaleMemoryDetector {
-
   /**
    * Detect potentially stale memories for a project.
    */
   async detectStaleMemories(projectName: string): Promise<StaleDetectionResult> {
-    const collectionName = `${projectName}_memory`;
+    // Durable memories live in `_agent_memory` (see MemoryService.getCollectionName),
+    // NOT `_memory`. The old name silently 404'd, returning zero stale candidates.
+    const collectionName = `${projectName}_agent_memory`;
     const staleMemories: StaleMemory[] = [];
     let totalScanned = 0;
+    const now = Date.now();
 
+    // ── Phase 1: durable scan (isolated — a 404 here must NOT skip the LTM scan) ──
     try {
-      const now = Date.now();
       let offset: string | number | undefined = undefined;
 
       do {
@@ -73,9 +75,13 @@ class StaleMemoryDetector {
           // Rule 1: Already superseded
           if (supersededBy) {
             staleMemories.push({
-              id, content: content.slice(0, 200), type,
+              id,
+              content: content.slice(0, 200),
+              type,
               reason: `Superseded by ${supersededBy}`,
-              createdAt, confidence, tags,
+              createdAt,
+              confidence,
+              tags,
             });
             continue;
           }
@@ -85,20 +91,33 @@ class StaleMemoryDetector {
             const ageMs = now - new Date(createdAt).getTime();
             if (ageMs > STALE_AGE_MS && source === 'auto_conversation' && !validated) {
               staleMemories.push({
-                id, content: content.slice(0, 200), type,
+                id,
+                content: content.slice(0, 200),
+                type,
                 reason: `Auto-extracted ${Math.round(ageMs / 86_400_000)}d ago, never validated`,
-                createdAt, confidence, tags,
+                createdAt,
+                confidence,
+                tags,
               });
               continue;
             }
           }
 
           // Rule 3: Low confidence auto-extracted
-          if (source === 'auto_conversation' && confidence !== undefined && confidence < LOW_CONFIDENCE_THRESHOLD && !validated) {
+          if (
+            source === 'auto_conversation' &&
+            confidence !== undefined &&
+            confidence < LOW_CONFIDENCE_THRESHOLD &&
+            !validated
+          ) {
             staleMemories.push({
-              id, content: content.slice(0, 200), type,
+              id,
+              content: content.slice(0, 200),
+              type,
               reason: `Low confidence (${confidence.toFixed(2)}) auto-extracted, never validated`,
-              createdAt, confidence, tags,
+              createdAt,
+              confidence,
+              tags,
             });
             continue;
           }
@@ -108,9 +127,13 @@ class StaleMemoryDetector {
             const ageMs = now - new Date(createdAt).getTime();
             if (ageMs > 90 * 86_400_000 && type === 'note') {
               staleMemories.push({
-                id, content: content.slice(0, 200), type,
+                id,
+                content: content.slice(0, 200),
+                type,
                 reason: `Generic note older than 90 days`,
-                createdAt, confidence, tags,
+                createdAt,
+                confidence,
+                tags,
               });
             }
           }
@@ -118,8 +141,22 @@ class StaleMemoryDetector {
 
         offset = response.next_page_offset as string | number | undefined;
       } while (offset && totalScanned < 10000);
+    } catch (error: any) {
+      // Durable collection may not exist yet (fresh project). Swallow 404/400 so
+      // the LTM scan below still runs; re-throw genuine errors.
+      if (error.status !== 404 && error.status !== 400) {
+        logger.error('Stale memory detection (durable scan) failed', {
+          error: error.message,
+          projectName,
+        });
+        throw error;
+      }
+    }
 
-      // Phase 2: Also scan LTM collections with Ebbinghaus decay rule
+    // ── Phase 2: scan LTM collections with Ebbinghaus decay rule ──
+    // Runs regardless of whether the durable scan found a collection. This is the
+    // path that actually surfaces never-accessed episodic memories about to decay.
+    try {
       if (config.CONSOLIDATION_ENABLED) {
         for (const ltmCollection of [
           `${projectName}_memory_episodic`,
@@ -141,7 +178,7 @@ class StaleMemoryDetector {
                 const id = String(point.id);
                 const content = (payload.content as string) || '';
                 const type = (payload.subtype ?? payload.type ?? 'note') as string;
-                const createdAt = (payload.timestamp ?? payload.createdAt) as string || '';
+                const createdAt = ((payload.timestamp ?? payload.createdAt) as string) || '';
                 const stability = (payload.stability as number) ?? 7;
                 const accessCount = (payload.accessCount as number) ?? 0;
                 const tags = (payload.tags as string[]) || [];
@@ -151,9 +188,12 @@ class StaleMemoryDetector {
                   const retention = computeRetention(createdAt, stability, accessCount);
                   if (retention < 0.1) {
                     staleMemories.push({
-                      id, content: content.slice(0, 200), type,
+                      id,
+                      content: content.slice(0, 200),
+                      type,
                       reason: `Ebbinghaus retention ${(retention * 100).toFixed(1)}%, never accessed (stability=${stability}d)`,
-                      createdAt, tags,
+                      createdAt,
+                      tags,
                     });
                   }
                 }
@@ -166,21 +206,23 @@ class StaleMemoryDetector {
           }
         }
       }
-
-      logger.info('Stale memory detection complete', {
-        projectName,
-        totalScanned,
-        staleCount: staleMemories.length,
-      });
-
-      return { staleMemories, totalScanned, projectName };
     } catch (error: any) {
-      if (error.status === 404) {
-        return { staleMemories: [], totalScanned: 0, projectName };
+      // LTM scan failed unexpectedly — keep whatever the durable scan collected.
+      if (error.status !== 404 && error.status !== 400) {
+        logger.error('Stale memory detection (LTM scan) failed', {
+          error: error.message,
+          projectName,
+        });
       }
-      logger.error('Stale memory detection failed', { error: error.message, projectName });
-      throw error;
     }
+
+    logger.info('Stale memory detection complete', {
+      projectName,
+      totalScanned,
+      staleCount: staleMemories.length,
+    });
+
+    return { staleMemories, totalScanned, projectName };
   }
 }
 

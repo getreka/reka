@@ -17,17 +17,17 @@ import { logger } from '../utils/logger';
 // TTL values in seconds - multi-level strategy
 const TTL = {
   // Session-level (L1) - hot cache
-  SESSION_EMBEDDING: 1800,      // 30 minutes
-  SESSION_SEARCH: 1800,         // 30 minutes
+  SESSION_EMBEDDING: 1800, // 30 minutes
+  SESSION_SEARCH: 1800, // 30 minutes
 
   // Project-level (L2) - warm cache
-  EMBEDDING: 3600,              // 1 hour
-  SEARCH: 1800,                 // 30 minutes
-  COLLECTION_INFO: 30,          // 30 seconds
-  CONFLUENCE_PAGE: 3600,        // 1 hour
+  EMBEDDING: 3600, // 1 hour
+  SEARCH: 1800, // 30 minutes
+  COLLECTION_INFO: 30, // 30 seconds
+  CONFLUENCE_PAGE: 3600, // 1 hour
 
   // Cross-project (L3) - cold cache
-  GLOBAL_EMBEDDING: 86400,      // 24 hours
+  GLOBAL_EMBEDDING: 86400, // 24 hours
 };
 
 // Cache key prefixes
@@ -219,11 +219,7 @@ class CacheService {
   /**
    * Get or set with callback
    */
-  async getOrSet<T>(
-    key: string,
-    fn: () => Promise<T>,
-    ttlSeconds?: number
-  ): Promise<T> {
+  async getOrSet<T>(key: string, fn: () => Promise<T>, ttlSeconds?: number): Promise<T> {
     const cached = await this.get<T>(key);
     if (cached !== null) {
       return cached;
@@ -257,10 +253,7 @@ class CacheService {
   /**
    * Get or compute embedding
    */
-  async getOrSetEmbedding(
-    text: string,
-    compute: () => Promise<number[]>
-  ): Promise<number[]> {
+  async getOrSetEmbedding(text: string, compute: () => Promise<number[]>): Promise<number[]> {
     const key = `emb:${this.hash(text)}`;
     return this.getOrSet(key, compute, TTL.EMBEDDING);
   }
@@ -442,11 +435,7 @@ class CacheService {
         TTL.EMBEDDING
       ),
       // L3: Global cache
-      this.set(
-        `${PREFIX.GLOBAL}:${PREFIX.EMBEDDING}:${textHash}`,
-        embedding,
-        TTL.GLOBAL_EMBEDDING
-      ),
+      this.set(`${PREFIX.GLOBAL}:${PREFIX.EMBEDDING}:${textHash}`, embedding, TTL.GLOBAL_EMBEDDING),
     ]);
   }
 
@@ -488,7 +477,7 @@ class CacheService {
           const l2Key = `${PREFIX.PROJECT}:${options.projectName}:${PREFIX.EMBEDDING}:${textHash}`;
           const l3Key = `${PREFIX.GLOBAL}:${PREFIX.EMBEDDING}:${textHash}`;
 
-          const value = await this.client!.get(l2Key) || await this.client!.get(l3Key);
+          const value = (await this.client!.get(l2Key)) || (await this.client!.get(l3Key));
           if (value) {
             const l1Key = `${PREFIX.SESSION}:${options.sessionId}:${PREFIX.EMBEDDING}:${textHash}`;
             await this.client!.setex(l1Key, TTL.SESSION_EMBEDDING, value);
@@ -578,11 +567,7 @@ class CacheService {
         TTL.SESSION_SEARCH
       ),
       // L2: Project cache
-      this.set(
-        `${PREFIX.SEARCH}:${collection}:${queryHash}`,
-        results,
-        TTL.SEARCH
-      ),
+      this.set(`${PREFIX.SEARCH}:${collection}:${queryHash}`, results, TTL.SEARCH),
     ]);
   }
 
@@ -615,18 +600,26 @@ class CacheService {
 
     try {
       const pipeline = this.client!.pipeline();
-      const metrics = ['l1_hits', 'l2_hits', 'l3_hits', 'misses', 'search_l1_hits', 'search_l2_hits', 'search_misses'];
+      const metrics = [
+        'l1_hits',
+        'l2_hits',
+        'l3_hits',
+        'misses',
+        'search_l1_hits',
+        'search_l2_hits',
+        'search_misses',
+      ];
 
       for (const metric of metrics) {
         pipeline.get(`${PREFIX.STATS}:${sessionId}:${metric}`);
       }
 
       const results = await pipeline.exec();
-      const values = results?.map(r => parseInt(r[1] as string || '0', 10)) || [];
+      const values = results?.map((r) => parseInt((r[1] as string) || '0', 10)) || [];
 
       const l1Hits = values[0] + values[4]; // embedding + search L1 hits
       const l2Hits = values[1] + values[5]; // embedding + search L2 hits
-      const l3Hits = values[2];             // embedding L3 hits only
+      const l3Hits = values[2]; // embedding L3 hits only
       const misses = values[3] + values[6]; // embedding + search misses
 
       const totalHits = l1Hits + l2Hits + l3Hits;

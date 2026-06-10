@@ -114,9 +114,27 @@ describe('SensoryBufferService', () => {
   describe('read', () => {
     it('calls XRANGE with correct key', async () => {
       mockRedis.xrange.mockResolvedValue([
-        ['1-0', ['toolName', 'search_codebase', 'inputSummary', 'test', 'outputSummary', 'ok',
-                 'filesTouched', '["a.ts"]', 'success', '1', 'durationMs', '100',
-                 'salience', '0.5', 'timestamp', '2026-01-01T00:00:00Z']],
+        [
+          '1-0',
+          [
+            'toolName',
+            'search_codebase',
+            'inputSummary',
+            'test',
+            'outputSummary',
+            'ok',
+            'filesTouched',
+            '["a.ts"]',
+            'success',
+            '1',
+            'durationMs',
+            '100',
+            'salience',
+            '0.5',
+            'timestamp',
+            '2026-01-01T00:00:00Z',
+          ],
+        ],
       ]);
 
       const events = await sensoryBuffer.read('proj', 'sess1', { count: 10 });

@@ -11,7 +11,9 @@ const mocks = vi.hoisted(() => ({
 
 vi.mock('../../services/vector-store', () => ({ vectorStore: { search: mocks.search } }));
 vi.mock('../../services/embedding', () => ({ embeddingService: { embed: mocks.embed } }));
-vi.mock('../../services/llm', () => ({ llm: { complete: mocks.complete, completeWithBestProvider: mocks.complete } }));
+vi.mock('../../services/llm', () => ({
+  llm: { complete: mocks.complete, completeWithBestProvider: mocks.complete },
+}));
 vi.mock('../../services/memory', () => ({ memoryService: { recall: mocks.recall } }));
 
 import reviewRoutes from '../../routes/review';
@@ -35,8 +37,9 @@ describe('Review Routes', () => {
 
   describe('POST /api/review', () => {
     it('reviews code', async () => {
-      const res = await withProject(request(app).post('/api/review'))
-        .send({ code: 'function foo() { return 1; }' });
+      const res = await withProject(request(app).post('/api/review')).send({
+        code: 'function foo() { return 1; }',
+      });
 
       expect(res.status).toBe(200);
       expect(res.body.review).toBeDefined();
@@ -44,23 +47,22 @@ describe('Review Routes', () => {
     });
 
     it('reviews a diff', async () => {
-      const res = await withProject(request(app).post('/api/review'))
-        .send({ diff: '+ added line\n- removed line' });
+      const res = await withProject(request(app).post('/api/review')).send({
+        diff: '+ added line\n- removed line',
+      });
 
       expect(res.status).toBe(200);
       expect(res.body.review).toBeDefined();
     });
 
     it('returns 400 when both code and diff are missing', async () => {
-      const res = await withProject(request(app).post('/api/review'))
-        .send({});
+      const res = await withProject(request(app).post('/api/review')).send({});
 
       expect(res.status).toBe(400);
     });
 
     it('returns 400 when projectName is missing', async () => {
-      const res = await request(app).post('/api/review')
-        .send({ code: 'function foo() {}' });
+      const res = await request(app).post('/api/review').send({ code: 'function foo() {}' });
       expect(res.status).toBe(400);
     });
 
@@ -69,8 +71,9 @@ describe('Review Routes', () => {
         { memory: { type: 'context', content: 'Use camelCase naming' }, score: 0.8 },
       ]);
 
-      const res = await withProject(request(app).post('/api/review'))
-        .send({ code: 'function foo() {}' });
+      const res = await withProject(request(app).post('/api/review')).send({
+        code: 'function foo() {}',
+      });
 
       expect(res.status).toBe(200);
       // recall is called twice: once for patterns, once for ADRs
@@ -80,8 +83,9 @@ describe('Review Routes', () => {
     it('handles non-JSON LLM response gracefully', async () => {
       mocks.complete.mockResolvedValue({ text: 'Just a text review, not JSON' });
 
-      const res = await withProject(request(app).post('/api/review'))
-        .send({ code: 'function foo() {}' });
+      const res = await withProject(request(app).post('/api/review')).send({
+        code: 'function foo() {}',
+      });
 
       expect(res.status).toBe(200);
       expect(res.body.review.summary).toBe('Just a text review, not JSON');
@@ -94,7 +98,8 @@ describe('Review Routes', () => {
         text: '{"riskLevel":"low","vulnerabilities":[],"summary":"safe"}',
       });
 
-      const res = await request(app).post('/api/review/security')
+      const res = await request(app)
+        .post('/api/review/security')
         .send({ code: 'const x = sanitize(input);' });
 
       expect(res.status).toBe(200);
@@ -102,8 +107,7 @@ describe('Review Routes', () => {
     });
 
     it('returns 400 when code is missing', async () => {
-      const res = await request(app).post('/api/review/security')
-        .send({});
+      const res = await request(app).post('/api/review/security').send({});
       expect(res.status).toBe(400);
     });
   });
@@ -114,7 +118,8 @@ describe('Review Routes', () => {
         text: '{"complexity":"medium","metrics":{},"suggestions":[],"summary":"ok"}',
       });
 
-      const res = await request(app).post('/api/review/complexity')
+      const res = await request(app)
+        .post('/api/review/complexity')
         .send({ code: 'function complex() { if (a) { if (b) { } } }' });
 
       expect(res.status).toBe(200);

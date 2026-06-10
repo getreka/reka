@@ -13,30 +13,30 @@ The memory governance system implements a **two-tier storage model** that separa
 
 ## Key Files and Their Roles
 
-| File | Role |
-|------|------|
-| `/home/ake/shared-ai-infra/rag-api/src/services/memory-governance.ts` | **Central governance service** -- routing, quarantine, promotion, rejection, adaptive threshold, feedback-driven maintenance |
-| `/home/ake/shared-ai-infra/rag-api/src/services/memory.ts` | **Durable memory service** -- CRUD on `{project}_agent_memory`, relationship detection, aging, merge |
-| `/home/ake/shared-ai-infra/rag-api/src/services/quality-gates.ts` | **Quality gates** -- typecheck, test, blast-radius checks run before optional gated promotion |
-| `/home/ake/shared-ai-infra/rag-api/src/services/feedback.ts` | **Feedback service** -- collects accurate/outdated/incorrect signals, provides counts for auto-promote/prune |
-| `/home/ake/shared-ai-infra/rag-api/src/services/conversation-analyzer.ts` | **Auto-learning** -- extracts learnings from conversations, routes them through governance |
-| `/home/ake/shared-ai-infra/rag-api/src/services/fact-extractor.ts` | **Agent fact extraction** -- parses agent ReAct traces, saves structured facts to quarantine |
-| `/home/ake/shared-ai-infra/rag-api/src/services/session-context.ts` | **Session lifecycle** -- on `endSession`, saves pending learnings through governance |
-| `/home/ake/shared-ai-infra/rag-api/src/routes/memory.ts` | **HTTP API** -- endpoints for promote, quarantine list, recall-durable, maintenance |
-| `/home/ake/shared-ai-infra/mcp-server/src/tools/memory.ts` | **MCP tools** -- `promote_memory`, `review_memories`, `validate_memory`, `memory_maintenance` |
-| `/home/ake/shared-ai-infra/mcp-server/src/context-enrichment.ts` | **Context enrichment** -- recalls ONLY from durable (`/api/memory/recall-durable`) |
-| `/home/ake/shared-ai-infra/rag-api/src/__tests__/services/memory-governance.test.ts` | **Unit tests** for the governance service |
+| File                                                                                 | Role                                                                                                                         |
+| ------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------- |
+| `/home/ake/shared-ai-infra/rag-api/src/services/memory-governance.ts`                | **Central governance service** -- routing, quarantine, promotion, rejection, adaptive threshold, feedback-driven maintenance |
+| `/home/ake/shared-ai-infra/rag-api/src/services/memory.ts`                           | **Durable memory service** -- CRUD on `{project}_agent_memory`, relationship detection, aging, merge                         |
+| `/home/ake/shared-ai-infra/rag-api/src/services/quality-gates.ts`                    | **Quality gates** -- typecheck, test, blast-radius checks run before optional gated promotion                                |
+| `/home/ake/shared-ai-infra/rag-api/src/services/feedback.ts`                         | **Feedback service** -- collects accurate/outdated/incorrect signals, provides counts for auto-promote/prune                 |
+| `/home/ake/shared-ai-infra/rag-api/src/services/conversation-analyzer.ts`            | **Auto-learning** -- extracts learnings from conversations, routes them through governance                                   |
+| `/home/ake/shared-ai-infra/rag-api/src/services/fact-extractor.ts`                   | **Agent fact extraction** -- parses agent ReAct traces, saves structured facts to quarantine                                 |
+| `/home/ake/shared-ai-infra/rag-api/src/services/session-context.ts`                  | **Session lifecycle** -- on `endSession`, saves pending learnings through governance                                         |
+| `/home/ake/shared-ai-infra/rag-api/src/routes/memory.ts`                             | **HTTP API** -- endpoints for promote, quarantine list, recall-durable, maintenance                                          |
+| `/home/ake/shared-ai-infra/mcp-server/src/tools/memory.ts`                           | **MCP tools** -- `promote_memory`, `review_memories`, `validate_memory`, `memory_maintenance`                                |
+| `/home/ake/shared-ai-infra/mcp-server/src/context-enrichment.ts`                     | **Context enrichment** -- recalls ONLY from durable (`/api/memory/recall-durable`)                                           |
+| `/home/ake/shared-ai-infra/rag-api/src/__tests__/services/memory-governance.test.ts` | **Unit tests** for the governance service                                                                                    |
 
 ---
 
 ## Qdrant Collections
 
-| Collection | Description |
-|------------|-------------|
-| `{project}_agent_memory` | **Durable storage** -- validated, promoted, and manually-created memories |
-| `{project}_memory_pending` | **Quarantine** -- auto-generated memories awaiting review/promotion |
-| `{project}_memory_feedback` | Stores per-memory feedback signals (accurate/outdated/incorrect) |
-| `{project}_search_feedback` | Stores per-query search feedback |
+| Collection                  | Description                                                               |
+| --------------------------- | ------------------------------------------------------------------------- |
+| `{project}_agent_memory`    | **Durable storage** -- validated, promoted, and manually-created memories |
+| `{project}_memory_pending`  | **Quarantine** -- auto-generated memories awaiting review/promotion       |
+| `{project}_memory_feedback` | Stores per-memory feedback signals (accurate/outdated/incorrect)          |
+| `{project}_search_feedback` | Stores per-query search feedback                                          |
 
 ---
 
@@ -51,6 +51,7 @@ async ingest(options: IngestOptions): Promise<Memory>
 ```
 
 **Routing logic:**
+
 - If `source` is undefined or does NOT start with `auto_` --> calls `memoryService.remember()` directly (durable)
 - If `source` starts with `auto_` (e.g., `auto_conversation`, `auto_pattern`, `auto_feedback`):
   1. Computes adaptive confidence threshold
@@ -81,6 +82,7 @@ async promote(projectName, memoryId, reason, evidence?, gateOptions?)
 ```
 
 **Steps:**
+
 1. **Optional quality gates**: If `runGates: true`, runs typecheck + test + blast-radius gates. Fails if any gate fails.
 2. Finds memory in quarantine via Qdrant scroll + filter
 3. Deletes from `{project}_memory_pending`
@@ -90,6 +92,7 @@ async promote(projectName, memoryId, reason, evidence?, gateOptions?)
    - `originalSource`, `originalConfidence`
 
 **Promotion reasons** (type `PromoteReason`):
+
 - `human_validated` -- a human reviewed and approved
 - `pr_merged` -- related PR was merged
 - `tests_passed` -- related tests passed
@@ -106,22 +109,24 @@ async reject(projectName, memoryId): Promise<boolean>
 
 Three gates, run before promotion if requested:
 
-| Gate | Action | Behavior |
-|------|--------|----------|
-| `typecheck` | `tsc --noEmit` | Fails if type errors found (30s timeout) |
-| `test` | Detects vitest/jest/npm test, runs related tests | Fails if tests fail (60s timeout) |
-| `blast_radius` | Graph traversal via graph-store | Warns if >20 files affected (informational) |
+| Gate           | Action                                           | Behavior                                    |
+| -------------- | ------------------------------------------------ | ------------------------------------------- |
+| `typecheck`    | `tsc --noEmit`                                   | Fails if type errors found (30s timeout)    |
+| `test`         | Detects vitest/jest/npm test, runs related tests | Fails if tests fail (60s timeout)           |
+| `blast_radius` | Graph traversal via graph-store                  | Warns if >20 files affected (informational) |
 
 ### 6. Feedback-Driven Maintenance
 
 The `runFeedbackMaintenance()` method combines two operations:
 
 #### Auto-Promote (`autoPromoteByFeedback`)
+
 - Queries `{project}_memory_feedback` for all memory feedback
 - Memories with **3+ "accurate" feedback** are automatically promoted from quarantine to durable
 - Uses `human_validated` reason with evidence noting the feedback count
 
 #### Auto-Prune (`autoPruneByFeedback`)
+
 - Memories with **2+ "incorrect" feedback** are deleted
 - Tries quarantine first, then durable (can prune from either tier)
 
@@ -155,12 +160,12 @@ When a new memory is stored via `memoryService.remember()`:
 
 ## Sources of Auto-Generated Memories
 
-| Source | `MemorySource` Value | Origin |
-|--------|---------------------|--------|
-| Conversation analysis | `auto_conversation` | `conversationAnalyzer.saveLearnings()` -- LLM extracts decisions/insights from text |
-| Agent fact extraction | `auto_pattern` | `factExtractor.saveFacts()` -- parses agent ReAct observation traces |
-| Auto-remember tool | `auto_pattern` | MCP `auto_remember` tool -- LLM classifies content, saves via `/api/memory` with metadata.source |
-| Session end | `auto_conversation` | `sessionContext.endSession()` -- saves pending learnings through governance |
+| Source                | `MemorySource` Value | Origin                                                                                           |
+| --------------------- | -------------------- | ------------------------------------------------------------------------------------------------ |
+| Conversation analysis | `auto_conversation`  | `conversationAnalyzer.saveLearnings()` -- LLM extracts decisions/insights from text              |
+| Agent fact extraction | `auto_pattern`       | `factExtractor.saveFacts()` -- parses agent ReAct observation traces                             |
+| Auto-remember tool    | `auto_pattern`       | MCP `auto_remember` tool -- LLM classifies content, saves via `/api/memory` with metadata.source |
+| Session end           | `auto_conversation`  | `sessionContext.endSession()` -- saves pending learnings through governance                      |
 
 All of these call `memoryGovernance.ingest()` with an `auto_*` source, so they all route through the quarantine path.
 
@@ -168,30 +173,30 @@ All of these call `memoryGovernance.ingest()` with an `auto_*` source, so they a
 
 ## HTTP API Endpoints
 
-| Endpoint | Method | Purpose |
-|----------|--------|---------|
-| `/api/memory` | POST | Create memory (routes auto-sources through governance) |
-| `/api/memory/recall` | POST | Recall from durable only |
-| `/api/memory/recall-durable` | POST | Explicit durable-only recall (used by enrichment) |
-| `/api/memory/quarantine` | GET | List quarantine memories for review |
-| `/api/memory/promote` | POST | Promote from quarantine to durable |
-| `/api/memory/:id/validate` | PATCH | Mark memory as validated/rejected |
-| `/api/memory/unvalidated` | GET | Get unvalidated auto-extracted memories |
-| `/api/memory/maintenance` | POST | Run auto-promote + auto-prune |
-| `/api/quality/run` | POST | Run quality gates on demand |
+| Endpoint                     | Method | Purpose                                                |
+| ---------------------------- | ------ | ------------------------------------------------------ |
+| `/api/memory`                | POST   | Create memory (routes auto-sources through governance) |
+| `/api/memory/recall`         | POST   | Recall from durable only                               |
+| `/api/memory/recall-durable` | POST   | Explicit durable-only recall (used by enrichment)      |
+| `/api/memory/quarantine`     | GET    | List quarantine memories for review                    |
+| `/api/memory/promote`        | POST   | Promote from quarantine to durable                     |
+| `/api/memory/:id/validate`   | PATCH  | Mark memory as validated/rejected                      |
+| `/api/memory/unvalidated`    | GET    | Get unvalidated auto-extracted memories                |
+| `/api/memory/maintenance`    | POST   | Run auto-promote + auto-prune                          |
+| `/api/quality/run`           | POST   | Run quality gates on demand                            |
 
 ---
 
 ## MCP Tool Surface
 
-| Tool | Purpose |
-|------|---------|
-| `remember` | Manual memory --> durable directly |
-| `auto_remember` | LLM-classified --> routes through governance (quarantine) |
-| `review_memories` | Lists quarantine (`{project}_memory_pending`) for human review |
-| `validate_memory` | Validates/rejects memory in durable storage |
-| `promote_memory` | Promotes quarantine --> durable, with optional quality gates |
-| `run_quality_gates` | Runs typecheck/test/blast-radius independently |
+| Tool                 | Purpose                                                                       |
+| -------------------- | ----------------------------------------------------------------------------- |
+| `remember`           | Manual memory --> durable directly                                            |
+| `auto_remember`      | LLM-classified --> routes through governance (quarantine)                     |
+| `review_memories`    | Lists quarantine (`{project}_memory_pending`) for human review                |
+| `validate_memory`    | Validates/rejects memory in durable storage                                   |
+| `promote_memory`     | Promotes quarantine --> durable, with optional quality gates                  |
+| `run_quality_gates`  | Runs typecheck/test/blast-radius independently                                |
 | `memory_maintenance` | Runs feedback-driven auto-promote (3+ accurate) and auto-prune (2+ incorrect) |
 
 ---

@@ -22,6 +22,7 @@ Overall the code is well-structured, readable, and properly delegates caching co
 **Severity**: High
 
 None of the public methods validate their input. An empty string, `null`, or extremely long text will be silently sent to the embedding provider, potentially causing:
+
 - Wasted cache entries for empty/whitespace strings
 - Provider errors or meaningless embeddings
 - Unbounded payload sizes to external APIs
@@ -54,9 +55,13 @@ All `axios.post()` calls are made without any timeout configuration. If the embe
 const response = await axios.post(`${config.BGE_M3_URL}/embed`, { text });
 
 // Recommended:
-const response = await axios.post(`${config.BGE_M3_URL}/embed`, { text }, {
-  timeout: 30000, // 30 seconds for single embed
-});
+const response = await axios.post(
+  `${config.BGE_M3_URL}/embed`,
+  { text },
+  {
+    timeout: 30000, // 30 seconds for single embed
+  },
+);
 ```
 
 Consider creating a shared axios instance with default timeouts:
@@ -167,8 +172,9 @@ async embed(text: string, options?: EmbedOptions): Promise<number[]> {
 **Severity**: Medium
 
 The `embedFull` and `embedBatchFull` methods call `computeEmbedding` or the BGE-specific methods directly without any cache layer. This means:
+
 - During indexing, the same code chunk re-indexed will always recompute its embedding
-- `embedFull`'s fallback calls `this.embed(text)` which *does* use cache, creating inconsistent caching behavior
+- `embedFull`'s fallback calls `this.embed(text)` which _does_ use cache, creating inconsistent caching behavior
 
 If caching is intentionally skipped for full embeddings, this should be documented. Otherwise, a cache layer for `FullEmbeddingResult` should be added.
 
@@ -183,7 +189,9 @@ None of the provider methods validate the shape of the HTTP response. If a provi
 // Recommended:
 const embedding = response.data.embedding;
 if (!Array.isArray(embedding) || embedding.length === 0) {
-  throw new Error(`Invalid embedding response from BGE-M3: expected number[], got ${typeof embedding}`);
+  throw new Error(
+    `Invalid embedding response from BGE-M3: expected number[], got ${typeof embedding}`,
+  );
 }
 return embedding;
 ```
@@ -251,6 +259,7 @@ const { embedding, level } = await cacheService.getSessionEmbedding(texts[i], { 
 ## Test Coverage Assessment
 
 The existing test file (`rag-api/src/__tests__/services/embedding.test.ts`, 175 lines) covers:
+
 - Basic caching (hit/miss) -- OK
 - Session-aware caching -- OK
 - Batch embedding with partial cache -- OK
@@ -258,6 +267,7 @@ The existing test file (`rag-api/src/__tests__/services/embedding.test.ts`, 175 
 - Error propagation -- minimal (only ECONNREFUSED)
 
 **Missing test coverage**:
+
 - `embedWithDetails` method (not tested at all)
 - `embedBatchFull` method
 - `embedBatch` fallback for non-BGE providers (Ollama, OpenAI sequential path)
@@ -272,11 +282,13 @@ The existing test file (`rag-api/src/__tests__/services/embedding.test.ts`, 175 
 ## Security Considerations
 
 ### OpenAI API Key Exposure Risk
+
 **Location**: Line 337
 
 The OpenAI API key is passed directly in the Authorization header via `config.OPENAI_API_KEY`. This is correct usage, but if verbose request logging is enabled (e.g., axios interceptors), the key could be logged. Consider using an axios instance with request interceptors that redact sensitive headers in logs.
 
 ### No Rate Limiting
+
 The service has no client-side rate limiting for API calls to external providers (OpenAI in particular has strict rate limits). Under heavy batch indexing load, the service could exhaust the OpenAI rate limit and cause cascading failures.
 
 ---
@@ -295,16 +307,16 @@ The service has no client-side rate limiting for API calls to external providers
 
 ## Recommendations Summary
 
-| Priority | Issue | Effort |
-|----------|-------|--------|
-| **P0** | Add input validation (empty/null text) | Small |
-| **P0** | Add HTTP request timeouts | Small |
-| **P1** | Add retry logic for transient failures | Medium |
-| **P1** | Parallelize cache lookups in batch methods | Small |
-| **P1** | Validate response shape from providers | Small |
-| **P2** | Add native batch support for OpenAI provider | Medium |
-| **P2** | Refactor `embedWithDetails` to reuse `embed` logic | Small |
-| **P2** | Add cache layer for `embedFull`/`embedBatchFull` | Medium |
-| **P3** | Extract OpenAI model to config | Tiny |
-| **P3** | Switch `error: any` to `error: unknown` | Tiny |
-| **P3** | Expand test coverage for uncovered methods | Medium |
+| Priority | Issue                                              | Effort |
+| -------- | -------------------------------------------------- | ------ |
+| **P0**   | Add input validation (empty/null text)             | Small  |
+| **P0**   | Add HTTP request timeouts                          | Small  |
+| **P1**   | Add retry logic for transient failures             | Medium |
+| **P1**   | Parallelize cache lookups in batch methods         | Small  |
+| **P1**   | Validate response shape from providers             | Small  |
+| **P2**   | Add native batch support for OpenAI provider       | Medium |
+| **P2**   | Refactor `embedWithDetails` to reuse `embed` logic | Small  |
+| **P2**   | Add cache layer for `embedFull`/`embedBatchFull`   | Medium |
+| **P3**   | Extract OpenAI model to config                     | Tiny   |
+| **P3**   | Switch `error: any` to `error: unknown`            | Tiny   |
+| **P3**   | Expand test coverage for uncovered methods         | Medium |

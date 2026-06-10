@@ -13,16 +13,41 @@ export function createArchitectureTools(projectName: string): ToolSpec[] {
       name: "record_adr",
       description: `Record an Architecture Decision Record (ADR). Use this to document important architectural decisions, technology choices, and design patterns for ${projectName}.`,
       schema: z.object({
-        title: z.string().describe("Short title for the decision (e.g., 'Use WebSocket for real-time updates')"),
-        context: z.string().describe("Why this decision was needed - the problem or requirement"),
+        title: z
+          .string()
+          .describe(
+            "Short title for the decision (e.g., 'Use WebSocket for real-time updates')",
+          ),
+        context: z
+          .string()
+          .describe(
+            "Why this decision was needed - the problem or requirement",
+          ),
         decision: z.string().describe("What was decided"),
-        consequences: z.string().optional().describe("Positive and negative consequences of this decision"),
-        alternatives: z.string().optional().describe("What alternatives were considered"),
-        status: z.enum(["proposed", "accepted", "deprecated", "superseded"]).optional().describe("Status of the decision (default: accepted)"),
-        tags: z.array(z.string()).optional().describe("Tags for categorization (e.g., ['api', 'security', 'database'])"),
+        consequences: z
+          .string()
+          .optional()
+          .describe("Positive and negative consequences of this decision"),
+        alternatives: z
+          .string()
+          .optional()
+          .describe("What alternatives were considered"),
+        status: z
+          .enum(["proposed", "accepted", "deprecated", "superseded"])
+          .optional()
+          .describe("Status of the decision (default: accepted)"),
+        tags: z
+          .array(z.string())
+          .optional()
+          .describe(
+            "Tags for categorization (e.g., ['api', 'security', 'database'])",
+          ),
       }),
       annotations: TOOL_ANNOTATIONS["record_adr"],
-      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
+      handler: async (
+        args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
         const {
           title,
           context,
@@ -79,12 +104,24 @@ ${alternatives ? `## Alternatives Considered\n${alternatives}` : ""}`;
       name: "get_adrs",
       description: `Get Architecture Decision Records for ${projectName}. Search by topic or list all ADRs.`,
       schema: z.object({
-        query: z.string().optional().describe("Search query (optional - returns all if empty)"),
-        status: z.enum(["proposed", "accepted", "deprecated", "superseded", "all"]).optional().describe("Filter by status"),
-        limit: z.coerce.number().optional().describe("Max results (default: 10)"),
+        query: z
+          .string()
+          .optional()
+          .describe("Search query (optional - returns all if empty)"),
+        status: z
+          .enum(["proposed", "accepted", "deprecated", "superseded", "all"])
+          .optional()
+          .describe("Filter by status"),
+        limit: z.coerce
+          .number()
+          .optional()
+          .describe("Max results (default: 10)"),
       }),
       annotations: TOOL_ANNOTATIONS["get_adrs"],
-      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
+      handler: async (
+        args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
         const {
           query,
           status = "all",
@@ -129,8 +166,7 @@ ${alternatives ? `## Alternatives Considered\n${alternatives}` : ""}`;
 
           result += `### ${i + 1}. ${icon} ${m.metadata?.adrTitle || m.relatedTo || "ADR"}\n`;
           result += `**Status:** ${adrStatus} | **ID:** \`${m.id}\`\n\n`;
-          result +=
-            truncate(m.content, 500) + "\n\n";
+          result += truncate(m.content, 500) + "\n\n";
         });
 
         return result;
@@ -141,15 +177,39 @@ ${alternatives ? `## Alternatives Considered\n${alternatives}` : ""}`;
       name: "record_pattern",
       description: `Record an architectural pattern used in ${projectName}. Patterns define how specific types of code should be structured.`,
       schema: z.object({
-        name: z.string().describe("Pattern name (e.g., 'Service Layer', 'Repository Pattern', 'API Endpoint')"),
-        description: z.string().describe("What this pattern is for and when to use it"),
-        structure: z.string().describe("How code following this pattern should be structured (file organization, naming, etc.)"),
-        example: z.string().optional().describe("Example code or file reference demonstrating the pattern"),
-        appliesTo: z.string().optional().describe("Where this pattern applies (e.g., 'backend/src/modules/*', 'all API endpoints')"),
-        tags: z.array(z.string()).optional().describe("Tags (e.g., ['backend', 'api', 'module'])"),
+        name: z
+          .string()
+          .describe(
+            "Pattern name (e.g., 'Service Layer', 'Repository Pattern', 'API Endpoint')",
+          ),
+        description: z
+          .string()
+          .describe("What this pattern is for and when to use it"),
+        structure: z
+          .string()
+          .describe(
+            "How code following this pattern should be structured (file organization, naming, etc.)",
+          ),
+        example: z
+          .string()
+          .optional()
+          .describe("Example code or file reference demonstrating the pattern"),
+        appliesTo: z
+          .string()
+          .optional()
+          .describe(
+            "Where this pattern applies (e.g., 'backend/src/modules/*', 'all API endpoints')",
+          ),
+        tags: z
+          .array(z.string())
+          .optional()
+          .describe("Tags (e.g., ['backend', 'api', 'module'])"),
       }),
       annotations: TOOL_ANNOTATIONS["record_pattern"],
-      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
+      handler: async (
+        args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
         const {
           name,
           description,
@@ -200,12 +260,24 @@ ${appliesTo ? `## Applies To\n${appliesTo}` : ""}`;
       name: "get_patterns",
       description: `Get architectural patterns for ${projectName}. Use to understand how to structure new code.`,
       schema: z.object({
-        query: z.string().optional().describe("Search for patterns by name or description"),
-        appliesTo: z.string().optional().describe("Filter by what patterns apply to (e.g., 'api', 'module')"),
-        limit: z.coerce.number().optional().describe("Max results (default: 10)"),
+        query: z
+          .string()
+          .optional()
+          .describe("Search for patterns by name or description"),
+        appliesTo: z
+          .string()
+          .optional()
+          .describe("Filter by what patterns apply to (e.g., 'api', 'module')"),
+        limit: z.coerce
+          .number()
+          .optional()
+          .describe("Max results (default: 10)"),
       }),
       annotations: TOOL_ANNOTATIONS["get_patterns"],
-      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
+      handler: async (
+        args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
         const {
           query,
           appliesTo,
@@ -259,18 +331,32 @@ ${appliesTo ? `## Applies To\n${appliesTo}` : ""}`;
       description: `Check if code or a feature follows established architectural patterns. Analyzes code against recorded patterns and ADRs.`,
       schema: z.object({
         code: z.string().optional().describe("Code snippet to check"),
-        filePath: z.string().optional().describe("File path for context (helps determine which patterns apply)"),
-        featureDescription: z.string().optional().describe("Description of what the code does (alternative to providing code)"),
+        filePath: z
+          .string()
+          .optional()
+          .describe(
+            "File path for context (helps determine which patterns apply)",
+          ),
+        featureDescription: z
+          .string()
+          .optional()
+          .describe(
+            "Description of what the code does (alternative to providing code)",
+          ),
       }),
       annotations: TOOL_ANNOTATIONS["check_architecture"],
-      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
+      handler: async (
+        args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
         const { code, filePath, featureDescription } = args as {
           code?: string;
           filePath?: string;
           featureDescription?: string;
         };
 
-        const patternQuery = filePath || featureDescription || "architectural patterns";
+        const patternQuery =
+          filePath || featureDescription || "architectural patterns";
 
         // Get relevant patterns
         const patternsResponse = await ctx.api.post("/api/memory/recall", {
@@ -304,8 +390,8 @@ ${appliesTo ? `## Applies To\n${appliesTo}` : ""}`;
         const patterns = (patternsResponse.data.results || []).filter(
           (r: any) => r.memory.tags?.includes("pattern"),
         );
-        const adrs = (adrsResponse.data.results || []).filter(
-          (r: any) => r.memory.tags?.includes("adr"),
+        const adrs = (adrsResponse.data.results || []).filter((r: any) =>
+          r.memory.tags?.includes("adr"),
         );
 
         let result = `# Architecture Check\n\n`;
@@ -417,10 +503,23 @@ Provide a structured analysis:
       description: `Get architectural guidance for implementing a new feature. Suggests structure, patterns to follow, and relevant ADRs.`,
       schema: z.object({
         feature: z.string().describe("Feature to implement"),
-        type: z.enum(["api", "module", "service", "component", "integration", "other"]).optional().describe("Type of feature"),
+        type: z
+          .enum([
+            "api",
+            "module",
+            "service",
+            "component",
+            "integration",
+            "other",
+          ])
+          .optional()
+          .describe("Type of feature"),
       }),
       annotations: TOOL_ANNOTATIONS["suggest_architecture"],
-      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
+      handler: async (
+        args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
         const { feature, type = "other" } = args as {
           feature: string;
           type?: string;
@@ -454,8 +553,8 @@ Provide a structured analysis:
         const patterns = (patternsResponse.data.results || []).filter(
           (r: any) => r.memory.tags?.includes("pattern"),
         );
-        const adrs = (adrsResponse.data.results || []).filter(
-          (r: any) => r.memory.tags?.includes("adr"),
+        const adrs = (adrsResponse.data.results || []).filter((r: any) =>
+          r.memory.tags?.includes("adr"),
         );
         const existingCode = codeResponse.data.results || [];
 
@@ -516,22 +615,39 @@ Provide a structured analysis:
       schema: z.object({
         title: z.string().describe("Short description of the tech debt"),
         description: z.string().describe("Detailed description of the issue"),
-        location: z.string().optional().describe("Where in the codebase (file paths, modules)"),
-        impact: z.enum(["low", "medium", "high", "critical"]).describe("Impact level"),
+        location: z
+          .string()
+          .optional()
+          .describe("Where in the codebase (file paths, modules)"),
+        impact: z
+          .enum(["low", "medium", "high", "critical"])
+          .describe("Impact level"),
         suggestedFix: z.string().optional().describe("How to fix this debt"),
-        relatedAdr: z.string().optional().describe("Related ADR ID if this violates a decision"),
+        relatedAdr: z
+          .string()
+          .optional()
+          .describe("Related ADR ID if this violates a decision"),
       }),
       annotations: TOOL_ANNOTATIONS["record_tech_debt"],
-      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
-        const { title, description, location, impact, suggestedFix, relatedAdr } =
-          args as {
-            title: string;
-            description: string;
-            location?: string;
-            impact: string;
-            suggestedFix?: string;
-            relatedAdr?: string;
-          };
+      handler: async (
+        args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
+        const {
+          title,
+          description,
+          location,
+          impact,
+          suggestedFix,
+          relatedAdr,
+        } = args as {
+          title: string;
+          description: string;
+          location?: string;
+          impact: string;
+          suggestedFix?: string;
+          relatedAdr?: string;
+        };
 
         const debtContent = `# Tech Debt: ${title}
 
@@ -576,11 +692,20 @@ ${relatedAdr ? `## Related ADR\n${relatedAdr}` : ""}`;
       name: "get_tech_debt",
       description: `List technical debt items for ${projectName}.`,
       schema: z.object({
-        impact: z.enum(["low", "medium", "high", "critical", "all"]).optional().describe("Filter by impact"),
-        limit: z.coerce.number().optional().describe("Max results (default: 10)"),
+        impact: z
+          .enum(["low", "medium", "high", "critical", "all"])
+          .optional()
+          .describe("Filter by impact"),
+        limit: z.coerce
+          .number()
+          .optional()
+          .describe("Max results (default: 10)"),
       }),
       annotations: TOOL_ANNOTATIONS["get_tech_debt"],
-      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
+      handler: async (
+        args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
         const { impact = "all", limit = 10 } = args as {
           impact?: string;
           limit?: number;
@@ -647,11 +772,22 @@ ${relatedAdr ? `## Related ADR\n${relatedAdr}` : ""}`;
       name: "analyze_project_structure",
       description: `Analyze the current project structure and compare with established patterns. Identifies inconsistencies and suggests improvements.`,
       schema: z.object({
-        path: z.string().optional().describe("Specific path to analyze (default: entire project)"),
-        deep: z.boolean().optional().describe("Perform deep analysis including code patterns (default: false)"),
+        path: z
+          .string()
+          .optional()
+          .describe("Specific path to analyze (default: entire project)"),
+        deep: z
+          .boolean()
+          .optional()
+          .describe(
+            "Perform deep analysis including code patterns (default: false)",
+          ),
       }),
       annotations: TOOL_ANNOTATIONS["analyze_project_structure"],
-      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
+      handler: async (
+        args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
         const { path, deep = false } = args as {
           path?: string;
           deep?: boolean;

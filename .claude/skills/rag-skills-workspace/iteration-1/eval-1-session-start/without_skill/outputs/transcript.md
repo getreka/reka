@@ -1,14 +1,16 @@
 # Session Start Transcript: Vector-Store Search Optimization
 
 ## Task
+
 "Починаю працювати над оптимізацією пошуку в vector-store.ts, запусти сесію"
 (Starting work on search optimization in vector-store.ts, start a session)
 
 ---
 
-## Tool Call 1: mcp__rag__start_session
+## Tool Call 1: mcp**rag**start_session
 
 **Input:**
+
 ```json
 {
   "sessionId": "vector-store-optimization-2026-02-26",
@@ -17,6 +19,7 @@
 ```
 
 **Result:**
+
 - Session ID: `vector-store-optimization-2026-02-26`
 - Started: 2026-02-26T17:39:44.039Z
 - Resumed From: `1c3dd7c8-7d71-4559-84cb-7f754fc1df25`
@@ -24,9 +27,10 @@
 
 ---
 
-## Tool Call 2: mcp__rag__context_briefing
+## Tool Call 2: mcp**rag**context_briefing
 
 **Input:**
+
 ```json
 {
   "task": "Оптимізація пошуку в vector-store.ts — покращення продуктивності та якості пошукових запитів",
@@ -35,6 +39,7 @@
 ```
 
 **Result:**
+
 - 5 memories recalled (decisions about Qdrant, insights on performance hotspots, retrieval quality opportunities, Qdrant optimization)
 - 5 patterns returned (Service Layer Singleton, Zod Validation, MCP Tool Module, Project Isolation, Tool Registration Pipeline)
 - 3 ADRs returned (Qdrant as sole vector DB, Zero-downtime reindexing, BGE-M3 embedding model)
@@ -44,6 +49,7 @@
 ## Tool Call 3: Read file rag-api/src/services/vector-store.ts
 
 **Input:**
+
 ```json
 {
   "file_path": "/home/ake/shared-ai-infra/rag-api/src/services/vector-store.ts"
@@ -51,14 +57,16 @@
 ```
 
 **Result:**
+
 - File has 1315 lines
 - VectorStoreService class with methods: initialize, isAlias, resolveOrphanedAlias, ensureCollection, createPayloadIndexes, ensurePayloadIndexes, deleteCollection, listCollections, listProjectCollections, getCollectionInfo, upsert, ensureCollectionWithSparse, upsertSparse, searchHybridNative, searchHybridClientSideRRF, search, searchGroups, groupResultsClientSide, delete, deleteByFilter, count, getFacetCounts, aggregateByField, scrollCollection, aggregateStats, clearCollection, createAlias, updateAlias, deleteAlias, listAliases, findClusters, findDuplicates, recommend, enableQuantization, disableQuantization, createSnapshot, listSnapshots, deleteSnapshot, recoverFromSnapshot, getCollectionAnalytics, getClusterInfo
 
 ---
 
-## Tool Call 4: mcp__rag__search_graph (parallel with Tool Call 5)
+## Tool Call 4: mcp**rag**search_graph (parallel with Tool Call 5)
 
 **Input:**
+
 ```json
 {
   "query": "vector-store search optimization",
@@ -68,6 +76,7 @@
 ```
 
 **Result:**
+
 - 5 direct matches in vector-store.ts (search, searchGroups, getCollectionAnalytics, VectorStoreService class, aggregateStats)
 - 29 graph-connected files discovered including:
   - rag-api/src/config.ts
@@ -80,9 +89,10 @@
 
 ---
 
-## Tool Call 5: mcp__rag__recall (parallel with Tool Call 4)
+## Tool Call 5: mcp**rag**recall (parallel with Tool Call 4)
 
 **Input:**
+
 ```json
 {
   "query": "vector-store search optimization performance Qdrant",
@@ -91,6 +101,7 @@
 ```
 
 **Result:**
+
 - 5 memories recalled:
   1. ADR: Qdrant as sole vector database with typed collections (64.9%)
   2. Insight: Qdrant Optimization Opportunities — binary quantization, HNSW tuning, etc. (64.5%)
@@ -100,9 +111,10 @@
 
 ---
 
-## Tool Call 6: mcp__rag__get_patterns (parallel with Tool Call 7)
+## Tool Call 6: mcp**rag**get_patterns (parallel with Tool Call 7)
 
 **Input:**
+
 ```json
 {
   "query": "search vector store",
@@ -111,13 +123,15 @@
 ```
 
 **Result:**
+
 - 5 patterns returned: Service Layer Singleton, Zod Validation Middleware, MCP Tool Module, Project Isolation via Collection Namespacing, Tool Registration Pipeline
 
 ---
 
-## Tool Call 7: mcp__rag__get_adrs (parallel with Tool Call 6)
+## Tool Call 7: mcp**rag**get_adrs (parallel with Tool Call 6)
 
 **Input:**
+
 ```json
 {
   "query": "search optimization vector",
@@ -126,13 +140,15 @@
 ```
 
 **Result:**
+
 - 5 ADRs: Qdrant as sole vector DB, BGE-M3 embedding model, Zero-downtime reindexing, Context enrichment hooks, AST-based code parsing
 
 ---
 
-## Tool Call 8: mcp__rag__get_session_context
+## Tool Call 8: mcp**rag**get_session_context
 
 **Input:**
+
 ```json
 {
   "sessionId": "vector-store-optimization-2026-02-26"
@@ -140,13 +156,15 @@
 ```
 
 **Result:**
+
 - Session context fields returned as undefined (lightweight session tracking)
 
 ---
 
-## Tool Call 9: mcp__rag__recall
+## Tool Call 9: mcp**rag**recall
 
 **Input:**
+
 ```json
 {
   "query": "retrieval quality improvement cross-encoder reranking HNSW tuning performance hotspots",
@@ -155,6 +173,7 @@
 ```
 
 **Result:**
+
 - 5 memories:
   1. Insight: Retrieval Quality Improvement Opportunities — Cross-Encoder Reranking, Contextual Retrieval, HyDE, Multi-Query Fusion (64.5%)
   2. Insight: Qdrant Optimization — binary quantization, HNSW tuning, inline storage (62.0%)
@@ -169,6 +188,7 @@
 Session `vector-store-optimization-2026-02-26` successfully started with full context loaded:
 
 ### Current State of vector-store.ts
+
 - 1315 lines, singleton VectorStoreService class
 - Key search methods: `search()`, `searchHybridNative()`, `searchHybridClientSideRRF()`, `searchGroups()`
 - Uses Qdrant JS client with dense + sparse vector support
@@ -177,6 +197,7 @@ Session `vector-store-optimization-2026-02-26` successfully started with full co
 - Batch upserts (50 sparse / 100 dense) to stay under 32MB limit
 
 ### Identified Optimization Opportunities
+
 1. **HNSW Tuning**: set m=16, ef_construct=200 (currently defaults)
 2. **Binary Quantization**: 32x less memory, 40x faster (Qdrant 1.15+)
 3. **Cross-Encoder Reranking**: +20-35% accuracy post-search
@@ -187,8 +208,10 @@ Session `vector-store-optimization-2026-02-26` successfully started with full co
 8. **Multi-Query Fusion**: 3-5 query variants with RRF merge
 
 ### Eval Baseline
+
 - Recall@10: 91.9%, MRR: 0.846, P50 latency: 46ms
 - Cross-file recall: 71.7%
 
 ### Connected Services (Graph)
+
 - context-pack.ts, routes/search.ts, indexer.ts, usage-tracker.ts, agent-runtime.ts

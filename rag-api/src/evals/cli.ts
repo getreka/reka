@@ -16,7 +16,7 @@ import { EvalReporter } from './reporter';
 
 function loadFixtures(): EvalCase[] {
   const fixturesDir = path.join(__dirname, 'fixtures');
-  const files = fs.readdirSync(fixturesDir).filter(f => f.endsWith('.json'));
+  const files = fs.readdirSync(fixturesDir).filter((f) => f.endsWith('.json'));
   const cases: EvalCase[] = [];
 
   for (const file of files) {
@@ -57,7 +57,7 @@ async function main() {
   process.exit(run.summary.failed > 0 ? 1 : 0);
 }
 
-main().catch(err => {
+main().catch((err) => {
   console.error('Eval failed:', err);
   process.exit(1);
 });

@@ -91,7 +91,9 @@
   "user_notes_summary": {
     "uncertainties": [],
     "needs_review": [],
-    "workarounds": ["Permission denied on Bash mkdir — switched to Write tool directly for output directory"]
+    "workarounds": [
+      "Permission denied on Bash mkdir — switched to Write tool directly for output directory"
+    ]
   },
   "eval_feedback": {
     "suggestions": [

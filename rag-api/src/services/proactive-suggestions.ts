@@ -20,7 +20,13 @@ export interface ContextTrigger {
 }
 
 export interface Suggestion {
-  type: 'related_file' | 'similar_bug' | 'relevant_doc' | 'pattern_example' | 'memory' | 'next_step';
+  type:
+    | 'related_file'
+    | 'similar_bug'
+    | 'relevant_doc'
+    | 'pattern_example'
+    | 'memory'
+    | 'next_step';
   title: string;
   description: string;
   resource?: string; // file path, memory ID, etc.
@@ -118,9 +124,10 @@ class ProactiveSuggestionService {
       uniqueSuggestions.sort((a, b) => b.relevance - a.relevance);
 
       // Calculate overall relevance
-      const estimatedRelevance = triggers.length > 0
-        ? triggers.reduce((sum, t) => sum + t.confidence, 0) / triggers.length
-        : 0;
+      const estimatedRelevance =
+        triggers.length > 0
+          ? triggers.reduce((sum, t) => sum + t.confidence, 0) / triggers.length
+          : 0;
 
       return {
         triggers,
@@ -146,7 +153,8 @@ class ProactiveSuggestionService {
     const triggers: ContextTrigger[] = [];
 
     // File path patterns
-    const filePatterns = text.match(/(?:[\w/-]+\/)?[\w-]+\.(ts|tsx|js|jsx|vue|py|go|rs|java|sql|md)/g) || [];
+    const filePatterns =
+      text.match(/(?:[\w/-]+\/)?[\w-]+\.(ts|tsx|js|jsx|vue|py|go|rs|java|sql|md)/g) || [];
     for (const file of filePatterns) {
       triggers.push({
         type: 'file',
@@ -287,7 +295,9 @@ class ProactiveSuggestionService {
         }
       }
     } catch (error: any) {
-      logger.warn(`Failed to get suggestions for trigger: ${trigger.type}`, { error: error.message });
+      logger.warn(`Failed to get suggestions for trigger: ${trigger.type}`, {
+        error: error.message,
+      });
     }
 
     return suggestions;
@@ -307,7 +317,7 @@ class ProactiveSuggestionService {
         limit: 5,
       });
 
-      return results.map(r => ({
+      return results.map((r) => ({
         id: r.memory.id,
         content: r.memory.content,
         type: r.memory.type,
@@ -323,7 +333,7 @@ class ProactiveSuggestionService {
    */
   private deduplicateSuggestions(suggestions: Suggestion[]): Suggestion[] {
     const seen = new Set<string>();
-    return suggestions.filter(s => {
+    return suggestions.filter((s) => {
       const key = s.resource || s.title;
       if (seen.has(key)) return false;
       seen.add(key);

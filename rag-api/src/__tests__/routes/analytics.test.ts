@@ -66,7 +66,7 @@ describe('Analytics Routes', () => {
         request(app).post('/api/analyze-conversation').send({
           projectName: 'test',
           conversation: 'user: hello\nassistant: hi',
-        }),
+        })
       );
 
       expect(res.status).toBe(200);
@@ -96,9 +96,7 @@ describe('Analytics Routes', () => {
     });
 
     it('returns 400 without text', async () => {
-      const res = await request(app)
-        .post('/api/extract-entities')
-        .send({});
+      const res = await request(app).post('/api/extract-entities').send({});
 
       expect(res.status).toBe(400);
     });
@@ -113,7 +111,7 @@ describe('Analytics Routes', () => {
           projectName: 'test',
           toolName: 'search_codebase',
           success: true,
-        }),
+        })
       );
 
       expect(res.status).toBe(200);
@@ -129,9 +127,7 @@ describe('Analytics Routes', () => {
         topTools: [],
       });
 
-      const res = await withProject(
-        request(app).get('/api/tool-analytics'),
-      );
+      const res = await withProject(request(app).get('/api/tool-analytics'));
 
       expect(res.status).toBe(200);
       expect(res.body.totalCalls).toBe(10);
@@ -144,9 +140,7 @@ describe('Analytics Routes', () => {
         { query: 'missing', toolName: 'search', count: 3, avgResultCount: 0.5 },
       ]);
 
-      const res = await withProject(
-        request(app).get('/api/knowledge-gaps'),
-      );
+      const res = await withProject(request(app).get('/api/knowledge-gaps'));
 
       expect(res.status).toBe(200);
       expect(res.body.gaps).toHaveLength(1);
@@ -156,14 +150,17 @@ describe('Analytics Routes', () => {
   describe('POST /api/similar-queries', () => {
     it('returns similar queries', async () => {
       mocks.findSimilarQueries.mockResolvedValue([
-        { usage: { toolName: 'search', inputSummary: 'auth', resultCount: 5, success: true }, score: 0.9 },
+        {
+          usage: { toolName: 'search', inputSummary: 'auth', resultCount: 5, success: true },
+          score: 0.9,
+        },
       ]);
 
       const res = await withProject(
         request(app).post('/api/similar-queries').send({
           projectName: 'test',
           query: 'authentication',
-        }),
+        })
       );
 
       expect(res.status).toBe(200);
@@ -174,7 +171,7 @@ describe('Analytics Routes', () => {
       const res = await withProject(
         request(app).post('/api/similar-queries').send({
           projectName: 'test',
-        }),
+        })
       );
 
       expect(res.status).toBe(400);
@@ -190,9 +187,7 @@ describe('Analytics Routes', () => {
         sessionStats: { totalSessions: 1 },
       });
 
-      const res = await withProject(
-        request(app).get('/api/behavior-patterns'),
-      );
+      const res = await withProject(request(app).get('/api/behavior-patterns'));
 
       expect(res.status).toBe(200);
       expect(res.body.peakHours).toHaveLength(1);
@@ -201,9 +196,13 @@ describe('Analytics Routes', () => {
 
   describe('POST /api/track-enrichment', () => {
     it('tracks enrichment event', async () => {
-      const res = await request(app)
-        .post('/api/track-enrichment')
-        .send({ projectName: 'test', tool: 'recall', result: 'hit', durationMs: 50, recallCount: 3 });
+      const res = await request(app).post('/api/track-enrichment').send({
+        projectName: 'test',
+        tool: 'recall',
+        result: 'hit',
+        durationMs: 50,
+        recallCount: 3,
+      });
 
       expect(res.status).toBe(200);
       expect(res.body.tracked).toBe(true);

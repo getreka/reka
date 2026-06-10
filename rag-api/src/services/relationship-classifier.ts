@@ -28,7 +28,7 @@ export interface ClassifiedRelation {
   targetId: string;
   type: ExtendedRelationType;
   reason: string;
-  confidence: number;  // 0-1
+  confidence: number; // 0-1
 }
 
 export interface ClassificationCandidate {
@@ -95,7 +95,10 @@ class RelationshipClassifierService {
     candidates: ClassificationCandidate[]
   ): Promise<ClassifiedRelation[]> {
     const candidateList = candidates
-      .map((c, i) => `[${i + 1}] ID: ${c.id}\n    Type: ${c.type}\n    Content: ${c.content.slice(0, 300)}`)
+      .map(
+        (c, i) =>
+          `[${i + 1}] ID: ${c.id}\n    Type: ${c.type}\n    Content: ${c.content.slice(0, 300)}`
+      )
       .join('\n\n');
 
     const prompt = `NEW MEMORY (type: ${newMemory.type}):
@@ -133,20 +136,29 @@ Classify the relationship between the NEW memory and each existing memory. Respo
 
       if (!Array.isArray(parsed)) return [];
 
-      const validIds = new Set(candidates.map(c => c.id));
+      const validIds = new Set(candidates.map((c) => c.id));
       const validTypes = new Set<string>([
-        'supersedes', 'contradicts', 'caused_by', 'follow_up',
-        'refines', 'alternative_to', 'relates_to', 'none',
+        'supersedes',
+        'contradicts',
+        'caused_by',
+        'follow_up',
+        'refines',
+        'alternative_to',
+        'relates_to',
+        'none',
       ]);
 
       return parsed
-        .filter(r =>
-          r.id && validIds.has(r.id) &&
-          r.type && validTypes.has(r.type) &&
-          r.type !== 'none' &&
-          (r.confidence ?? 0.5) >= 0.5
+        .filter(
+          (r) =>
+            r.id &&
+            validIds.has(r.id) &&
+            r.type &&
+            validTypes.has(r.type) &&
+            r.type !== 'none' &&
+            (r.confidence ?? 0.5) >= 0.5
         )
-        .map(r => ({
+        .map((r) => ({
           targetId: r.id!,
           type: r.type as ExtendedRelationType,
           reason: (r.reason || '').slice(0, 200),

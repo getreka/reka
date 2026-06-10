@@ -73,10 +73,7 @@ class MemoryMigrationService {
 
     // Build set of existing IDs in target collections to skip duplicates
     const existingIds = new Set<string>();
-    for (const col of [
-      `${projectName}_memory_episodic`,
-      `${projectName}_memory_semantic`,
-    ]) {
+    for (const col of [`${projectName}_memory_episodic`, `${projectName}_memory_semantic`]) {
       try {
         let offset: string | undefined;
         do {

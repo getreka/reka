@@ -30,8 +30,21 @@ describe('errorHandler', () => {
 
   it('handles ZodError with multiple issues → 400 + formatted details array', () => {
     const issues: ZodIssue[] = [
-      { code: 'invalid_type', path: ['body', 'name'], message: 'Required', expected: 'string', received: 'undefined' },
-      { code: 'too_small', path: ['body', 'limit'], message: 'Too small', minimum: 1, type: 'number', inclusive: true },
+      {
+        code: 'invalid_type',
+        path: ['body', 'name'],
+        message: 'Required',
+        expected: 'string',
+        received: 'undefined',
+      },
+      {
+        code: 'too_small',
+        path: ['body', 'limit'],
+        message: 'Too small',
+        minimum: 1,
+        type: 'number',
+        inclusive: true,
+      },
     ];
     const zodErr = new ZodError(issues);
     const { req, res, next } = createMocks();
@@ -105,8 +118,6 @@ describe('errorHandler', () => {
     errorHandler(nonError, req, res, next);
 
     expect(res.status).toHaveBeenCalledWith(500);
-    expect(res.json).toHaveBeenCalledWith(
-      expect.objectContaining({ code: 'UNKNOWN_ERROR' })
-    );
+    expect(res.json).toHaveBeenCalledWith(expect.objectContaining({ code: 'UNKNOWN_ERROR' }));
   });
 });

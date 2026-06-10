@@ -3,13 +3,16 @@ import { computed } from "vue";
 import { useRoute, useRouter } from "vue-router";
 import Tag from "primevue/tag";
 import Button from "primevue/button";
+import Avatar from "primevue/avatar";
 import { useAppStore } from "@/stores/app";
+import { useAuthStore } from "@/stores/auth";
 
 defineProps<{ showHamburger?: boolean }>();
 
 const route = useRoute();
 const router = useRouter();
 const app = useAppStore();
+const auth = useAuthStore();
 
 const pageTitle = computed(() => {
   const titles: Record<string, string> = {
@@ -67,6 +70,35 @@ const pageTitle = computed(() => {
         @click="router.push('/settings')"
         v-tooltip="'Settings'"
       />
+      <template v-if="auth.isDemoMode && auth.isAuthenticated">
+        <div
+          style="
+            display: flex;
+            align-items: center;
+            gap: 0.5rem;
+            margin-left: 0.5rem;
+            padding-left: 0.75rem;
+            border-left: 1px solid var(--p-surface-200);
+          "
+        >
+          <Avatar
+            :label="auth.user?.username?.charAt(0).toUpperCase()"
+            shape="circle"
+            size="small"
+            style="background: var(--p-primary-color); color: white"
+          />
+          <span style="font-size: 0.875rem; color: var(--p-text-color)">{{
+            auth.user?.username
+          }}</span>
+          <Button
+            icon="pi pi-sign-out"
+            text
+            size="small"
+            @click="auth.logout().then(() => router.push('/auth/login'))"
+            v-tooltip="'Logout'"
+          />
+        </div>
+      </template>
     </div>
   </header>
 </template>

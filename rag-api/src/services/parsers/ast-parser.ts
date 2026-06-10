@@ -12,8 +12,8 @@ export interface GraphEdge {
   fromSymbol: string;
   toFile: string;
   toSymbol: string;
-  edgeType: 'imports' | 'calls' | 'extends' | 'implements' | 'depends_on';
-  confidence?: 'lsp' | 'scip' | 'tree-sitter' | 'heuristic';
+  edgeType: 'imports' | 'calls' | 'extends' | 'implements' | 'depends_on' | 'memory_references';
+  confidence?: 'lsp' | 'scip' | 'tree-sitter' | 'heuristic' | 'consolidation';
   symbolDescriptor?: string;
 }
 

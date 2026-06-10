@@ -68,6 +68,10 @@ export class ApiClient {
     }
   }
 
+  setProjectName(name: string): void {
+    this._headers["X-Project-Name"] = name;
+  }
+
   // eslint-disable-next-line @typescript-eslint/no-explicit-any
   async get<T = any>(
     path: string,

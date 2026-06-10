@@ -184,11 +184,11 @@ class WorkRegistry extends EventEmitter {
   list(filter?: { type?: WorkType; projectName?: string; state?: WorkState }): WorkStatus[] {
     let items = Array.from(this.items.values());
 
-    if (filter?.type) items = items.filter(i => i.type === filter.type);
-    if (filter?.projectName) items = items.filter(i => i.projectName === filter.projectName);
-    if (filter?.state) items = items.filter(i => i.state === filter.state);
+    if (filter?.type) items = items.filter((i) => i.type === filter.type);
+    if (filter?.projectName) items = items.filter((i) => i.projectName === filter.projectName);
+    if (filter?.state) items = items.filter((i) => i.state === filter.state);
 
-    return items.map(i => ({ ...i }));
+    return items.map((i) => ({ ...i }));
   }
 
   /**

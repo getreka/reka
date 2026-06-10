@@ -1,9 +1,9 @@
 apiVersion: 1
 
 providers:
-  - name: 'default'
+  - name: "default"
     orgId: 1
-    folder: 'RAG Infrastructure'
+    folder: "RAG Infrastructure"
     type: file
     disableDeletion: false
     editable: true

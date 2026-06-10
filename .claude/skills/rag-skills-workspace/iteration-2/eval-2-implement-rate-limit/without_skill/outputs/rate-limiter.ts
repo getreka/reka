@@ -13,10 +13,10 @@
  * File: rag-api/src/middleware/rate-limiter.ts
  */
 
-import { Request, Response, NextFunction } from 'express';
-import config from '../config';
-import { logger } from '../utils/logger';
-import { rateLimitHitsTotal, rateLimitActiveIPs } from '../utils/metrics';
+import { Request, Response, NextFunction } from "express";
+import config from "../config";
+import { logger } from "../utils/logger";
+import { rateLimitHitsTotal, rateLimitActiveIPs } from "../utils/metrics";
 
 // ---------------------------------------------------------------------------
 // Configuration
@@ -37,7 +37,9 @@ function getRateLimitConfig(): RateLimitConfig {
   return {
     max: (config as any).RATE_LIMIT_MAX ?? 100,
     windowMs: (config as any).RATE_LIMIT_WINDOW_MS ?? 60_000,
-    skipPaths: ((config as any).RATE_LIMIT_SKIP_PATHS as string[] | undefined) ?? ['/health', '/metrics'],
+    skipPaths: ((config as any).RATE_LIMIT_SKIP_PATHS as
+      | string[]
+      | undefined) ?? ["/health", "/metrics"],
     enabled: (config as any).RATE_LIMIT_ENABLED ?? true,
   };
 }
@@ -52,20 +54,20 @@ function getRateLimitConfig(): RateLimitConfig {
  */
 function extractClientIP(req: Request): string {
   // X-Forwarded-For: first entry is the original client
-  const xff = req.headers['x-forwarded-for'];
+  const xff = req.headers["x-forwarded-for"];
   if (xff) {
-    const first = (Array.isArray(xff) ? xff[0] : xff).split(',')[0].trim();
+    const first = (Array.isArray(xff) ? xff[0] : xff).split(",")[0].trim();
     if (first) return normalizeIP(first);
   }
 
   // X-Real-IP (nginx)
-  const xRealIp = req.headers['x-real-ip'];
-  if (typeof xRealIp === 'string' && xRealIp) {
+  const xRealIp = req.headers["x-real-ip"];
+  if (typeof xRealIp === "string" && xRealIp) {
     return normalizeIP(xRealIp.trim());
   }
 
   // Direct connection
-  return normalizeIP(req.ip || req.socket.remoteAddress || 'unknown');
+  return normalizeIP(req.ip || req.socket.remoteAddress || "unknown");
 }
 
 /**
@@ -73,7 +75,7 @@ function extractClientIP(req: Request): string {
  * e.g. "::ffff:127.0.0.1" -> "127.0.0.1"
  */
 function normalizeIP(ip: string): string {
-  if (ip.startsWith('::ffff:')) {
+  if (ip.startsWith("::ffff:")) {
     return ip.slice(7);
   }
   return ip;
@@ -111,7 +113,10 @@ class SlidingWindowStore {
 
     // Prune expired timestamps
     const windowStart = now - this.windowMs;
-    const firstValidIndex = this.binarySearchFirstValid(timestamps, windowStart);
+    const firstValidIndex = this.binarySearchFirstValid(
+      timestamps,
+      windowStart,
+    );
 
     if (firstValidIndex > 0) {
       timestamps.splice(0, firstValidIndex);
@@ -121,9 +126,10 @@ class SlidingWindowStore {
     timestamps.push(now);
 
     // Reset time is when the oldest request in the window expires
-    const resetAt = timestamps.length > 0
-      ? timestamps[0] + this.windowMs
-      : now + this.windowMs;
+    const resetAt =
+      timestamps.length > 0
+        ? timestamps[0] + this.windowMs
+        : now + this.windowMs;
 
     return { count: timestamps.length, resetAt };
   }
@@ -147,9 +153,10 @@ class SlidingWindowStore {
       }
     }
 
-    const resetAt = timestamps.length > 0
-      ? timestamps[timestamps.length - validCount] + this.windowMs
-      : now + this.windowMs;
+    const resetAt =
+      timestamps.length > 0
+        ? timestamps[timestamps.length - validCount] + this.windowMs
+        : now + this.windowMs;
 
     return { count: validCount, resetAt };
   }
@@ -157,7 +164,10 @@ class SlidingWindowStore {
   /**
    * Binary search for the first timestamp after windowStart.
    */
-  private binarySearchFirstValid(timestamps: number[], windowStart: number): number {
+  private binarySearchFirstValid(
+    timestamps: number[],
+    windowStart: number,
+  ): number {
     let lo = 0;
     let hi = timestamps.length;
     while (lo < hi) {
@@ -180,14 +190,19 @@ class SlidingWindowStore {
     let cleaned = 0;
 
     for (const [ip, timestamps] of this.store) {
-      if (timestamps.length === 0 || timestamps[timestamps.length - 1] <= windowStart) {
+      if (
+        timestamps.length === 0 ||
+        timestamps[timestamps.length - 1] <= windowStart
+      ) {
         this.store.delete(ip);
         cleaned++;
       }
     }
 
     if (cleaned > 0) {
-      logger.debug(`Rate limiter cleanup: removed ${cleaned} stale IPs, ${this.store.size} remaining`);
+      logger.debug(
+        `Rate limiter cleanup: removed ${cleaned} stale IPs, ${this.store.size} remaining`,
+      );
     }
 
     // Update Prometheus gauge
@@ -235,7 +250,11 @@ function getStore(windowMs: number): SlidingWindowStore {
  * Returns 429 with Retry-After header when limit is exceeded.
  * Sets standard rate limit headers on every response.
  */
-export function rateLimitMiddleware(req: Request, res: Response, next: NextFunction): void {
+export function rateLimitMiddleware(
+  req: Request,
+  res: Response,
+  next: NextFunction,
+): void {
   const cfg = getRateLimitConfig();
 
   // Skip if disabled
@@ -257,31 +276,34 @@ export function rateLimitMiddleware(req: Request, res: Response, next: NextFunct
   const resetEpochSeconds = Math.ceil(resetAt / 1000);
 
   // Set standard rate limit headers on ALL responses
-  res.setHeader('X-RateLimit-Limit', cfg.max);
-  res.setHeader('X-RateLimit-Remaining', remaining);
-  res.setHeader('X-RateLimit-Reset', resetEpochSeconds);
+  res.setHeader("X-RateLimit-Limit", cfg.max);
+  res.setHeader("X-RateLimit-Remaining", remaining);
+  res.setHeader("X-RateLimit-Reset", resetEpochSeconds);
 
   // Check if limit exceeded
   if (count > cfg.max) {
     const retryAfterSeconds = Math.ceil((resetAt - now) / 1000);
 
     // Set Retry-After header (standard HTTP)
-    res.setHeader('Retry-After', retryAfterSeconds);
+    res.setHeader("Retry-After", retryAfterSeconds);
 
     // Record metric
     rateLimitHitsTotal.inc({ ip_hash: hashIP(ip) });
 
-    logger.warn(`Rate limit exceeded for IP ${maskIP(ip)}: ${count}/${cfg.max} requests`, {
-      ip: maskIP(ip),
-      count,
-      limit: cfg.max,
-      retryAfter: retryAfterSeconds,
-      requestId: req.requestId,
-    });
+    logger.warn(
+      `Rate limit exceeded for IP ${maskIP(ip)}: ${count}/${cfg.max} requests`,
+      {
+        ip: maskIP(ip),
+        count,
+        limit: cfg.max,
+        retryAfter: retryAfterSeconds,
+        requestId: req.requestId,
+      },
+    );
 
     res.status(429).json({
-      error: 'Rate limit exceeded',
-      code: 'RATE_LIMIT',
+      error: "Rate limit exceeded",
+      code: "RATE_LIMIT",
       details: {
         retryAfter: retryAfterSeconds,
         limit: cfg.max,
@@ -306,7 +328,7 @@ function hashIP(ip: string): string {
   let hash = 0;
   for (let i = 0; i < ip.length; i++) {
     const char = ip.charCodeAt(i);
-    hash = ((hash << 5) - hash) + char;
+    hash = (hash << 5) - hash + char;
     hash |= 0; // Convert to 32-bit integer
   }
   return Math.abs(hash).toString(36);
@@ -317,16 +339,16 @@ function hashIP(ip: string): string {
  * e.g. "192.168.1.42" -> "192.168.x.x"
  */
 function maskIP(ip: string): string {
-  const parts = ip.split('.');
+  const parts = ip.split(".");
   if (parts.length === 4) {
     return `${parts[0]}.${parts[1]}.x.x`;
   }
   // IPv6: show first 4 groups
-  const v6parts = ip.split(':');
+  const v6parts = ip.split(":");
   if (v6parts.length > 4) {
-    return v6parts.slice(0, 4).join(':') + ':...';
+    return v6parts.slice(0, 4).join(":") + ":...";
   }
-  return 'masked';
+  return "masked";
 }
 
 // ---------------------------------------------------------------------------

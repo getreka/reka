@@ -27,13 +27,13 @@ export interface SensoryEvent {
 }
 
 export interface SensoryReadOptions {
-  since?: string;  // Redis stream ID to read from (exclusive)
-  count?: number;  // Max events to return
+  since?: string; // Redis stream ID to read from (exclusive)
+  count?: number; // Max events to return
 }
 
 export interface SensoryStats {
   eventCount: number;
-  salienceDistribution: Record<string, number>;  // bucket → count
+  salienceDistribution: Record<string, number>; // bucket → count
   topTools: Array<{ tool: string; count: number }>;
 }
 
@@ -43,6 +43,11 @@ export interface SensoryStats {
 const SALIENCE_MAP: Record<string, number> = {
   // Errors and failures (highest salience)
   error: 0.9,
+
+  // Session lifecycle (high salience — track starts/ends/consolidation)
+  start_session: 0.8,
+  end_session: 0.8,
+  consolidation: 0.85,
 
   // Decisions and architecture
   record_adr: 0.85,
@@ -64,11 +69,13 @@ const SALIENCE_MAP: Record<string, number> = {
   context_briefing: 0.5,
   smart_dispatch: 0.5,
 
-  // Memory operations
-  remember: 0.4,
+  // Memory write operations (contain valuable content — decisions, investigations, fixes)
+  remember: 0.7,
+  batch_remember: 0.7,
+  promote_memory: 0.6,
+
+  // Memory read operations
   recall: 0.4,
-  batch_remember: 0.4,
-  promote_memory: 0.4,
 
   // Low salience
   list_memories: 0.2,
@@ -103,7 +110,11 @@ class SensoryBufferService {
    * Append a tool event to the sensory buffer stream.
    * Fire-and-forget safe — never throws.
    */
-  async append(projectName: string, sessionId: string, event: SensoryEvent): Promise<string | null> {
+  async append(
+    projectName: string,
+    sessionId: string,
+    event: SensoryEvent
+  ): Promise<string | null> {
     const redis = cacheService.getClient();
     if (!redis) return null;
 
@@ -113,16 +124,26 @@ class SensoryBufferService {
       // XADD with MAXLEN trim to prevent unbounded growth
       const id = await redis.xadd(
         key,
-        'MAXLEN', '~', String(config.SENSORY_BUFFER_MAX_LEN),
+        'MAXLEN',
+        '~',
+        String(config.SENSORY_BUFFER_MAX_LEN),
         '*',
-        'toolName', event.toolName,
-        'inputSummary', event.inputSummary,
-        'outputSummary', event.outputSummary,
-        'filesTouched', JSON.stringify(event.filesTouched),
-        'success', event.success ? '1' : '0',
-        'durationMs', String(event.durationMs),
-        'salience', String(event.salience),
-        'timestamp', event.timestamp,
+        'toolName',
+        event.toolName,
+        'inputSummary',
+        event.inputSummary,
+        'outputSummary',
+        event.outputSummary,
+        'filesTouched',
+        JSON.stringify(event.filesTouched),
+        'success',
+        event.success ? '1' : '0',
+        'durationMs',
+        String(event.durationMs),
+        'salience',
+        String(event.salience),
+        'timestamp',
+        event.timestamp
       );
 
       // Set TTL on the stream (only once, won't reset if already set)
@@ -141,7 +162,11 @@ class SensoryBufferService {
   /**
    * Read events from the sensory buffer.
    */
-  async read(projectName: string, sessionId: string, opts?: SensoryReadOptions): Promise<SensoryEvent[]> {
+  async read(
+    projectName: string,
+    sessionId: string,
+    opts?: SensoryReadOptions
+  ): Promise<SensoryEvent[]> {
     const redis = cacheService.getClient();
     if (!redis) return [];
 
@@ -228,7 +253,9 @@ class SensoryBufferService {
     let filesTouched: string[] = [];
     try {
       filesTouched = JSON.parse(map.get('filesTouched') ?? '[]');
-    } catch { /* empty */ }
+    } catch {
+      /* empty */
+    }
 
     return {
       toolName: map.get('toolName') ?? '',

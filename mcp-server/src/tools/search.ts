@@ -4,7 +4,12 @@
  */
 
 import type { ToolSpec, ToolContext } from "../types.js";
-import { formatCodeResults, formatNavigationResults, truncate, pct } from "../formatters.js";
+import {
+  formatCodeResults,
+  formatNavigationResults,
+  truncate,
+  pct,
+} from "../formatters.js";
 import { z } from "zod";
 import { TOOL_ANNOTATIONS } from "../annotations.js";
 
@@ -18,15 +23,42 @@ export function createSearchTools(projectName: string): ToolSpec[] {
       description: `Search the ${projectName} codebase. Returns file locations, symbols, and graph connections. Use Read tool to view the actual code at returned locations.`,
       schema: z.object({
         query: z.string().describe("Search query for finding code"),
-        limit: z.coerce.number().optional().describe("Max results to return (default: 5)"),
-        language: z.string().optional().describe("Filter by language (typescript, python, vue, etc.)"),
-        path: z.string().optional().describe("Filter by path pattern (e.g., 'src/modules/*')"),
-        layer: z.string().optional().describe("Filter by architectural layer (api, service, util, model, middleware, test, parser, types, config, other)"),
-        service: z.string().optional().describe("Filter by service/class name (e.g., 'EmbeddingService')"),
+        limit: z.coerce
+          .number()
+          .optional()
+          .describe("Max results to return (default: 5)"),
+        language: z
+          .string()
+          .optional()
+          .describe("Filter by language (typescript, python, vue, etc.)"),
+        path: z
+          .string()
+          .optional()
+          .describe("Filter by path pattern (e.g., 'src/modules/*')"),
+        layer: z
+          .string()
+          .optional()
+          .describe(
+            "Filter by architectural layer (api, service, util, model, middleware, test, parser, types, config, other)",
+          ),
+        service: z
+          .string()
+          .optional()
+          .describe("Filter by service/class name (e.g., 'EmbeddingService')"),
       }),
       annotations: TOOL_ANNOTATIONS["search_codebase"],
-      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
-        const { query, limit = 5, language, path, layer, service } = args as {
+      handler: async (
+        args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
+        const {
+          query,
+          limit = 5,
+          language,
+          path,
+          layer,
+          service,
+        } = args as {
           query: string;
           limit?: number;
           language?: string;
@@ -53,10 +85,16 @@ export function createSearchTools(projectName: string): ToolSpec[] {
       description: "Find code similar to a given snippet.",
       schema: z.object({
         code: z.string().describe("Code snippet to find similar code for"),
-        limit: z.coerce.number().optional().describe("Max results (default: 5)"),
+        limit: z.coerce
+          .number()
+          .optional()
+          .describe("Max results (default: 5)"),
       }),
       annotations: TOOL_ANNOTATIONS["search_similar"],
-      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
+      handler: async (
+        args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
         const { code, limit = 5 } = args as { code: string; limit?: number };
         const response = await ctx.api.post("/api/search-similar", {
           collection: `${ctx.collectionPrefix}codebase`,
@@ -75,15 +113,34 @@ export function createSearchTools(projectName: string): ToolSpec[] {
       description: `Search ${projectName} codebase grouped by file. Returns file locations with symbols and connections. Use Read tool to view the actual code.`,
       schema: z.object({
         query: z.string().describe("Search query"),
-        groupBy: z.string().optional().describe("Field to group by (default: 'file')"),
-        limit: z.coerce.number().optional().describe("Max groups to return (default: 10)"),
+        groupBy: z
+          .string()
+          .optional()
+          .describe("Field to group by (default: 'file')"),
+        limit: z.coerce
+          .number()
+          .optional()
+          .describe("Max groups to return (default: 10)"),
         language: z.string().optional().describe("Filter by language"),
-        layer: z.string().optional().describe("Filter by architectural layer (api, service, util, etc.)"),
+        layer: z
+          .string()
+          .optional()
+          .describe("Filter by architectural layer (api, service, util, etc.)"),
         service: z.string().optional().describe("Filter by service/class name"),
       }),
       annotations: TOOL_ANNOTATIONS["grouped_search"],
-      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
-        const { query, groupBy = "file", limit = 10, language, layer, service } = args as {
+      handler: async (
+        args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
+        const {
+          query,
+          groupBy = "file",
+          limit = 10,
+          language,
+          layer,
+          service,
+        } = args as {
           query: string;
           groupBy?: string;
           limit?: number;
@@ -91,8 +148,12 @@ export function createSearchTools(projectName: string): ToolSpec[] {
           layer?: string;
           service?: string;
         };
-        const filters: Record<string, string | undefined> = { language, layer, service };
-        const hasFilters = Object.values(filters).some(v => v !== undefined);
+        const filters: Record<string, string | undefined> = {
+          language,
+          layer,
+          service,
+        };
+        const hasFilters = Object.values(filters).some((v) => v !== undefined);
         const response = await ctx.api.post("/api/search-grouped", {
           collection: `${ctx.collectionPrefix}codebase`,
           query,
@@ -114,15 +175,34 @@ export function createSearchTools(projectName: string): ToolSpec[] {
       description: `Hybrid search combining keyword matching and semantic similarity for ${projectName}. Returns file locations with symbols and connections. Use Read tool to view code.`,
       schema: z.object({
         query: z.string().describe("Search query"),
-        limit: z.coerce.number().optional().describe("Max results (default: 10)"),
-        semanticWeight: z.coerce.number().optional().describe("Weight for semantic vs keyword (0-1, default: 0.7)"),
+        limit: z.coerce
+          .number()
+          .optional()
+          .describe("Max results (default: 10)"),
+        semanticWeight: z.coerce
+          .number()
+          .optional()
+          .describe("Weight for semantic vs keyword (0-1, default: 0.7)"),
         language: z.string().optional().describe("Filter by language"),
-        layer: z.string().optional().describe("Filter by architectural layer (api, service, util, etc.)"),
+        layer: z
+          .string()
+          .optional()
+          .describe("Filter by architectural layer (api, service, util, etc.)"),
         service: z.string().optional().describe("Filter by service/class name"),
       }),
       annotations: TOOL_ANNOTATIONS["hybrid_search"],
-      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
-        const { query, limit = 10, semanticWeight = 0.7, language, layer, service } = args as {
+      handler: async (
+        args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
+        const {
+          query,
+          limit = 10,
+          semanticWeight = 0.7,
+          language,
+          layer,
+          service,
+        } = args as {
           query: string;
           limit?: number;
           semanticWeight?: number;
@@ -130,8 +210,12 @@ export function createSearchTools(projectName: string): ToolSpec[] {
           layer?: string;
           service?: string;
         };
-        const filters: Record<string, string | undefined> = { language, layer, service };
-        const hasFilters = Object.values(filters).some(v => v !== undefined);
+        const filters: Record<string, string | undefined> = {
+          language,
+          layer,
+          service,
+        };
+        const hasFilters = Object.values(filters).some((v) => v !== undefined);
         const response = await ctx.api.post("/api/search-hybrid", {
           collection: `${ctx.collectionPrefix}codebase`,
           query,
@@ -152,10 +236,16 @@ export function createSearchTools(projectName: string): ToolSpec[] {
       description: `Search documentation in the ${projectName} project.`,
       schema: z.object({
         query: z.string().describe("Search query"),
-        limit: z.coerce.number().optional().describe("Max results (default: 5)"),
+        limit: z.coerce
+          .number()
+          .optional()
+          .describe("Max results (default: 5)"),
       }),
       annotations: TOOL_ANNOTATIONS["search_docs"],
-      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
+      handler: async (
+        args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
         const { query, limit = 5 } = args as { query: string; limit?: number };
         const response = await ctx.api.post("/api/search", {
           collection: `${ctx.collectionPrefix}docs`,
@@ -167,11 +257,7 @@ export function createSearchTools(projectName: string): ToolSpec[] {
           return "No documentation found for this query.";
         }
         return results
-          .map(
-            (r: any) =>
-              `**${r.file}**\n` +
-              truncate(r.content, 500)
-          )
+          .map((r: any) => `**${r.file}**\n` + truncate(r.content, 500))
           .join("\n\n---\n\n");
       },
     },
@@ -190,7 +276,7 @@ export function createSearchTools(projectName: string): ToolSpec[] {
       annotations: TOOL_ANNOTATIONS["get_project_stats"],
       handler: async (_args: Record<string, unknown>, ctx: ToolContext) => {
         const response = await ctx.api.get(
-          `/api/stats/${ctx.collectionPrefix}codebase`
+          `/api/stats/${ctx.collectionPrefix}codebase`,
         );
         const stats = response.data;
         let text = `**${ctx.projectName} Project Statistics**\n\n`;
@@ -221,24 +307,40 @@ export function createSearchTools(projectName: string): ToolSpec[] {
       name: "find_symbol",
       description: `Find a function, class, type, or interface by name in ${projectName}. Fast symbol lookup without full-text search.`,
       schema: z.object({
-        symbol: z.string().describe("Symbol name to find (function, class, type, etc.)"),
-        kind: z.string().optional().describe("Filter by kind: function, class, interface, type, enum, const"),
-        limit: z.coerce.number().optional().describe("Max results (default: 10)"),
+        symbol: z
+          .string()
+          .describe("Symbol name to find (function, class, type, etc.)"),
+        kind: z
+          .string()
+          .optional()
+          .describe(
+            "Filter by kind: function, class, interface, type, enum, const",
+          ),
+        limit: z.coerce
+          .number()
+          .optional()
+          .describe("Max results (default: 10)"),
       }),
       outputSchema: z.object({
-        symbols: z.array(z.object({
-          kind: z.string(),
-          name: z.string(),
-          file: z.string(),
-          startLine: z.coerce.number(),
-          endLine: z.coerce.number(),
-          signature: z.string(),
-          exported: z.boolean(),
-        })),
+        symbols: z.array(
+          z.object({
+            kind: z.string(),
+            name: z.string(),
+            file: z.string(),
+            startLine: z.coerce.number(),
+            endLine: z.coerce.number(),
+            signature: z.string(),
+            exported: z.boolean(),
+          }),
+        ),
       }),
       annotations: TOOL_ANNOTATIONS["find_symbol"],
       handler: async (args: Record<string, unknown>, ctx: ToolContext) => {
-        const { symbol, kind, limit = 10 } = args as {
+        const {
+          symbol,
+          kind,
+          limit = 10,
+        } = args as {
           symbol: string;
           kind?: string;
           limit?: number;
@@ -258,7 +360,7 @@ export function createSearchTools(projectName: string): ToolSpec[] {
             (r: any) =>
               `**${r.kind} ${r.name}** in \`${r.file}\` (lines ${r.startLine}-${r.endLine})\n` +
               `\`${truncate(r.signature, 150)}\`` +
-              (r.exports ? " _(exported)_" : "")
+              (r.exports ? " _(exported)_" : ""),
           )
           .join("\n\n");
         return {
@@ -282,12 +384,25 @@ export function createSearchTools(projectName: string): ToolSpec[] {
       description: `Search ${projectName} codebase with graph expansion. Returns file locations plus connected files via import/call relationships. Use Read tool to view code.`,
       schema: z.object({
         query: z.string().describe("Search query"),
-        limit: z.coerce.number().optional().describe("Max direct results (default: 5)"),
-        expandHops: z.coerce.number().optional().describe("Number of graph hops to expand (default: 1)"),
+        limit: z.coerce
+          .number()
+          .optional()
+          .describe("Max direct results (default: 5)"),
+        expandHops: z.coerce
+          .number()
+          .optional()
+          .describe("Number of graph hops to expand (default: 1)"),
       }),
       annotations: TOOL_ANNOTATIONS["search_graph"],
-      handler: async (args: Record<string, unknown>, ctx: ToolContext): Promise<string> => {
-        const { query, limit = 5, expandHops = 1 } = args as {
+      handler: async (
+        args: Record<string, unknown>,
+        ctx: ToolContext,
+      ): Promise<string> => {
+        const {
+          query,
+          limit = 5,
+          expandHops = 1,
+        } = args as {
           query: string;
           limit?: number;
           expandHops?: number;
@@ -301,7 +416,10 @@ export function createSearchTools(projectName: string): ToolSpec[] {
         });
         const { results, graphExpanded, expandedFiles } = response.data;
 
-        if ((!results || results.length === 0) && (!graphExpanded || graphExpanded.length === 0)) {
+        if (
+          (!results || results.length === 0) &&
+          (!graphExpanded || graphExpanded.length === 0)
+        ) {
           return "No results found.";
         }
 

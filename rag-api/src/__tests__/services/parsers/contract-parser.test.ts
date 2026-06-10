@@ -53,7 +53,7 @@ enum Role {
 
     it('extracts symbols from block names', () => {
       const chunks = parser.parse(protoContent, 'api.proto');
-      const symbols = chunks.flatMap(c => c.symbols || []);
+      const symbols = chunks.flatMap((c) => c.symbols || []);
       expect(symbols).toContain('User');
       expect(symbols).toContain('UserService');
       expect(symbols).toContain('Role');
@@ -110,7 +110,7 @@ mutation CreateUser {
 
     it('extracts symbols', () => {
       const chunks = parser.parse(gqlContent, 'schema.graphql');
-      const symbols = chunks.flatMap(c => c.symbols || []);
+      const symbols = chunks.flatMap((c) => c.symbols || []);
       expect(symbols).toContain('User');
       expect(symbols).toContain('CreateUserInput');
       expect(symbols).toContain('Role');
@@ -159,7 +159,7 @@ components:
 
     it('extracts top-level key names as symbols', () => {
       const chunks = parser.parse(yamlOpenAPI, 'openapi.yaml');
-      const symbols = chunks.flatMap(c => c.symbols || []);
+      const symbols = chunks.flatMap((c) => c.symbols || []);
       expect(symbols).toContain('openapi');
       expect(symbols).toContain('paths');
       expect(symbols).toContain('components');
