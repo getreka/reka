@@ -186,7 +186,68 @@ const CORE_TOOLS = new Set([
   "run_agent",
 ]);
 
-const coreSpecs = allSpecs.filter((s) => CORE_TOOLS.has(s.name));
+// LITE PROFILE (~6 tools): the highest-frequency tools registered eagerly.
+// Rationale: the Claude host now supports ToolSearch / deferred tool-schema
+// loading (~85% token reduction with accuracy UP), which makes the older
+// Hick's-law CORE_TOOLS allowlist largely obsolete. The installed MCP SDK
+// (@modelcontextprotocol/sdk 1.25.x) exposes NO per-tool defer/lazy-loading
+// flag on registerTool (only enable()/disable() visibility toggles), so we
+// cannot ask the server to defer schemas. Deferred loading is a CLIENT-side
+// (host) capability. Therefore 'lite' simply registers this minimal set and
+// the remaining tools stay reachable via run_agent (the agent runtime calls
+// the RAG API directly), exactly like hidden tools under 'core'.
+const LITE_TOOLS = new Set([
+  "search_codebase",
+  "hybrid_search",
+  "find_symbol",
+  "context_briefing",
+  "remember",
+  "recall",
+  // run_agent kept so everything else stays reachable in lite mode.
+  "run_agent",
+]);
+
+// Search-friendly, prescriptive descriptions for the lite set ("Call this
+// when…") so ToolSearch / the host ranks them well. Only overrides the lite
+// tools; all other tools keep their module-defined descriptions.
+const LITE_DESCRIPTIONS: Record<string, string> = {
+  search_codebase:
+    "Call this when you need to find code by meaning across the codebase (functions, classes, where a feature lives). Semantic + keyword search over indexed source.",
+  hybrid_search:
+    "Call this when a question is conceptual ('how does X work', 'where is auth handled') — runs dense + sparse hybrid retrieval with reranking for the best matches.",
+  find_symbol:
+    "Call this when you know a function/class/type NAME and want its exact definition and location. Fast symbol-index lookup, faster and more precise than search.",
+  context_briefing:
+    "Call this BEFORE making any code change: it runs codebase search, symbol lookup, graph (blast radius) and memory recall in parallel and returns a single briefing.",
+  remember:
+    "Call this AFTER you make a decision, learn something, or finish a change — persists it to durable project memory so future sessions recall it.",
+  recall:
+    "Call this when you need past decisions, insights, ADRs, or notes about this project — semantic search over agent memory.",
+};
+
+// Profile selection. Default 'core' preserves CURRENT behavior so nothing breaks.
+type McpProfile = "lite" | "core" | "full";
+const MCP_PROFILE = (
+  process.env.MCP_PROFILE || "core"
+).toLowerCase() as McpProfile;
+
+let activeSpecs: ToolSpec[];
+if (MCP_PROFILE === "full") {
+  activeSpecs = allSpecs;
+} else if (MCP_PROFILE === "lite") {
+  activeSpecs = allSpecs
+    .filter((s) => LITE_TOOLS.has(s.name))
+    .map((s) =>
+      LITE_DESCRIPTIONS[s.name]
+        ? { ...s, description: LITE_DESCRIPTIONS[s.name] }
+        : s,
+    );
+} else {
+  // 'core' (default) — unchanged ~35-tool allowlist.
+  activeSpecs = allSpecs.filter((s) => CORE_TOOLS.has(s.name));
+}
+
+const coreSpecs = activeSpecs;
 
 // MCP Server (modern McpServer API with native Zod validation)
 const server = new McpServer(
@@ -263,7 +324,7 @@ async function main() {
     `${PROJECT_NAME} RAG MCP server running (transport: ${MCP_TRANSPORT}, prefix: ${COLLECTION_PREFIX_FN()})`,
   );
   console.error(
-    `Registered ${coreSpecs.length}/${allSpecs.length} core tools (${allSpecs.length - coreSpecs.length} hidden, accessible via run_agent)`,
+    `Registered ${coreSpecs.length}/${allSpecs.length} tools [profile: ${MCP_PROFILE}] (${allSpecs.length - coreSpecs.length} hidden, accessible via run_agent)`,
   );
 }
 
