@@ -1,0 +1,12 @@
+{
+  "name": "@reka/bench",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Reka code-QA / retrieval benchmark harness (recall@k, MRR, answer-contains, token cost)",
+  "scripts": {
+    "bench": "ts-node --transpile-only -P tsconfig.json runner.ts",
+    "typecheck": "tsc -p tsconfig.json --noEmit",
+    "test": "vitest run metrics.test.ts"
+  },
+  "comment": "Run from the rag-api directory so the shared node_modules (ts-node, vitest, @types/node) resolve. Examples: `npx ts-node --transpile-only rag-api/bench/runner.ts rag-api/bench/datasets/sample.json` or `cd rag-api/bench && npm run bench -- datasets/sample.json`."
+}

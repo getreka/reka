@@ -1,0 +1,74 @@
+[
+  {
+    "id": "rate-limiter",
+    "question": "where is the rate limiter implemented and what algorithm does it use",
+    "expectedFiles": ["rag-api/src/middleware/rate-limit.ts"],
+    "expectedAnswerContains": ["rate", "sliding window"]
+  },
+  {
+    "id": "memory-consolidation",
+    "question": "how does memory consolidation work, turning a session into long-term memory",
+    "expectedFiles": ["rag-api/src/services/consolidation-agent.ts"],
+    "expectedAnswerContains": ["consolidation", "episodic", "semantic"]
+  },
+  {
+    "id": "mcp-tools",
+    "question": "what tools does the MCP server expose and where are they registered",
+    "expectedFiles": ["mcp-server/src/index.ts"],
+    "expectedAnswerContains": ["tool", "register"]
+  },
+  {
+    "id": "embedding-provider",
+    "question": "how are text embeddings generated and which providers are supported",
+    "expectedFiles": ["rag-api/src/services/embedding.ts"],
+    "expectedAnswerContains": ["embedding", "BGE-M3"]
+  },
+  {
+    "id": "vector-store",
+    "question": "how does the system talk to Qdrant and manage per-project collections",
+    "expectedFiles": ["rag-api/src/services/vector-store.ts"],
+    "expectedAnswerContains": ["Qdrant", "collection"]
+  },
+  {
+    "id": "auth-deny-by-default",
+    "question": "how does API key authentication work and what header carries the key",
+    "expectedFiles": ["rag-api/src/middleware/auth.ts"],
+    "expectedAnswerContains": ["api key", "x-api-key"]
+  },
+  {
+    "id": "smart-dispatch",
+    "question": "how does smart dispatch decide which lookups to run for a task",
+    "expectedFiles": ["rag-api/src/services/smart-dispatch.ts"],
+    "expectedAnswerContains": ["lookup", "parallel"]
+  },
+  {
+    "id": "memory-governance",
+    "question": "how are auto-generated memories quarantined and later promoted",
+    "expectedFiles": ["rag-api/src/services/memory-governance.ts"],
+    "expectedAnswerContains": ["quarantine", "promote"]
+  },
+  {
+    "id": "spreading-activation",
+    "question": "how does spreading activation expand memory retrieval across linked memories",
+    "expectedFiles": ["rag-api/src/services/spreading-activation.ts"],
+    "expectedAnswerContains": ["activation", "hop"]
+  },
+  {
+    "id": "project-graph",
+    "question": "where are code dependency graph edges stored and how is blast radius computed",
+    "expectedFiles": ["rag-api/src/services/graph-store.ts"],
+    "expectedAnswerContains": ["graph", "dependenc"]
+  },
+  {
+    "id": "symbol-index",
+    "question": "how does find_symbol look up a function or class by name quickly",
+    "expectedFiles": ["rag-api/src/services/symbol-index.ts"],
+    "expectedAnswerContains": ["symbol"]
+  },
+  {
+    "id": "ebbinghaus-decay",
+    "question": "how does long-term memory apply Ebbinghaus forgetting and decay to retrieval scores",
+    "expectedFiles": ["rag-api/src/services/memory-ltm.ts"],
+    "expectedAnswerContains": ["decay", "memory"]
+  }
+]

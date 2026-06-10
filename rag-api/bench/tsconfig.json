@@ -1,0 +1,19 @@
+{
+  "comment": "Standalone tsconfig so the bench harness type-checks on its own, independent of the main rag-api build (which has rootDir=./src and excludes this folder). Run: cd rag-api && npx tsc -p bench/tsconfig.json --noEmit",
+  "compilerOptions": {
+    "target": "ES2022",
+    "module": "commonjs",
+    "lib": ["ES2022", "DOM"],
+    "moduleResolution": "node",
+    "strict": true,
+    "esModuleInterop": true,
+    "skipLibCheck": true,
+    "forceConsistentCasingInFileNames": true,
+    "resolveJsonModule": true,
+    "noEmit": true,
+    "types": ["node", "vitest/globals"],
+    "typeRoots": ["../node_modules/@types", "../node_modules"]
+  },
+  "include": ["*.ts"],
+  "exclude": ["vitest.config.ts"]
+}
