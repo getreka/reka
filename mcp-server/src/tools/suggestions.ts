@@ -664,15 +664,15 @@ export function createSuggestionTools(projectName: string): ToolSpec[] {
         if (!mcpConfig.mcpServers) mcpConfig.mcpServers = {};
 
         const serverEnv: Record<string, string> = {
-          RAG_API_URL: apiUrl,
+          REKA_API_URL: apiUrl,
           PROJECT_NAME: targetProject,
           PROJECT_PATH: projectPath,
         };
-        if (apiKey) serverEnv.RAG_API_KEY = apiKey;
+        if (apiKey) serverEnv.REKA_API_KEY = apiKey;
 
         mcpConfig.mcpServers[serverName] = {
           command: "npx",
-          args: ["-y", "@crowley/rag-mcp@latest"],
+          args: ["-y", "@getreka/mcp@latest"],
           env: serverEnv,
         };
 
