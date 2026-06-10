@@ -68,7 +68,7 @@ export interface Config {
   ANTHROPIC_API_KEY?: string;
   ANTHROPIC_MODEL: string;
   ANTHROPIC_THINK: boolean;
-  CLAUDE_EFFORT: 'low' | 'medium' | 'high' | 'max';
+  CLAUDE_EFFORT: 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 
   // Vector
   VECTOR_SIZE: number;

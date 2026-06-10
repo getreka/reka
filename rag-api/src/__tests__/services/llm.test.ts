@@ -272,9 +272,15 @@ describe('LLMService', () => {
           max_tokens: 1024,
           system: 'Be concise',
           messages: [{ role: 'user', content: 'anthropic prompt' }],
-          temperature: 0.5,
-        })
+        }),
+        // Second arg is the SDK request-options bag carrying the AbortSignal.
+        expect.anything()
       );
+
+      // Sampling params are never forwarded to the Anthropic Messages API (they 400 on
+      // current models) — temperature is dropped on the Anthropic path.
+      const params = mocks.anthropicCreate.mock.calls[0][0];
+      expect(params.temperature).toBeUndefined();
 
       expect(result.text).toBe('anthropic response');
       expect(result.usage).toEqual({
@@ -299,8 +305,10 @@ describe('LLMService', () => {
 
       expect(mocks.anthropicCreate).toHaveBeenCalledWith(
         expect.objectContaining({
-          thinking: { type: 'enabled', budget_tokens: expect.any(Number) },
-        })
+          thinking: { type: 'adaptive' },
+        }),
+        // Second arg is the SDK request-options bag carrying the AbortSignal.
+        expect.anything()
       );
 
       expect(result.text).toBe('The answer is 42');
@@ -336,6 +344,64 @@ describe('LLMService', () => {
       expect(params.system).toContain('valid JSON only');
     });
 
+    it('sends output_config.effort from config on the Anthropic path', async () => {
+      mocks.anthropicCreate.mockResolvedValue({
+        content: [{ type: 'text', text: 'ok' }],
+        usage: { input_tokens: 5, output_tokens: 5 },
+      });
+
+      await llm.complete('prompt');
+
+      const params = mocks.anthropicCreate.mock.calls[0][0];
+      expect(params.output_config?.effort).toBe('high');
+    });
+
+    it('uses output_config.format json_schema instead of JSON instruction when jsonSchema set', async () => {
+      mocks.anthropicCreate.mockResolvedValue({
+        content: [{ type: 'text', text: '{"x":1}' }],
+        usage: { input_tokens: 5, output_tokens: 5 },
+      });
+
+      const schema = { type: 'object', properties: { x: { type: 'number' } } };
+      await llm.complete('return json', {
+        systemPrompt: 'You are helpful',
+        format: 'json',
+        jsonSchema: schema,
+      });
+
+      const params = mocks.anthropicCreate.mock.calls[0][0];
+      expect(params.output_config?.format).toEqual({ type: 'json_schema', schema });
+      // The prose "valid JSON only" instruction must NOT be appended when a schema is supplied.
+      expect(params.system).toBe('You are helpful');
+    });
+
+    it('flags truncated when stop_reason is max_tokens', async () => {
+      mocks.anthropicCreate.mockResolvedValue({
+        content: [{ type: 'text', text: 'cut off' }],
+        usage: { input_tokens: 5, output_tokens: 5 },
+        stop_reason: 'max_tokens',
+      });
+
+      const result = await llm.complete('long prompt');
+      expect(result.truncated).toBe(true);
+    });
+
+    it('records cache token usage from the response', async () => {
+      mocks.anthropicCreate.mockResolvedValue({
+        content: [{ type: 'text', text: 'cached' }],
+        usage: {
+          input_tokens: 5,
+          output_tokens: 5,
+          cache_creation_input_tokens: 100,
+          cache_read_input_tokens: 200,
+        },
+      });
+
+      const result = await llm.complete('prompt');
+      expect(result.usage?.cacheCreationTokens).toBe(100);
+      expect(result.usage?.cacheReadTokens).toBe(200);
+    });
+
     it('retries without thinking on 400 error', async () => {
       mockedConfig.ANTHROPIC_THINK = true;
       const err = Object.assign(new Error('Bad Request'), { status: 400 });
@@ -363,6 +429,54 @@ describe('LLMService', () => {
       (llm as any).anthropicClient = null;
 
       await expect(llm.complete('prompt')).rejects.toThrow('Anthropic API key not configured');
+    });
+  });
+
+  describe('AbortSignal threading (consolidation abort fix)', () => {
+    it('forwards options.signal into the Ollama axios request config', async () => {
+      mocks.post.mockResolvedValue({
+        data: { message: { content: 'ok' } },
+      });
+      const controller = new AbortController();
+
+      await llm.complete('prompt', { signal: controller.signal });
+
+      // axios.post(url, body, config) — config is the 3rd arg
+      const config = mocks.post.mock.calls[0][2];
+      expect(config.signal).toBe(controller.signal);
+    });
+
+    it('forwards options.signal into the Anthropic SDK request options', async () => {
+      (llm as any).provider = 'anthropic';
+      (llm as any).anthropicClient = mockAnthropicClient();
+      mocks.anthropicCreate.mockResolvedValue({
+        content: [{ type: 'text', text: 'ok' }],
+        usage: { input_tokens: 5, output_tokens: 5 },
+      });
+      const controller = new AbortController();
+
+      await llm.complete('prompt', { signal: controller.signal });
+
+      // messages.create(params, requestOptions) — signal is on the 2nd arg
+      const requestOptions = mocks.anthropicCreate.mock.calls[0][1];
+      expect(requestOptions?.signal).toBe(controller.signal);
+
+      (llm as any).provider = 'ollama';
+    });
+
+    it('passes signal through completeWithBestProvider utility routing', async () => {
+      mocks.post.mockResolvedValue({
+        data: { message: { content: 'ok' } },
+      });
+      const controller = new AbortController();
+
+      await llm.completeWithBestProvider('prompt', {
+        complexity: 'utility',
+        signal: controller.signal,
+      });
+
+      const config = mocks.post.mock.calls[0][2];
+      expect(config.signal).toBe(controller.signal);
     });
   });
 
@@ -488,6 +602,47 @@ describe('LLMService', () => {
       expect(result.toolUse).toHaveLength(1);
       expect(result.toolUse![0].name).toBe('search_codebase');
       expect(result.toolUse![0].input).toEqual({ query: 'auth' });
+    });
+
+    it('returns raw response content and applies prompt-cache breakpoints on Anthropic chat', async () => {
+      (llm as any).anthropicClient = mockAnthropicClient();
+      const content = [
+        { type: 'thinking', thinking: 'reasoning', signature: 'sig' },
+        { type: 'text', text: 'answer' },
+        { type: 'tool_use', id: 'call_1', name: 'search_codebase', input: { query: 'x' } },
+      ];
+      mocks.anthropicCreate.mockResolvedValue({
+        content,
+        usage: { input_tokens: 10, output_tokens: 30 },
+      });
+
+      const result = await llm.chat([{ role: 'user', content: 'go' }], {
+        provider: 'anthropic',
+        systemPrompt: 'You are an agent',
+        tools: [
+          {
+            name: 'search_codebase',
+            description: 'Search codebase',
+            input_schema: {
+              type: 'object' as const,
+              properties: { query: { type: 'string' } },
+              required: ['query'],
+            },
+          },
+        ],
+      });
+
+      // rawContent is returned verbatim (preserves signed thinking blocks)
+      expect(result.rawContent).toBe(content);
+
+      const params = mocks.anthropicCreate.mock.calls[0][0];
+      // system sent as a block array with a cache_control breakpoint on the last block
+      expect(Array.isArray(params.system)).toBe(true);
+      expect(params.system[params.system.length - 1].cache_control).toEqual({ type: 'ephemeral' });
+      // last tool definition carries cache_control
+      expect(params.tools[params.tools.length - 1].cache_control).toEqual({ type: 'ephemeral' });
+      // sampling params not forwarded
+      expect(params.temperature).toBeUndefined();
     });
   });
 

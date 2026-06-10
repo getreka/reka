@@ -265,6 +265,22 @@ class AgentRuntime {
     }
     messages.push({ role: 'user', content: userPrompt });
 
+    // Prompt caching: Anthropic allows at most 4 cache_control breakpoints per request.
+    // chatWithAnthropic already spends two (system block + last tool definition), so the
+    // conversation may carry at most ONE more. We mark the newest tool_result turn each
+    // iteration and strip the breakpoint off the previously-marked turn — otherwise the
+    // markers accumulate across `messages` and the request 400s by the ~3rd tool round.
+    // `cachedToolResults` holds the exact array object pushed into `messages`, so mutating
+    // its last element in place removes the stale breakpoint from the already-pushed turn.
+    let cachedToolResults:
+      | Array<{
+          type: 'tool_result';
+          tool_use_id: string;
+          content: string;
+          cache_control?: { type: 'ephemeral' };
+        }>
+      | undefined;
+
     for (let iteration = 1; iteration <= maxIterations; iteration++) {
       const remaining = deadline - Date.now();
       if (remaining <= 5000) {
@@ -300,7 +316,12 @@ class AgentRuntime {
       }
 
       // Process tool calls
-      const toolResults: Array<{ type: 'tool_result'; tool_use_id: string; content: string }> = [];
+      const toolResults: Array<{
+        type: 'tool_result';
+        tool_use_id: string;
+        content: string;
+        cache_control?: { type: 'ephemeral' };
+      }> = [];
 
       for (const toolCall of response.toolUse) {
         // Validate action is allowed
@@ -350,24 +371,44 @@ class AgentRuntime {
 
       agentTask.steps.push(step);
 
-      // Add assistant response and tool results to history
-      // Build assistant content blocks
-      const assistantContent: Array<
-        | { type: 'text'; text: string }
-        | { type: 'tool_use'; id: string; name: string; input: Record<string, unknown> }
-      > = [];
-      if (response.text) {
-        assistantContent.push({ type: 'text', text: response.text });
-      }
-      for (const toolCall of response.toolUse) {
-        assistantContent.push({
-          type: 'tool_use',
-          id: toolCall.id,
-          name: toolCall.name,
-          input: toolCall.input,
-        });
+      // Add assistant response and tool results to history.
+      // Push the RAW response content verbatim — it carries the signed `thinking` blocks that
+      // Claude 4+ requires alongside `tool_use` on a continuation. Reconstructing from
+      // text+tool_use only would drop the signature and the API would 400. Falling back to a
+      // text+tool_use rebuild only when rawContent is unavailable (e.g. non-Anthropic mocks).
+      let assistantContent: any[];
+      if (response.rawContent && response.rawContent.length > 0) {
+        assistantContent = response.rawContent;
+      } else {
+        assistantContent = [];
+        if (response.text) {
+          assistantContent.push({ type: 'text', text: response.text });
+        }
+        for (const toolCall of response.toolUse) {
+          assistantContent.push({
+            type: 'tool_use',
+            id: toolCall.id,
+            name: toolCall.name,
+            input: toolCall.input,
+          });
+        }
       }
       messages.push({ role: 'assistant', content: assistantContent });
+
+      // Prompt caching: mark the last block of this (newest) tool_result turn with
+      // cache_control so the growing conversation prefix is cached each iteration.
+      // First strip the breakpoint off the previously-marked turn so the conversation
+      // never holds more than ONE breakpoint (Anthropic's hard limit is 4 total; the
+      // system block + last tool definition already consume two — see chatWithAnthropic).
+      if (toolResults.length > 0) {
+        if (cachedToolResults) {
+          // Mutate the already-pushed array's last element in place to drop its marker.
+          const prev = cachedToolResults[cachedToolResults.length - 1];
+          if (prev) delete prev.cache_control;
+        }
+        toolResults[toolResults.length - 1].cache_control = { type: 'ephemeral' };
+        cachedToolResults = toolResults;
+      }
       messages.push({ role: 'user', content: toolResults });
 
       // Check for convergence — early exit if observations are repetitive

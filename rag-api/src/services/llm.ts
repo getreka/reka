@@ -2,7 +2,11 @@
  * LLM Service - Multi-provider support
  *
  * Providers: Ollama (local), OpenAI, Anthropic (via official SDK).
- * Anthropic provider supports adaptive thinking and streaming.
+ * Anthropic provider uses adaptive thinking (`thinking: {type: 'adaptive'}`),
+ * output_config.effort, prompt caching, structured outputs, and streaming.
+ * Sampling parameters (temperature/top_p/top_k) are NOT forwarded to the
+ * Anthropic Messages API — they 400 on current models — so temperature is
+ * applied for Ollama/OpenAI only.
  */
 
 import axios from 'axios';
@@ -15,11 +19,13 @@ import { llmUsageLogger } from './llm-usage-logger';
 
 export interface CompletionOptions {
   maxTokens?: number;
-  temperature?: number;
+  temperature?: number; // Forwarded to Ollama/OpenAI only — Anthropic rejects sampling params
   systemPrompt?: string;
   think?: boolean; // Ollama: think param, Claude: adaptive thinking
-  format?: 'json' | null; // Ollama: native JSON mode, Claude: system prompt instruction
+  format?: 'json' | null; // Ollama: native JSON mode, Claude: structured outputs (when no jsonSchema)
+  jsonSchema?: Record<string, unknown>; // Claude: output_config.format json_schema (overrides format)
   stream?: boolean; // Enable streaming (default false)
+  signal?: AbortSignal; // Cancels the in-flight provider call (axios + Anthropic SDK honor it)
 }
 
 export interface CompletionResult {
@@ -29,8 +35,11 @@ export interface CompletionResult {
     promptTokens: number;
     completionTokens: number;
     totalTokens: number;
+    cacheCreationTokens?: number; // Anthropic prompt-cache write tokens (~1.25x cost)
+    cacheReadTokens?: number; // Anthropic prompt-cache read tokens (~0.1x cost)
   };
   provider?: string; // Which provider handled the request
+  truncated?: boolean; // True if the response was cut off (stop_reason === 'max_tokens')
 }
 
 export type ComplexityLevel = 'utility' | 'standard' | 'complex';
@@ -162,7 +171,14 @@ class LLMService {
   private recordUsage(
     provider: string,
     model: string,
-    usage: { promptTokens: number; completionTokens: number } | undefined,
+    usage:
+      | {
+          promptTokens: number;
+          completionTokens: number;
+          cacheCreationTokens?: number;
+          cacheReadTokens?: number;
+        }
+      | undefined,
     durationMs: number,
     caller: string,
     opts: { thinking?: boolean; success?: boolean; error?: string; projectName?: string } = {}
@@ -172,6 +188,8 @@ class LLMService {
       model,
       promptTokens: usage?.promptTokens,
       completionTokens: usage?.completionTokens,
+      cacheCreationTokens: usage?.cacheCreationTokens,
+      cacheReadTokens: usage?.cacheReadTokens,
       durationMs,
       caller,
       projectName: opts.projectName,
@@ -219,7 +237,8 @@ class LLMService {
     try {
       const response = await ollamaCircuit.execute(() =>
         withRetry(
-          () => axios.post(`${config.OLLAMA_URL}/api/chat`, body, { timeout }),
+          () =>
+            axios.post(`${config.OLLAMA_URL}/api/chat`, body, { timeout, signal: options.signal }),
           { maxAttempts: 2, baseDelayMs: 1000, maxDelayMs: 10000 },
           'llm.ollama'
         )
@@ -261,6 +280,7 @@ class LLMService {
         delete body.think;
         const response = await axios.post(`${config.OLLAMA_URL}/api/chat`, body, {
           timeout: 120000,
+          signal: options.signal,
         });
         const result: CompletionResult = {
           text: response.data.message?.content || '',
@@ -331,6 +351,7 @@ class LLMService {
                   'Content-Type': 'application/json',
                 },
                 timeout: 120000,
+                signal: options.signal,
               }
             ),
           { maxAttempts: 2, baseDelayMs: 1000, maxDelayMs: 15000 },
@@ -375,6 +396,33 @@ class LLMService {
   // Anthropic Provider (Official SDK)
   // ============================================
 
+  /**
+   * Apply Anthropic-specific request config in one place:
+   *  - adaptive thinking (`thinking: {type: 'adaptive'}`) when enabled; OMITTED when disabled
+   *    (never send `{type: 'disabled'}` — it 400s on Fable 5)
+   *  - output_config.effort from config.CLAUDE_EFFORT (cast for SDK type — 'xhigh' / fable-5)
+   *  - output_config.format json_schema for structured outputs
+   * Sampling params are never set here — they 400 on current models.
+   */
+  private applyAnthropicOutputConfig(
+    params: Anthropic.MessageCreateParams,
+    enableThinking: boolean,
+    jsonSchema?: Record<string, unknown>
+  ): void {
+    if (enableThinking) {
+      params.thinking = { type: 'adaptive' };
+    }
+
+    const outputConfig: Anthropic.OutputConfig = {
+      // 'xhigh' is valid on Fable 5 / Opus 4.7+ but absent from the 0.78 SDK enum — cast.
+      effort: config.CLAUDE_EFFORT as Anthropic.OutputConfig['effort'],
+    };
+    if (jsonSchema) {
+      outputConfig.format = { type: 'json_schema', schema: jsonSchema };
+    }
+    params.output_config = outputConfig;
+  }
+
   private async completeWithAnthropic(
     prompt: string,
     options: CompletionOptions
@@ -386,14 +434,17 @@ class LLMService {
     }
 
     const enableThinking = options.think ?? config.ANTHROPIC_THINK;
-    const maxTokens = options.maxTokens ?? 4096;
+    // Raise the non-streaming default to 16000 so responses aren't truncated mid-thought.
+    const maxTokens = options.maxTokens ?? 16000;
 
-    // Build system prompt — append JSON instruction if format: 'json'
+    // Build system prompt — append JSON instruction only when no json_schema is supplied.
+    // With output_config.format json_schema the constraint is enforced server-side, so the
+    // prose instruction is unnecessary (and would only bloat the prompt).
     let systemPrompt = options.systemPrompt;
-    if (options.format === 'json' && systemPrompt) {
+    if (!options.jsonSchema && options.format === 'json' && systemPrompt) {
       systemPrompt +=
         '\n\nIMPORTANT: Respond with valid JSON only. No markdown, no explanation outside JSON.';
-    } else if (options.format === 'json') {
+    } else if (!options.jsonSchema && options.format === 'json') {
       systemPrompt = 'Respond with valid JSON only. No markdown, no explanation outside JSON.';
     }
 
@@ -405,11 +456,13 @@ class LLMService {
           systemPrompt,
           enableThinking,
           maxTokens,
-          options.temperature
+          options.jsonSchema,
+          options.signal
         );
       }
 
-      // Build request params
+      // Build request params. Sampling params (temperature/top_p/top_k) are intentionally
+      // NOT forwarded — they 400 on current Anthropic models.
       const params: Anthropic.MessageCreateParams = {
         model: config.ANTHROPIC_MODEL,
         max_tokens: enableThinking ? Math.max(maxTokens, 16000) : maxTokens,
@@ -420,22 +473,11 @@ class LLMService {
         params.system = systemPrompt;
       }
 
-      // Temperature: not allowed with thinking, must be 1 for thinking or omit
-      if (!enableThinking && options.temperature !== undefined) {
-        params.temperature = options.temperature;
-      }
-
-      // Adaptive thinking for complex reasoning
-      if (enableThinking) {
-        params.thinking = {
-          type: 'enabled',
-          budget_tokens: Math.min(10000, Math.max(maxTokens, 16000) - 1000),
-        };
-      }
+      this.applyAnthropicOutputConfig(params, enableThinking, options.jsonSchema);
 
       const response = await anthropicCircuit.execute(() =>
         withRetry(
-          () => client.messages.create(params),
+          () => client.messages.create(params, { signal: options.signal }),
           {
             maxAttempts: 2,
             baseDelayMs: 1000,
@@ -457,7 +499,7 @@ class LLMService {
       );
       return result;
     } catch (error: any) {
-      // Fallback: if thinking fails, retry without it
+      // Fallback: if thinking fails, retry without it (omit thinking param entirely)
       if (enableThinking && error.status === 400) {
         logger.warn('Claude thinking mode failed, retrying without thinking', {
           error: error.message,
@@ -470,10 +512,8 @@ class LLMService {
         if (systemPrompt) {
           params.system = systemPrompt;
         }
-        if (options.temperature !== undefined) {
-          params.temperature = options.temperature;
-        }
-        const response = await client.messages.create(params);
+        this.applyAnthropicOutputConfig(params, false, options.jsonSchema);
+        const response = await client.messages.create(params, { signal: options.signal });
         const result = this.parseAnthropicResponse(response);
         this.recordUsage(
           'anthropic',
@@ -512,7 +552,8 @@ class LLMService {
     systemPrompt: string | undefined,
     enableThinking: boolean,
     maxTokens: number,
-    temperature?: number
+    jsonSchema?: Record<string, unknown>,
+    signal?: AbortSignal
   ): Promise<CompletionResult> {
     const params: Anthropic.MessageCreateParams = {
       model: config.ANTHROPIC_MODEL,
@@ -525,18 +566,9 @@ class LLMService {
       params.system = systemPrompt;
     }
 
-    if (!enableThinking && temperature !== undefined) {
-      params.temperature = temperature;
-    }
+    this.applyAnthropicOutputConfig(params, enableThinking, jsonSchema);
 
-    if (enableThinking) {
-      params.thinking = {
-        type: 'enabled',
-        budget_tokens: Math.min(10000, Math.max(maxTokens, 16000) - 1000),
-      };
-    }
-
-    const stream = client.messages.stream(params);
+    const stream = client.messages.stream(params, { signal });
     const response = await stream.finalMessage();
 
     return this.parseAnthropicResponse(response);
@@ -558,16 +590,31 @@ class LLMService {
       }
     }
 
-    return {
+    const cacheCreationTokens = response.usage.cache_creation_input_tokens ?? undefined;
+    const cacheReadTokens = response.usage.cache_read_input_tokens ?? undefined;
+
+    const result: CompletionResult = {
       text,
       thinking: thinking || undefined,
       usage: {
         promptTokens: response.usage.input_tokens,
         completionTokens: response.usage.output_tokens,
         totalTokens: response.usage.input_tokens + response.usage.output_tokens,
+        cacheCreationTokens,
+        cacheReadTokens,
       },
       provider: 'anthropic',
     };
+
+    if (response.stop_reason === 'max_tokens') {
+      logger.warn('Anthropic response truncated (stop_reason=max_tokens)', {
+        model: config.ANTHROPIC_MODEL,
+        outputTokens: response.usage.output_tokens,
+      });
+      result.truncated = true;
+    }
+
+    return result;
   }
 
   // ============================================
@@ -588,8 +635,15 @@ class LLMService {
     text: string;
     thinking?: string;
     toolUse?: Array<{ id: string; name: string; input: Record<string, unknown> }>;
+    // Raw assistant content blocks from the Anthropic response (text + thinking + tool_use,
+    // with signatures preserved). Push verbatim into the next turn so signed thinking blocks
+    // are not dropped — the Messages API rejects a tool_use continuation otherwise. Undefined
+    // for non-Anthropic providers.
+    rawContent?: Anthropic.ContentBlock[];
     promptTokens: number;
     completionTokens: number;
+    cacheCreationTokens?: number;
+    cacheReadTokens?: number;
   }> {
     const provider = options.provider || this.provider;
 
@@ -610,8 +664,11 @@ class LLMService {
     text: string;
     thinking?: string;
     toolUse?: Array<{ id: string; name: string; input: Record<string, unknown> }>;
+    rawContent?: Anthropic.ContentBlock[];
     promptTokens: number;
     completionTokens: number;
+    cacheCreationTokens?: number;
+    cacheReadTokens?: number;
   }> {
     const startTime = Date.now();
     const client = this.anthropicClient;
@@ -620,7 +677,7 @@ class LLMService {
     }
 
     const enableThinking = options.think ?? config.ANTHROPIC_THINK;
-    const maxTokens = options.maxTokens ?? 4096;
+    const maxTokens = options.maxTokens ?? 16000;
 
     // Separate system message from the rest
     const anthropicMessages: Anthropic.MessageParam[] = [];
@@ -632,7 +689,7 @@ class LLMService {
       } else {
         anthropicMessages.push({
           role: msg.role as 'user' | 'assistant',
-          content: msg.content as string,
+          content: msg.content as Anthropic.ContentBlockParam[] | string,
         });
       }
     }
@@ -643,23 +700,22 @@ class LLMService {
       messages: anthropicMessages,
     };
 
+    // Prompt caching: send the (byte-stable) system prompt as a block array with a
+    // cache_control breakpoint on the last block so the system+tools prefix is cached
+    // and reused across every iteration of the agent tool loop.
     if (systemPrompt) {
-      params.system = systemPrompt;
+      params.system = [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }];
     }
 
-    if (!enableThinking && options.temperature !== undefined) {
-      params.temperature = options.temperature;
-    }
-
-    if (enableThinking) {
-      params.thinking = {
-        type: 'enabled',
-        budget_tokens: Math.min(10000, Math.max(maxTokens, 16000) - 1000),
-      };
-    }
+    this.applyAnthropicOutputConfig(params, enableThinking, options.jsonSchema);
 
     if (options.tools && options.tools.length > 0) {
-      params.tools = options.tools;
+      // Mark the last tool definition with cache_control so the (stable) tool list is cached
+      // together with the system prefix. Clone the last tool to avoid mutating the caller's array.
+      const tools = options.tools.slice();
+      const last = tools[tools.length - 1];
+      tools[tools.length - 1] = { ...last, cache_control: { type: 'ephemeral' } };
+      params.tools = tools;
     }
 
     const response = await anthropicCircuit.execute(() =>
@@ -691,6 +747,8 @@ class LLMService {
     const usage = {
       promptTokens: response.usage.input_tokens,
       completionTokens: response.usage.output_tokens,
+      cacheCreationTokens: response.usage.cache_creation_input_tokens ?? undefined,
+      cacheReadTokens: response.usage.cache_read_input_tokens ?? undefined,
     };
     this.recordUsage('anthropic', config.ANTHROPIC_MODEL, usage, Date.now() - startTime, 'chat', {
       thinking: enableThinking,
@@ -700,6 +758,8 @@ class LLMService {
       text,
       thinking: thinking || undefined,
       toolUse: toolUse.length > 0 ? toolUse : undefined,
+      // Preserve the raw assistant content (incl. signed thinking blocks) for verbatim re-push.
+      rawContent: response.content,
       ...usage,
     };
   }

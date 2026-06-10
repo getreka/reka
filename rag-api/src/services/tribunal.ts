@@ -16,6 +16,7 @@ import { v4 as uuidv4 } from 'uuid';
 import config from '../config';
 import { logger } from '../utils/logger';
 import { llm } from './llm';
+import { modelCostUsd } from './llm-usage-logger';
 import { embeddingService } from './embedding';
 import { vectorStore } from './vector-store';
 import { memoryService } from './memory';
@@ -176,7 +177,83 @@ Render a verdict with this EXACT structure:
   return prompt;
 }
 
-// ── Verdict Parser ──────────────────────────────────────────
+// ── Verdict Structured Output Schema ────────────────────────
+
+// JSON schema for the judge's verdict — sent as output_config.format on the Anthropic path
+// so the verdict comes back as guaranteed-valid JSON (no brittle regex parsing).
+const VERDICT_JSON_SCHEMA: Record<string, unknown> = {
+  type: 'object',
+  additionalProperties: false,
+  properties: {
+    recommendation: { type: 'string', description: 'Which position wins' },
+    confidence: { type: 'string', enum: ['high', 'medium', 'low'] },
+    reasoning: { type: 'string', description: '2-3 paragraphs explaining the decision' },
+    scores: {
+      type: 'array',
+      items: {
+        type: 'object',
+        additionalProperties: false,
+        properties: {
+          position: { type: 'string' },
+          score: { type: 'integer' },
+          justification: { type: 'string' },
+        },
+        required: ['position', 'score', 'justification'],
+      },
+    },
+    tradeoffs: {
+      type: 'string',
+      description: 'What is sacrificed by choosing this recommendation',
+    },
+    dissent: { type: 'string', description: 'Strongest counter-argument from the losing side' },
+    conditions: { type: 'string', description: 'When this verdict should be revisited' },
+  },
+  required: [
+    'recommendation',
+    'confidence',
+    'reasoning',
+    'scores',
+    'tradeoffs',
+    'dissent',
+    'conditions',
+  ],
+};
+
+/**
+ * Parse a structured (json_schema) verdict response. Used on the Anthropic path where
+ * output_config.format guarantees valid JSON. Falls back to the regex parser on any
+ * parse failure so a malformed response never crashes the debate.
+ */
+function parseVerdictJson(text: string, positions: string[]): TribunalVerdict {
+  try {
+    const raw = JSON.parse(text) as Partial<TribunalVerdict>;
+    const confidence = (
+      ['high', 'medium', 'low'].includes(raw.confidence as string) ? raw.confidence : 'medium'
+    ) as 'high' | 'medium' | 'low';
+    const scores = Array.isArray(raw.scores)
+      ? raw.scores.map((s) => ({
+          position: String(s.position ?? ''),
+          score: Number.isFinite(s.score) ? Number(s.score) : 5,
+          justification: String(s.justification ?? ''),
+        }))
+      : positions.map((position) => ({ position, score: 5, justification: '' }));
+
+    return {
+      recommendation: String(raw.recommendation ?? ''),
+      confidence,
+      reasoning: String(raw.reasoning ?? ''),
+      scores,
+      tradeoffs: String(raw.tradeoffs ?? ''),
+      dissent: String(raw.dissent ?? ''),
+      conditions: String(raw.conditions ?? ''),
+    };
+  } catch {
+    // Structured output was expected but didn't parse — fall back to the regex parser.
+    return parseVerdict(text, positions);
+  }
+}
+
+// ── Verdict Parser (regex fallback, Ollama path) ────────────
 
 function parseVerdict(text: string, positions: string[]): TribunalVerdict {
   const get = (label: string): string => {
@@ -212,15 +289,42 @@ function parseVerdict(text: string, positions: string[]): TribunalVerdict {
 }
 
 // ── Cost Estimation ─────────────────────────────────────────
+//
+// Model pricing knowledge lives in llm-usage-logger.modelCostUsd (single source of
+// truth, also prices prompt-cache tokens). Tribunal only tracks token tallies and
+// returns 0 for the local Ollama provider.
 
-function estimateCost(tokens: number): number {
-  // Conservative estimate based on Claude Sonnet pricing ($3/$15 per 1M tokens)
-  const inputCostPer1M = 3;
-  const outputCostPer1M = 15;
-  // Rough 60/40 split input/output
-  const inputTokens = tokens * 0.6;
-  const outputTokens = tokens * 0.4;
-  return (inputTokens / 1_000_000) * inputCostPer1M + (outputTokens / 1_000_000) * outputCostPer1M;
+// Running token tally for a debate, separated into input/output so cost is exact.
+interface CostAccumulator {
+  promptTokens: number;
+  completionTokens: number;
+  totalTokens: number;
+  cacheCreationTokens: number; // Anthropic prompt-cache write tokens (~1.25x input cost)
+  cacheReadTokens: number; // Anthropic prompt-cache read tokens (~0.1x input cost)
+  provider: string; // last provider that handled a call (e.g. 'anthropic', 'ollama')
+  model: string; // last model that handled a call
+}
+
+/**
+ * Provider/model-aware cost estimate using actual prompt/completion token counts.
+ * Returns 0 for Ollama (local, no marginal cost). Delegates pricing (incl. cache
+ * tokens) to llm-usage-logger.modelCostUsd; unknown Anthropic models fall back to
+ * Sonnet pricing there.
+ */
+function estimateCost(acc: CostAccumulator): number {
+  if (acc.provider === 'ollama') return 0;
+
+  // If we have a real input/output split, use it; otherwise fall back to a 60/40 estimate.
+  const hasSplit = acc.promptTokens > 0 || acc.completionTokens > 0;
+  const promptTokens = hasSplit ? acc.promptTokens : acc.totalTokens * 0.6;
+  const completionTokens = hasSplit ? acc.completionTokens : acc.totalTokens * 0.4;
+
+  return modelCostUsd(acc.model, {
+    promptTokens,
+    completionTokens,
+    cacheCreationTokens: acc.cacheCreationTokens,
+    cacheReadTokens: acc.cacheReadTokens,
+  });
 }
 
 // ── Debate Store (in-memory, TTL cleanup) ───────────────────
@@ -444,6 +548,32 @@ class TribunalService {
       durationMs: 0,
     };
 
+    // Accumulate actual input/output tokens + the provider/model that handled the calls
+    // so the final cost reflects real Anthropic pricing (or 0 for Ollama).
+    const costAcc: CostAccumulator = {
+      promptTokens: 0,
+      completionTokens: 0,
+      totalTokens: 0,
+      cacheCreationTokens: 0,
+      cacheReadTokens: 0,
+      provider: 'anthropic',
+      model: config.ANTHROPIC_MODEL,
+    };
+    const addUsage = (usage?: {
+      promptTokens?: number;
+      completionTokens?: number;
+      totalTokens?: number;
+      cacheCreationTokens?: number;
+      cacheReadTokens?: number;
+    }): void => {
+      if (!usage) return;
+      costAcc.promptTokens += usage.promptTokens || 0;
+      costAcc.completionTokens += usage.completionTokens || 0;
+      costAcc.totalTokens += usage.totalTokens || 0;
+      costAcc.cacheCreationTokens += usage.cacheCreationTokens || 0;
+      costAcc.cacheReadTokens += usage.cacheReadTokens || 0;
+    };
+
     // Register in work registry
     const workHandle = workRegistry.register({
       id,
@@ -479,6 +609,8 @@ class TribunalService {
         });
         framingText = framingResult.text;
         framingTokens = framingResult.usage?.totalTokens || 0;
+        addUsage(framingResult.usage);
+        if (framingResult.provider) costAcc.provider = framingResult.provider;
       }
 
       result.cost.totalTokens += framingTokens;
@@ -506,41 +638,64 @@ class TribunalService {
         // Run parallel research agents — one per position
         const researchPromises = cfg.positions.map(async (position) => {
           try {
-            const result = await agentRuntime.run({
+            const agentResult = await agentRuntime.run({
               projectName: cfg.projectName,
               agentType: 'research',
               task: `Research evidence for the position "${position}" in the context of: ${cfg.topic}. Focus on concrete data: existing code patterns, benchmarks, industry best practices, and trade-offs.`,
               maxIterations: 5,
               timeout: 60_000,
             });
-            return { position, evidence: result.result || '' };
+            return {
+              position,
+              evidence: agentResult.result || '',
+              tokens: agentResult.usage?.totalTokens || 0,
+            };
           } catch (err: any) {
             logger.warn('Tribunal deep research failed for position', {
               position,
               error: err.message,
             });
-            return { position, evidence: '' };
+            return { position, evidence: '', tokens: 0 };
           }
         });
 
         const researchResults = await Promise.all(researchPromises);
         let researchTokens = 0;
-        for (const { position, evidence } of researchResults) {
+        for (const { position, evidence, tokens } of researchResults) {
           if (evidence) {
             positionResearch.set(position, evidence);
           }
+          // Count every research agent's token usage toward the debate cost — even
+          // failed runs may have spent tokens before erroring. agentRuntime only
+          // reports an aggregate total (no input/output split). Split it 60/40 here
+          // so the cost is reflected even when other phases already populated the
+          // accumulator's prompt/completion split (estimateCost's own 60/40 fallback
+          // only fires when BOTH are still zero, which research alone wouldn't satisfy).
+          researchTokens += tokens;
+          addUsage({
+            totalTokens: tokens,
+            promptTokens: Math.round(tokens * 0.6),
+            completionTokens: Math.round(tokens * 0.4),
+          });
         }
+        result.cost.totalTokens += researchTokens;
 
-        // Budget check after research
+        // Budget check after research (costAcc now includes deep-research cost, so this
+        // guard is no longer a no-op and estimatedUsd reflects research spend).
         const researchDurationMs = Date.now() - researchStart;
         logger.info('Tribunal deep research completed', {
           id,
           positions: cfg.positions,
+          researchTokens,
           durationMs: researchDurationMs,
         });
 
-        if (estimateCost(result.cost.totalTokens) > maxBudget) {
-          logger.warn('Tribunal budget exceeded after deep research', { id });
+        if (estimateCost(costAcc) > maxBudget) {
+          logger.warn('Tribunal budget exceeded after deep research', {
+            id,
+            estimatedUsd: estimateCost(costAcc),
+            maxBudget,
+          });
         }
       }
 
@@ -563,11 +718,14 @@ class TribunalService {
         );
       });
 
-      const initialArgs = await Promise.all(argPromises);
+      const initialAdvocateResults = await Promise.all(argPromises);
+      const initialArgs = initialAdvocateResults.map((r) => r.argument);
       let argsTokens = 0;
-      for (const arg of initialArgs) {
-        argsTokens += arg.tokens;
-        result.arguments.push(arg);
+      for (const r of initialAdvocateResults) {
+        argsTokens += r.argument.tokens;
+        result.arguments.push(r.argument);
+        addUsage(r.usage);
+        if (r.provider) costAcc.provider = r.provider;
       }
       result.cost.totalTokens += argsTokens;
       result.phases.push({
@@ -591,10 +749,10 @@ class TribunalService {
       storeDebate(result);
 
       // Budget check
-      if (estimateCost(result.cost.totalTokens) > maxBudget) {
+      if (estimateCost(costAcc) > maxBudget) {
         logger.warn('Tribunal budget exceeded after arguments, skipping rebuttals', {
           id,
-          estimatedUsd: estimateCost(result.cost.totalTokens),
+          estimatedUsd: estimateCost(costAcc),
           maxBudget,
         });
       } else {
@@ -619,13 +777,15 @@ class TribunalService {
           });
 
           const roundRebuttals = await Promise.all(rebuttalPromises);
-          for (const rebuttal of roundRebuttals) {
-            rebuttalTokens += rebuttal.tokens;
-            result.arguments.push(rebuttal);
+          for (const r of roundRebuttals) {
+            rebuttalTokens += r.argument.tokens;
+            result.arguments.push(r.argument);
+            addUsage(r.usage);
+            if (r.provider) costAcc.provider = r.provider;
           }
 
-          // Budget check between rounds
-          if (estimateCost(result.cost.totalTokens + rebuttalTokens) > maxBudget) {
+          // Budget check between rounds (costAcc already includes this round's usage)
+          if (estimateCost(costAcc) > maxBudget) {
             logger.warn('Tribunal budget exceeded during rebuttals', { id, round });
             break;
           }
@@ -661,11 +821,21 @@ class TribunalService {
         maxTokens: 4096,
         temperature: 0.2,
         think: config.TRIBUNAL_JUDGE_COMPLEXITY === 'complex',
+        // Structured outputs: enforced on the Anthropic path via output_config.format.
+        // Ignored by the Ollama path, which still emits the labelled-markdown verdict.
+        jsonSchema: VERDICT_JSON_SCHEMA,
       });
 
       const verdictTokens = verdictResult.usage?.totalTokens || 0;
       result.cost.totalTokens += verdictTokens;
-      result.verdict = parseVerdict(verdictResult.text, cfg.positions);
+      addUsage(verdictResult.usage);
+      if (verdictResult.provider) costAcc.provider = verdictResult.provider;
+      // Anthropic returns guaranteed-valid JSON (json_schema); Ollama returns the
+      // labelled-markdown format parsed by the regex fallback.
+      result.verdict =
+        verdictResult.provider === 'anthropic'
+          ? parseVerdictJson(verdictResult.text, cfg.positions)
+          : parseVerdict(verdictResult.text, cfg.positions);
       result.phases.push({
         name: 'verdict',
         durationMs: Date.now() - verdictStart,
@@ -707,7 +877,7 @@ class TribunalService {
         }
       }
 
-      result.cost.estimatedUsd = estimateCost(result.cost.totalTokens);
+      result.cost.estimatedUsd = estimateCost(costAcc);
       result.durationMs = Date.now() - startTime;
       result.status = 'completed';
       workHandle.complete({
@@ -768,7 +938,17 @@ class TribunalService {
     ragContext: string | undefined,
     opponentArgs: TribunalArgument[] | undefined,
     round: number
-  ): Promise<TribunalArgument> {
+  ): Promise<{
+    argument: TribunalArgument;
+    usage?: {
+      promptTokens?: number;
+      completionTokens?: number;
+      totalTokens?: number;
+      cacheCreationTokens?: number;
+      cacheReadTokens?: number;
+    };
+    provider?: string;
+  }> {
     let prompt = `## Debate Topic\n${topic}\n\n## Framing\n${framing}\n\n`;
 
     if (ragContext) {
@@ -793,10 +973,14 @@ class TribunalService {
     });
 
     return {
-      position,
-      content: result.text,
-      round,
-      tokens: result.usage?.totalTokens || 0,
+      argument: {
+        position,
+        content: result.text,
+        round,
+        tokens: result.usage?.totalTokens || 0,
+      },
+      usage: result.usage,
+      provider: result.provider,
     };
   }
 
