@@ -147,6 +147,11 @@ const DEFAULT_EXCLUDE = [
   '**/eval/golden-queries.json',
 ];
 
+// Chunk types that classifyFile() can route to typed (SEPARATE_COLLECTIONS)
+// collections — i.e. everything except 'unknown', which the upsert path skips.
+// Kept in sync with ParserRegistry.classifyFile()'s return union.
+const TYPED_CHUNK_TYPES = ['code', 'config', 'docs', 'contract'] as const;
+
 // Confidence ranking for edge source upgrades (higher = more authoritative)
 const CONFIDENCE_RANK: Record<string, number> = {
   lsp: 4,
@@ -1252,6 +1257,216 @@ export async function indexFiles(options: IndexFilesOptions): Promise<IndexStats
     });
     throw error;
   }
+}
+
+// ============================================
+// Incremental Re-index (file-watcher driven)
+// ============================================
+
+export interface IncrementalReindexOptions {
+  projectName: string;
+  projectPath: string;
+  /** Added or changed absolute paths (or paths relative to projectPath). */
+  changed?: string[];
+  /** Removed absolute paths (or paths relative to projectPath). */
+  removed?: string[];
+}
+
+export interface IncrementalReindexResult {
+  reindexedFiles: number;
+  removedFiles: number;
+  skippedUnchanged: number;
+  totalChunks: number;
+  errors: number;
+  duration: number;
+}
+
+/**
+ * Normalize an incoming path (absolute or relative) to a project-relative path
+ * using forward slashes, matching the `file` payload key used everywhere else.
+ */
+function toRelativePath(projectPath: string, filePath: string): string {
+  const rel = path.isAbsolute(filePath) ? path.relative(projectPath, filePath) : filePath;
+  return rel.replace(/\\/g, '/');
+}
+
+/**
+ * Remove all index artifacts for a single file: vector chunks (legacy +
+ * typed collections), symbol entries, and graph edges. Best-effort and
+ * resilient — a failure on one store never aborts the others.
+ */
+async function purgeFileFromIndex(
+  projectName: string,
+  collectionName: string,
+  relativePath: string
+): Promise<void> {
+  // Legacy / aliased codebase collection chunks (filter by payload.file)
+  try {
+    await vectorStore.deleteByFilter(collectionName, {
+      must: [{ key: 'file', match: { value: relativePath } }],
+    });
+  } catch (error: any) {
+    if (error?.status !== 404) {
+      logger.debug(`Failed to delete chunks for ${relativePath}`, { error: error?.message });
+    }
+  }
+
+  // Typed (separate) collections also carry per-file chunks. We don't know the
+  // chunkType up front, so sweep all type suffixes that classifyFile() routes
+  // to (everything except 'unknown', which the upsert path never routes).
+  if (config.SEPARATE_COLLECTIONS) {
+    const typedCollections = TYPED_CHUNK_TYPES.map((t) => `${projectName}_${t}`);
+    for (const typed of typedCollections) {
+      try {
+        await vectorStore.deleteByFilter(typed, {
+          must: [{ key: 'file', match: { value: relativePath } }],
+        });
+      } catch (error: any) {
+        if (error?.status !== 404) {
+          logger.debug(`Failed to delete typed chunks for ${relativePath}`, {
+            collection: typed,
+            error: error?.message,
+          });
+        }
+      }
+    }
+  }
+
+  // Symbol index + graph edges (both already guard their own 404s)
+  try {
+    await symbolIndex.clearFileSymbols(projectName, relativePath);
+  } catch (error: any) {
+    logger.debug(`Failed to clear symbols for ${relativePath}`, { error: error?.message });
+  }
+  try {
+    await graphStore.clearFileEdges(projectName, relativePath);
+  } catch (error: any) {
+    logger.debug(`Failed to clear edges for ${relativePath}`, { error: error?.message });
+  }
+}
+
+/**
+ * Incrementally re-index a specific set of changed/added/removed files.
+ *
+ * Driven by the file watcher. For each changed/added file it hash-guards
+ * against the stored file hash (skipping unchanged content), then reuses
+ * indexFiles() — which already deletes the file's existing chunks, re-chunks,
+ * embeds, upserts, and refreshes graph + symbol entries. For removed files it
+ * purges all index artifacts (chunks, symbols, graph edges) and drops the file
+ * from the hash index.
+ *
+ * Idempotent and resilient: one bad file never aborts the batch.
+ */
+export async function reindexChangedFiles(
+  options: IncrementalReindexOptions
+): Promise<IncrementalReindexResult> {
+  const { projectName, projectPath, changed = [], removed = [] } = options;
+  const collectionName = getCollectionName(projectName, 'codebase');
+  const startTime = Date.now();
+
+  const result: IncrementalReindexResult = {
+    reindexedFiles: 0,
+    removedFiles: 0,
+    skippedUnchanged: 0,
+    totalChunks: 0,
+    errors: 0,
+    duration: 0,
+  };
+
+  // Load the existing hash index once so we can hash-guard and keep it in sync.
+  const hashIndex = await getFileHashIndex(projectName);
+  let hashIndexDirty = false;
+
+  // --- Removals first (so a delete+recreate of the same path stays correct) ---
+  const removedRel = [...new Set(removed.map((p) => toRelativePath(projectPath, p)))];
+  for (const relativePath of removedRel) {
+    try {
+      await purgeFileFromIndex(projectName, collectionName, relativePath);
+      if (hashIndex[relativePath]) {
+        delete hashIndex[relativePath];
+        hashIndexDirty = true;
+      }
+      result.removedFiles++;
+    } catch (error: any) {
+      logger.warn(`Failed to purge removed file ${relativePath}`, { error: error?.message });
+      result.errors++;
+    }
+  }
+
+  // --- Changed / added: hash-guard, then read content for indexFiles() ---
+  const changedRel = [...new Set(changed.map((p) => toRelativePath(projectPath, p)))];
+  const filesToIndex: Array<{ path: string; content: string }> = [];
+  for (const relativePath of changedRel) {
+    const absPath = path.isAbsolute(relativePath)
+      ? relativePath
+      : path.join(projectPath, relativePath);
+    try {
+      const content = fs.readFileSync(absPath, 'utf-8');
+      const hash = computeFileHash(content);
+      const existing = hashIndex[relativePath];
+      if (existing && existing.hash === hash) {
+        result.skippedUnchanged++;
+        continue;
+      }
+      filesToIndex.push({ path: relativePath, content });
+    } catch (error: any) {
+      // File may have been removed between the event and the read — skip quietly.
+      logger.debug(`Skipping unreadable changed file ${relativePath}`, { error: error?.message });
+      result.errors++;
+    }
+  }
+
+  if (filesToIndex.length > 0) {
+    try {
+      // indexFiles() handles delete-existing-chunks + parse + embed + upsert +
+      // graph + symbols + hash-index persistence (done:true finalizes + cache).
+      const stats = await indexFiles({
+        projectName,
+        files: filesToIndex,
+        force: false,
+        done: true,
+      });
+      result.reindexedFiles += stats.indexedFiles;
+      result.totalChunks += stats.totalChunks;
+      result.errors += stats.errors;
+    } catch (error: any) {
+      logger.warn(`Incremental reindex batch failed for ${projectName}`, {
+        error: error?.message,
+      });
+      result.errors += filesToIndex.length;
+    }
+  }
+
+  // Persist hash-index removals + invalidate search cache if anything changed.
+  // (indexFiles with done:true already saved the index for the changed set, but
+  // it works off a fresh copy, so re-save here only when we deleted entries.)
+  if (hashIndexDirty) {
+    try {
+      // Merge our removals on top of whatever indexFiles persisted.
+      const latest = await getFileHashIndex(projectName);
+      for (const relativePath of removedRel) {
+        delete latest[relativePath];
+      }
+      await saveFileHashIndex(projectName, latest);
+    } catch (error: any) {
+      logger.debug('Failed to persist hash index after removals', { error: error?.message });
+    }
+  }
+
+  if (result.removedFiles > 0 || result.reindexedFiles > 0) {
+    await cacheService.invalidateCollection(collectionName).catch(() => {});
+  }
+
+  result.duration = Date.now() - startTime;
+  logger.info(`Incremental reindex for ${projectName}`, {
+    reindexed: result.reindexedFiles,
+    removed: result.removedFiles,
+    skipped: result.skippedUnchanged,
+    chunks: result.totalChunks,
+    errors: result.errors,
+    durationMs: result.duration,
+  });
+  return result;
 }
 
 /**
