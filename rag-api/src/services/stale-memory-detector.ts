@@ -40,12 +40,15 @@ class StaleMemoryDetector {
    * Detect potentially stale memories for a project.
    */
   async detectStaleMemories(projectName: string): Promise<StaleDetectionResult> {
-    const collectionName = `${projectName}_memory`;
+    // Durable memories live in `_agent_memory` (see MemoryService.getCollectionName),
+    // NOT `_memory`. The old name silently 404'd, returning zero stale candidates.
+    const collectionName = `${projectName}_agent_memory`;
     const staleMemories: StaleMemory[] = [];
     let totalScanned = 0;
+    const now = Date.now();
 
+    // ── Phase 1: durable scan (isolated — a 404 here must NOT skip the LTM scan) ──
     try {
-      const now = Date.now();
       let offset: string | number | undefined = undefined;
 
       do {
@@ -138,8 +141,22 @@ class StaleMemoryDetector {
 
         offset = response.next_page_offset as string | number | undefined;
       } while (offset && totalScanned < 10000);
+    } catch (error: any) {
+      // Durable collection may not exist yet (fresh project). Swallow 404/400 so
+      // the LTM scan below still runs; re-throw genuine errors.
+      if (error.status !== 404 && error.status !== 400) {
+        logger.error('Stale memory detection (durable scan) failed', {
+          error: error.message,
+          projectName,
+        });
+        throw error;
+      }
+    }
 
-      // Phase 2: Also scan LTM collections with Ebbinghaus decay rule
+    // ── Phase 2: scan LTM collections with Ebbinghaus decay rule ──
+    // Runs regardless of whether the durable scan found a collection. This is the
+    // path that actually surfaces never-accessed episodic memories about to decay.
+    try {
       if (config.CONSOLIDATION_ENABLED) {
         for (const ltmCollection of [
           `${projectName}_memory_episodic`,
@@ -189,21 +206,23 @@ class StaleMemoryDetector {
           }
         }
       }
-
-      logger.info('Stale memory detection complete', {
-        projectName,
-        totalScanned,
-        staleCount: staleMemories.length,
-      });
-
-      return { staleMemories, totalScanned, projectName };
     } catch (error: any) {
-      if (error.status === 404) {
-        return { staleMemories: [], totalScanned: 0, projectName };
+      // LTM scan failed unexpectedly — keep whatever the durable scan collected.
+      if (error.status !== 404 && error.status !== 400) {
+        logger.error('Stale memory detection (LTM scan) failed', {
+          error: error.message,
+          projectName,
+        });
       }
-      logger.error('Stale memory detection failed', { error: error.message, projectName });
-      throw error;
     }
+
+    logger.info('Stale memory detection complete', {
+      projectName,
+      totalScanned,
+      staleCount: staleMemories.length,
+    });
+
+    return { staleMemories, totalScanned, projectName };
   }
 }
 

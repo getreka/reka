@@ -1007,7 +1007,23 @@ describe('SessionActor', () => {
       expect(newState.status).toBe('ended');
     });
 
-    it('tolerates consolidation errors gracefully', async () => {
+    it('tolerates consolidation errors gracefully (no throw out of handle)', async () => {
+      mockConsolidate.mockRejectedValueOnce(new Error('LLM timeout'));
+
+      const state = defaultState();
+      const payload = { projectName: 'beep', sessionId: 'sess-abc' };
+
+      // handle() must not throw — it schedules a retry rather than crashing the actor.
+      const newState = await actor.handle(
+        'session:beep:sess-abc',
+        makeMessage('session:ending', payload, 'session:beep:sess-abc'),
+        state
+      );
+
+      expect(newState).toBeDefined();
+    });
+
+    it('does NOT mark session "ended" when consolidation fails (keep re-consolidatable)', async () => {
       mockConsolidate.mockRejectedValueOnce(new Error('LLM timeout'));
 
       const state = defaultState();
@@ -1019,8 +1035,91 @@ describe('SessionActor', () => {
         state
       );
 
-      // Should still reach 'ended' status despite consolidation failure
+      // On failure the session stays in 'ending' (NOT 'ended') so a retry can
+      // re-consolidate. Only a successful consolidation transitions to 'ended'.
+      expect(newState.status).toBe('ending');
+    });
+
+    it('does NOT clearState when consolidation fails (preserve actor for retry)', async () => {
+      mockConsolidate.mockRejectedValueOnce(new Error('LLM timeout'));
+
+      const state = defaultState();
+      const payload = { projectName: 'beep', sessionId: 'sess-abc' };
+
+      await actor.handle(
+        'session:beep:sess-abc',
+        makeMessage('session:ending', payload, 'session:beep:sess-abc'),
+        state
+      );
+
+      // clearState() deletes the actor state key. On a failed consolidation it must
+      // NOT be deleted, so the session can still be re-consolidated.
+      expect(mockRedisDel).not.toHaveBeenCalledWith(
+        expect.stringContaining('session:beep:sess-abc:state')
+      );
+    });
+
+    it('does NOT clear working memory when consolidation fails (preserve buffer for retry)', async () => {
+      mockConsolidate.mockRejectedValueOnce(new Error('LLM timeout'));
+
+      const state = defaultState();
+      const payload = { projectName: 'beep', sessionId: 'sess-abc' };
+
+      await actor.handle(
+        'session:beep:sess-abc',
+        makeMessage('session:ending', payload, 'session:beep:sess-abc'),
+        state
+      );
+
+      // Working memory must survive a failed consolidation so a retry can re-run.
+      expect(mockWmClear).not.toHaveBeenCalled();
+    });
+
+    it('enqueues a consolidation retry onto session-lifecycle when consolidation fails', async () => {
+      mockConsolidate.mockRejectedValueOnce(new Error('LLM timeout'));
+
+      const { getQueue } = await import('../../events/queues');
+      const queueObj = vi.mocked(getQueue)('session-lifecycle');
+
+      const state = defaultState();
+      const payload = { projectName: 'beep', sessionId: 'sess-abc' };
+
+      await actor.handle(
+        'session:beep:sess-abc',
+        makeMessage('session:ending', payload, 'session:beep:sess-abc'),
+        state
+      );
+
+      // The actor mailbox has no per-message BullMQ retry, so on failure it must
+      // re-enqueue 'session:ending' onto the worker queue (which carries
+      // attempts/backoff) to actually retry consolidation.
+      expect(vi.mocked(getQueue)).toHaveBeenCalledWith('session-lifecycle');
+      const addMock = (queueObj as any).add as ReturnType<typeof vi.fn>;
+      expect(addMock).toHaveBeenCalledWith(
+        'session:ending',
+        { projectName: 'beep', sessionId: 'sess-abc' },
+        expect.objectContaining({ attempts: 3 })
+      );
+    });
+
+    it('does NOT enqueue a retry when consolidation succeeds', async () => {
+      // mockConsolidate resolves by default (success path)
+      const { getQueue } = await import('../../events/queues');
+      const queueObj = vi.mocked(getQueue)('session-lifecycle');
+      const addMock = (queueObj as any).add as ReturnType<typeof vi.fn>;
+      addMock.mockClear();
+
+      const state = defaultState();
+      const payload = { projectName: 'beep', sessionId: 'sess-abc' };
+
+      const newState = await actor.handle(
+        'session:beep:sess-abc',
+        makeMessage('session:ending', payload, 'session:beep:sess-abc'),
+        state
+      );
+
       expect(newState.status).toBe('ended');
+      expect(addMock).not.toHaveBeenCalled();
     });
   });
 });

@@ -11,6 +11,7 @@ import { llm } from './llm';
 import { relationshipClassifier } from './relationship-classifier';
 // reconsolidation moved to memory-effects worker
 import { spreadingActivation, type ActivatedMemory } from './spreading-activation';
+import { memoryVersions, type VersionActor } from './memory-versions';
 import { logger } from '../utils/logger';
 import config from '../config';
 import { publishEvent } from '../events/emitter';
@@ -25,6 +26,8 @@ export type MemoryType =
   | 'procedure';
 export type MemorySource = 'manual' | 'auto_conversation' | 'auto_pattern' | 'auto_feedback';
 export type TodoStatus = 'pending' | 'in_progress' | 'done' | 'cancelled';
+/** Pin scope — controls which surfaces a memory is always loaded in. */
+export type PinScope = 'repo' | 'all' | 'unpinned';
 export type FactCategory =
   | 'personal_info'
   | 'preference'
@@ -73,6 +76,11 @@ export interface Memory {
   factCategory?: FactCategory;
   factEntities?: string[];
   factDateTs?: number; // Unix timestamp (seconds) for date-range filtering
+  // Trigger descriptions: "when to recall" cue, embedded separately so the QUERY
+  // can match the trigger in addition to the content.
+  triggerDescription?: string;
+  triggerEmbedding?: number[]; // embedding of triggerDescription (for blended ranking)
+  pin?: PinScope;
 }
 
 export interface MemorySearchResult {
@@ -91,6 +99,9 @@ export interface CreateMemoryOptions {
   factCategory?: FactCategory;
   factEntities?: string[];
   factDateTs?: number; // Unix timestamp (seconds)
+  // Trigger descriptions
+  triggerDescription?: string;
+  pin?: PinScope;
 }
 
 export interface TemporalConstraint {
@@ -180,6 +191,20 @@ function extractKeywords(query: string): string[] {
     .toLowerCase()
     .split(/\W+/)
     .filter((w) => w.length > 2 && !STOPWORDS.has(w));
+}
+
+/** Cosine similarity between two equal-length vectors (used for trigger blending). */
+function cosineSimilarity(a: number[], b: number[]): number {
+  let dot = 0;
+  let na = 0;
+  let nb = 0;
+  for (let i = 0; i < a.length; i++) {
+    dot += a[i] * b[i];
+    na += a[i] * a[i];
+    nb += b[i] * b[i];
+  }
+  if (na === 0 || nb === 0) return 0;
+  return dot / (Math.sqrt(na) * Math.sqrt(nb));
 }
 
 function extractTemporalConstraint(query: string): TemporalConstraint {
@@ -299,6 +324,8 @@ class MemoryService {
       factCategory,
       factEntities,
       factDateTs,
+      triggerDescription,
+      pin,
     } = options;
     const collectionName = this.getCollectionName(projectName);
 
@@ -314,6 +341,8 @@ class MemoryService {
       factCategory,
       factEntities,
       factDateTs,
+      triggerDescription,
+      pin,
     };
 
     // Add todo-specific fields
@@ -326,6 +355,19 @@ class MemoryService {
     const embedding = await embeddingService.embed(
       `${type}: ${content}${relatedTo ? ` (related to: ${relatedTo})` : ''}${tags.length > 0 ? ` [tags: ${tags.join(', ')}]` : ''}`
     );
+
+    // Trigger descriptions: embed the "when to recall" cue separately so recall can
+    // blend a similarity over the trigger into the ranking. Best-effort — a failed
+    // trigger embed must not break the remember.
+    if (triggerDescription) {
+      try {
+        memory.triggerEmbedding = await embeddingService.embed(triggerDescription);
+      } catch (err: any) {
+        logger.debug('Trigger embedding failed; storing trigger without vector', {
+          error: err?.message,
+        });
+      }
+    }
 
     // Emit event for async relationship detection (handled by memory-effects worker)
     publishEvent('memory:created', {
@@ -347,6 +389,19 @@ class MemoryService {
     };
 
     await vectorStore.upsert(collectionName, [point]);
+
+    // Append-only version audit (fire-and-forget — never break a remember).
+    memoryVersions
+      .record(projectName, {
+        op: 'created',
+        memoryId: memory.id,
+        actor: (metadata?.versionActor as VersionActor) ?? 'api',
+        content,
+        type,
+        tags,
+        metadata,
+      })
+      .catch(() => {});
 
     logger.info(`Memory stored: ${type}`, {
       id: memory.id,
@@ -511,6 +566,39 @@ class MemoryService {
     const { reranker } = await import('./reranker');
     results = await reranker.rerank(query, results, limit * 2);
 
+    // Trigger descriptions: blend a similarity over each result's triggerEmbedding
+    // (the "when to recall" cue) into its score. This lets a query match the trigger
+    // even when it doesn't match the content text directly. Backward-compatible:
+    // results without a triggerEmbedding are untouched.
+    if (results.some((r) => Array.isArray(r.payload.triggerEmbedding))) {
+      try {
+        // Trigger embeddings are stored document/passage-side (embeddingService.embed
+        // of the raw triggerDescription — see remember()). Compare against a
+        // document-side embedding of the query so both vectors live in the SAME space.
+        // Using the instruction-prefixed embedQuery here would compare across mismatched
+        // spaces for instruction-tuned models and corrupt the similarity.
+        const triggerQueryEmbedding = await embeddingService.embed(query);
+        // ADDITIVE boost: a trigger match only ever LIFTS a memory's score; it never
+        // multiplies the base score down (which would demote a triggered memory below
+        // weaker untriggered ones that keep their full score). trigSim is in roughly
+        // [0, 1], so untriggered items (no boost) stay directly comparable.
+        const TRIGGER_WEIGHT = 0.3;
+        for (const r of results) {
+          const trigEmb = r.payload.triggerEmbedding as number[] | undefined;
+          if (Array.isArray(trigEmb) && trigEmb.length === triggerQueryEmbedding.length) {
+            // Clamp at 0: cosine can be negative, and a non-matching (or opposing)
+            // trigger must never PENALIZE a memory below its base score. Only a
+            // positive trigger match lifts the score.
+            const trigSim = Math.max(0, cosineSimilarity(triggerQueryEmbedding, trigEmb));
+            r.score = r.score + TRIGGER_WEIGHT * trigSim;
+          }
+        }
+        results.sort((a, b) => b.score - a.score);
+      } catch (err: any) {
+        logger.debug('Trigger-description blend skipped', { error: err?.message });
+      }
+    }
+
     const now = Date.now();
     const THIRTY_DAYS = 30 * 24 * 60 * 60 * 1000;
 
@@ -557,6 +645,8 @@ class MemoryService {
             factCategory: r.payload.factCategory as FactCategory | undefined,
             factEntities: r.payload.factEntities as string[] | undefined,
             factDateTs: r.payload.factDateTs as number | undefined,
+            triggerDescription: r.payload.triggerDescription as string | undefined,
+            pin: r.payload.pin as Memory['pin'],
           },
           score,
         };
@@ -623,6 +713,8 @@ class MemoryService {
               factCategory: undefined,
               factEntities: undefined,
               factDateTs: undefined,
+              triggerDescription: undefined,
+              pin: undefined,
             },
             score: act.activation,
           });
@@ -677,6 +769,8 @@ class MemoryService {
                   factCategory: undefined,
                   factEntities: undefined,
                   factDateTs: undefined,
+                  triggerDescription: undefined,
+                  pin: undefined,
                 },
                 score: 0.5,
               });
@@ -719,25 +813,55 @@ class MemoryService {
 
     const results = await vectorStore.search(collectionName, embedding, limit, filter);
 
-    return results.map((r) => ({
-      id: r.id,
-      type: r.payload.type as MemoryType,
-      content: r.payload.content as string,
-      tags: (r.payload.tags as string[]) || [],
-      relatedTo: r.payload.relatedTo as string | undefined,
-      createdAt: r.payload.createdAt as string,
-      updatedAt: r.payload.updatedAt as string,
-      metadata: r.payload.metadata as Record<string, unknown> | undefined,
-      status: r.payload.status as TodoStatus | undefined,
-      statusHistory: r.payload.statusHistory as Memory['statusHistory'],
-    }));
+    return (
+      results
+        // Exclude superseded memories so a prior merge's originals don't leak into
+        // list_memories / review output. Mirrors recall()'s post-filter (kept as a
+        // post-filter rather than a Qdrant condition so the search filter stays the
+        // plain type/tag filter the rest of the code and tests expect).
+        .filter((r) => !r.payload.supersededBy)
+        .map((r) => ({
+          id: r.id,
+          type: r.payload.type as MemoryType,
+          content: r.payload.content as string,
+          tags: (r.payload.tags as string[]) || [],
+          relatedTo: r.payload.relatedTo as string | undefined,
+          createdAt: r.payload.createdAt as string,
+          updatedAt: r.payload.updatedAt as string,
+          metadata: r.payload.metadata as Record<string, unknown> | undefined,
+          status: r.payload.status as TodoStatus | undefined,
+          statusHistory: r.payload.statusHistory as Memory['statusHistory'],
+        }))
+    );
   }
 
   /**
    * Delete a specific memory
    */
-  async forget(projectName: string, memoryId: string): Promise<boolean> {
+  async forget(
+    projectName: string,
+    memoryId: string,
+    actor: VersionActor = 'api'
+  ): Promise<boolean> {
     const collectionName = this.getCollectionName(projectName);
+
+    // Record an immutable 'deleted' version BEFORE removing the point so the
+    // content snapshot is preserved for audit/rollback. Best-effort: capture the
+    // current payload if available, but never let logging block the delete.
+    try {
+      const existing = await this.getById(projectName, memoryId);
+      await memoryVersions.record(projectName, {
+        op: 'deleted',
+        memoryId,
+        actor,
+        content: existing?.content ?? '',
+        type: existing?.type,
+        tags: existing?.tags,
+        metadata: existing?.metadata,
+      });
+    } catch (err: any) {
+      logger.debug('Failed to record deletion version', { memoryId, error: err?.message });
+    }
 
     try {
       await vectorStore.delete(collectionName, [memoryId]);
@@ -746,6 +870,32 @@ class MemoryService {
     } catch (error) {
       logger.error(`Failed to delete memory: ${memoryId}`, { error });
       return false;
+    }
+  }
+
+  /**
+   * Fetch a single memory by exact id (used by version audit/rollback).
+   * Returns null if not found or the collection does not exist.
+   */
+  async getById(projectName: string, memoryId: string): Promise<Memory | null> {
+    const collectionName = this.getCollectionName(projectName);
+    try {
+      const response = await vectorStore['client'].scroll(collectionName, {
+        limit: 1,
+        with_payload: true,
+        with_vector: false,
+        filter: { must: [{ key: 'id', match: { value: memoryId } }] },
+      });
+      const point = response.points[0];
+      if (!point) return null;
+      return this.pointToMemory({
+        id: point.id as string,
+        payload: point.payload as Record<string, unknown>,
+      });
+    } catch (err: any) {
+      if (err.status === 404 || err.status === 400) return null;
+      logger.debug('getById failed', { memoryId, error: err?.message });
+      return null;
     }
   }
 
@@ -873,6 +1023,19 @@ class MemoryService {
 
     await vectorStore.upsert(collectionName, [point]);
 
+    // Append-only version audit (fire-and-forget).
+    memoryVersions
+      .record(projectName, {
+        op: 'modified',
+        memoryId: updatedMemory.id,
+        actor: 'api',
+        content: updatedMemory.content,
+        type: updatedMemory.type,
+        tags: updatedMemory.tags,
+        metadata: { ...updatedMemory.metadata, status },
+      })
+      .catch(() => {});
+
     logger.info(`Todo status updated: ${todoId} -> ${status}`, { project: projectName });
     return updatedMemory;
   }
@@ -929,6 +1092,8 @@ class MemoryService {
         factCategory,
         factEntities,
         factDateTs,
+        triggerDescription,
+        pin,
       } = item;
 
       const memory: Memory = {
@@ -943,6 +1108,8 @@ class MemoryService {
         factCategory,
         factEntities,
         factDateTs,
+        triggerDescription,
+        pin,
       };
 
       if (type === 'todo') {
@@ -973,6 +1140,21 @@ class MemoryService {
       // Batch upsert
       await vectorStore.upsert(collectionName, points);
       saved.push(...memories);
+
+      // Append-only version audit per saved memory (fire-and-forget).
+      for (const m of memories) {
+        memoryVersions
+          .record(projectName, {
+            op: 'created',
+            memoryId: m.id,
+            actor: (m.metadata?.versionActor as VersionActor) ?? 'api',
+            content: m.content,
+            type: m.type,
+            tags: m.tags,
+            metadata: m.metadata,
+          })
+          .catch(() => {});
+      }
 
       logger.info(`Batch remember: ${saved.length} memories saved`, { projectName });
     } catch (error: any) {
@@ -1063,12 +1245,19 @@ class MemoryService {
     };
 
     try {
-      // Scroll through memories to find candidates
+      // Scroll through memories to find candidates. Require supersededBy to be empty
+      // so points already superseded by a prior merge are never candidates —
+      // otherwise on every run the still-present (non-deleted) originals get
+      // re-clustered with their near-identical merged successor and merged AGAIN,
+      // causing unbounded duplicate growth and repeated LLM merge calls until the
+      // grace-period purge removes them. Qdrant `is_empty` matches points where the
+      // field is missing or null (i.e. NOT superseded).
       const mustConditions: Record<string, unknown>[] = [];
       if (type && type !== 'all') {
         mustConditions.push({ key: 'type', match: { value: type } });
       }
-      const filter = mustConditions.length > 0 ? { must: mustConditions } : undefined;
+      mustConditions.push({ is_empty: { key: 'supersededBy' } });
+      const filter = { must: mustConditions };
 
       const memories: Array<{ id: string; payload: Record<string, unknown> }> = [];
       let offset: string | number | undefined = undefined;
@@ -1106,13 +1295,33 @@ class MemoryService {
         if (processed.has(mem.id)) continue;
 
         try {
-          const similar = await vectorStore.recommend(collectionName, [mem.id], [], 10);
+          // Constrain clusters to the SAME type so we never merge a decision into
+          // a note (recommend() previously passed no type filter → cross-type merges).
+          // Also require supersededBy to be empty so a prior merge's originals are
+          // never pulled back into a new cluster (mirrors the scroll filter above and
+          // prevents the re-merge loop).
+          const memType = mem.payload.type as MemoryType | undefined;
+          const recommendConditions: Record<string, unknown>[] = [
+            { is_empty: { key: 'supersededBy' } },
+          ];
+          if (memType) {
+            recommendConditions.push({ key: 'type', match: { value: memType } });
+          }
+          const typeFilter = { must: recommendConditions };
+          const similar = await vectorStore.recommend(collectionName, [mem.id], [], 10, typeFilter);
 
           const cluster: Memory[] = [this.pointToMemory(mem)];
           processed.add(mem.id);
 
           for (const s of similar) {
-            if (s.score >= threshold && !processed.has(s.id)) {
+            if (
+              s.score >= threshold &&
+              !processed.has(s.id) &&
+              (!memType || s.payload.type === memType) &&
+              // Defensive post-filter: drop any superseded point the filter missed
+              // (e.g. clients that don't honor is_empty) so it can't re-cluster.
+              !s.payload.supersededBy
+            ) {
               cluster.push(this.pointToMemory({ id: s.id, payload: s.payload }));
               processed.add(s.id);
             }
@@ -1166,21 +1375,80 @@ class MemoryService {
               ? mergeResult.value
               : [...new Set(cluster.map((m) => m.content.trim()))].join(' | ');
 
+          // Carry over governance state so a merge never demotes a validated /
+          // promoted / high-confidence memory back to an unvalidated stub.
+          const anyValidated = cluster.some((m) => m.validated);
+          const maxConfidence = cluster.reduce<number | undefined>((max, m) => {
+            if (m.confidence === undefined) return max;
+            return max === undefined ? m.confidence : Math.max(max, m.confidence);
+          }, undefined);
+          const promotedAt = cluster
+            .map((m) => (m.metadata?.promotedAt as string | undefined) ?? undefined)
+            .filter(Boolean)
+            .sort()
+            .pop();
+          // Prefer the strongest provenance: manual > promoted-auto > raw auto.
+          const mergedSource =
+            cluster.find((m) => m.source === 'manual')?.source ??
+            cluster.find((m) => m.source)?.source;
+
+          // Carry the strongest pin so an auto-merge never silently un-pins an
+          // always-loaded memory. Pin strength: 'all' > 'repo' > unpinned.
+          const PIN_RANK: Record<string, number> = { all: 2, repo: 1, unpinned: 0 };
+          const mergedPin = cluster
+            .map((m) => m.pin)
+            .filter((p): p is PinScope => p !== undefined && p !== 'unpinned')
+            .sort((a, b) => (PIN_RANK[b] ?? 0) - (PIN_RANK[a] ?? 0))[0];
+
+          // Keep a trigger cue so the merged memory still matches its recall trigger.
+          // Take it from the most-recent member that carries one (cluster is roughly
+          // ordered with the seed first; pick by createdAt to be deterministic).
+          const triggerDonor = cluster
+            .filter((m) => m.triggerDescription)
+            .sort((a, b) =>
+              b.createdAt > a.createdAt ? 1 : b.createdAt < a.createdAt ? -1 : 0
+            )[0];
+          const mergedTriggerDescription = triggerDonor?.triggerDescription;
+
           const mergedMemory: Memory = {
             id: uuidv4(),
             type: cluster[0].type,
             content: mergedContent,
             tags: [...new Set(cluster.flatMap((m) => m.tags))],
             relatedTo: cluster.find((m) => m.relatedTo)?.relatedTo,
+            // Use the NEWEST createdAt so the merged memory does not resume
+            // Ebbinghaus decay as if it were the oldest member of the cluster.
             createdAt: cluster.reduce(
-              (earliest, m) => (m.createdAt < earliest ? m.createdAt : earliest),
+              (latest, m) => (m.createdAt > latest ? m.createdAt : latest),
               cluster[0].createdAt
             ),
             updatedAt: new Date().toISOString(),
+            source: mergedSource,
+            confidence: maxConfidence,
+            validated: anyValidated || undefined,
+            relationships: (() => {
+              const all = cluster.flatMap((m) => m.relationships ?? []);
+              const seen = new Set<string>();
+              const deduped = all.filter((r) => {
+                const k = `${r.type}:${r.targetId}`;
+                if (seen.has(k)) return false;
+                seen.add(k);
+                return true;
+              });
+              return deduped.length > 0 ? deduped : undefined;
+            })(),
+            // Preserve pin (always-loaded scope) and trigger cue from the cluster so
+            // an auto-merge never strips them. triggerEmbedding is re-derived below
+            // (in the non-dryRun path) so the stored vector matches the kept text.
+            pin: mergedPin,
+            triggerDescription: mergedTriggerDescription,
+            triggerEmbedding: triggerDonor?.triggerEmbedding,
             metadata: {
               mergedFrom: cluster.map((m) => m.id),
               mergedAt: new Date().toISOString(),
               originalCount: cluster.length,
+              ...(promotedAt ? { promotedAt } : {}),
+              ...(anyValidated ? { validated: true } : {}),
             },
           };
 
@@ -1191,6 +1459,21 @@ class MemoryService {
               `${mergedMemory.type}: ${mergedMemory.content}${mergedMemory.relatedTo ? ` (related to: ${mergedMemory.relatedTo})` : ''}`
             );
 
+            // Re-embed the carried trigger description so the stored triggerEmbedding
+            // is consistent with remember() (document/passage-side embed of the cue).
+            // Best-effort: a failed trigger embed must not abort the merge upsert.
+            if (mergedMemory.triggerDescription) {
+              try {
+                mergedMemory.triggerEmbedding = await embeddingService.embed(
+                  mergedMemory.triggerDescription
+                );
+              } catch (err: any) {
+                logger.debug('Trigger re-embed during merge failed; keeping donor vector', {
+                  error: err?.message,
+                });
+              }
+            }
+
             await vectorStore.upsert(collectionName, [
               {
                 id: mergedMemory.id,
@@ -1199,8 +1482,22 @@ class MemoryService {
               },
             ]);
 
-            const idsToDelete = cluster.map((m) => m.id);
-            await vectorStore.delete(collectionName, idsToDelete);
+            // Non-destructive: mark originals as superseded (preserves audit trail
+            // + lets recall skip them) instead of deleting. Mirrors runCompaction.
+            const now = new Date().toISOString();
+            for (const origId of cluster.map((m) => m.id)) {
+              try {
+                await vectorStore['client'].setPayload(collectionName, {
+                  points: [origId],
+                  payload: { supersededBy: mergedMemory.id, updatedAt: now },
+                });
+              } catch (err: any) {
+                logger.debug('Failed to mark superseded during merge', {
+                  origId,
+                  error: err.message,
+                });
+              }
+            }
           }
 
           result.totalMerged++;
@@ -1276,6 +1573,9 @@ class MemoryService {
       factCategory: point.payload.factCategory as FactCategory | undefined,
       factEntities: point.payload.factEntities as string[] | undefined,
       factDateTs: point.payload.factDateTs as number | undefined,
+      triggerDescription: point.payload.triggerDescription as string | undefined,
+      triggerEmbedding: point.payload.triggerEmbedding as number[] | undefined,
+      pin: point.payload.pin as Memory['pin'],
     };
   }
 

@@ -54,7 +54,10 @@ export function startSessionLifecycleWorker(): void {
             logger.debug('Predictive prefetch failed', { error: err.message, sessionId });
           }
 
-          // Auto-merge similar memories (delegated to memoryService via session-context)
+          // Auto-merge similar memories (delegated to memoryService via session-context).
+          // NOTE: This worker path is superseded by SessionActor (see session-actor.ts)
+          // and is effectively dead under the Actor-model rollout. It is kept aligned
+          // with the actor: mergeMemories is non-destructive (supersede, not delete).
           try {
             const { memoryService } = await import('../../services/memory');
             const result = await memoryService.mergeMemories({
@@ -121,7 +124,16 @@ export function startSessionLifecycleWorker(): void {
             summary?: string;
           };
 
-          // Run consolidation agent (skip if short session with manual memories already saved)
+          // Run consolidation agent (skip if short session with manual memories already saved).
+          // Track success so we only clear working memory after a SUCCESSFUL (or skipped)
+          // consolidation — a failed run must preserve the buffer so a BullMQ retry can
+          // re-consolidate instead of losing the session.
+          let consolidationOk = false;
+          // Hold the consolidation error so we can re-throw AFTER guarded cleanup is
+          // skipped. Re-throwing makes the BullMQ job fail, which triggers the queue's
+          // configured attempts/backoff to retry — the buffer survives because the
+          // working-memory clear below is gated on consolidationOk.
+          let consolidationError: Error | null = null;
           try {
             const { sensoryBuffer } = await import('../../services/sensory-buffer');
             const events = await sensoryBuffer.read(projectName, sessionId, { count: 50 });
@@ -135,13 +147,20 @@ export function startSessionLifecycleWorker(): void {
                 sessionId,
                 events: events.length,
               });
+              consolidationOk = true; // nothing to consolidate → safe to clear
             } else {
               const agent = await getConsolidationAgent();
               await agent.consolidate(projectName, sessionId);
+              consolidationOk = true;
               logger.info('Session consolidation completed', { sessionId, events: events.length });
             }
           } catch (err: any) {
-            logger.debug('Consolidation failed', { error: err.message, sessionId });
+            consolidationError =
+              err instanceof Error ? err : new Error(String(err?.message ?? err));
+            logger.warn('Consolidation failed — preserving working memory for retry', {
+              error: err.message,
+              sessionId,
+            });
           }
 
           // Stale memory detection
@@ -152,12 +171,23 @@ export function startSessionLifecycleWorker(): void {
             logger.debug('Stale detection failed', { error: err.message });
           }
 
-          // Cleanup working memory
-          try {
-            const wm = await getWorkingMemory();
-            await wm.clear(projectName, sessionId);
-          } catch (err: any) {
-            logger.debug('Working memory cleanup failed', { error: err.message });
+          // Cleanup working memory — ONLY if consolidation succeeded (or was skipped).
+          // The buffer must survive a failed consolidation so the retried job can
+          // re-consolidate from it.
+          if (consolidationOk) {
+            try {
+              const wm = await getWorkingMemory();
+              await wm.clear(projectName, sessionId);
+            } catch (err: any) {
+              logger.debug('Working memory cleanup failed', { error: err.message });
+            }
+          }
+
+          // Re-throw AFTER skipping the buffer clear so BullMQ fails this job and the
+          // queue's attempts/backoff retry the consolidation. Without this the session's
+          // knowledge silently dies on the 24h sensory-buffer TTL.
+          if (consolidationError) {
+            throw consolidationError;
           }
           break;
         }

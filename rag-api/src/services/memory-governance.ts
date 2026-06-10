@@ -18,6 +18,8 @@ import {
 import { memoryLtm, type SemanticSubtype } from './memory-ltm';
 import { qualityGates } from './quality-gates';
 import { feedbackService } from './feedback';
+import { cacheService } from './cache';
+import { memoryVersions } from './memory-versions';
 import { logger } from '../utils/logger';
 import { memoryGovernanceTotal, maintenanceDuration } from '../utils/metrics';
 import config from '../config';
@@ -43,10 +45,49 @@ class MemoryGovernanceService {
     return `${projectName}_agent_memory`;
   }
 
+  private promotedCounterKey(projectName: string): string {
+    return `governance:${projectName}:promoted`;
+  }
+
+  private rejectedCounterKey(projectName: string): string {
+    return `governance:${projectName}:rejected`;
+  }
+
   /**
-   * Compute adaptive confidence threshold from promotion/rejection history.
-   * High success rate → lower threshold (accept more). High rejection → raise threshold.
-   * Range: [0.4, 0.8], default 0.5.
+   * Atomically bump a governance outcome counter (promote/reject).
+   * Best-effort: a missing Redis client just means the threshold stays at default.
+   */
+  private async incrCounter(key: string): Promise<void> {
+    try {
+      await cacheService.increment(key, 1);
+      // A counter changed → invalidate cached thresholds so the next ingest re-reads.
+      this.thresholdCache.clear();
+    } catch (err: any) {
+      logger.debug('Governance counter increment failed', { key, error: err.message });
+    }
+  }
+
+  private async readCounter(key: string): Promise<number> {
+    try {
+      const raw = await cacheService.getClient()?.get(key);
+      const n = raw ? parseInt(raw, 10) : 0;
+      return Number.isFinite(n) ? n : 0;
+    } catch {
+      return 0;
+    }
+  }
+
+  /**
+   * Compute adaptive confidence threshold from explicit promote/reject COUNTERS.
+   *
+   * Previously this counted the whole quarantine collection as "pending" and
+   * derived successRate = promoted / (promoted + pending). That meant a normal
+   * unreviewed backlog (lots of pending, zero reviews) drove the threshold to
+   * 0.8 and silently dropped new auto-memories. We now use durable review
+   * outcomes only: successRate = promoted / (promoted + rejected).
+   *
+   * High success rate → lower threshold (accept more). High rejection → raise it.
+   * Range: [0.4, 0.8], default 0.5 until at least 5 reviews exist.
    */
   async getAdaptiveThreshold(projectName: string): Promise<number> {
     const cached = this.thresholdCache.get(projectName);
@@ -54,44 +95,13 @@ class MemoryGovernanceService {
 
     const DEFAULT = 0.5;
     try {
-      const quarantine = this.getQuarantineCollection(projectName);
-      const durable = this.getDurableCollection(projectName);
+      const [promoted, rejected] = await Promise.all([
+        this.readCounter(this.promotedCounterKey(projectName)),
+        this.readCounter(this.rejectedCounterKey(projectName)),
+      ]);
 
-      // Count promoted (durable with originalSource=auto_*)
-      let promoted = 0;
-      try {
-        const durableResults = await vectorStore['client'].scroll(durable, {
-          limit: 200,
-          with_payload: true,
-          with_vector: false,
-          filter: {
-            should: [
-              { key: 'metadata.originalSource', match: { value: 'auto_conversation' } },
-              { key: 'metadata.originalSource', match: { value: 'auto_pattern' } },
-              { key: 'metadata.originalSource', match: { value: 'auto_feedback' } },
-            ],
-          },
-        });
-        promoted = durableResults.points.length;
-      } catch {
-        /* collection may not exist */
-      }
-
-      // Count still in quarantine (rejected or pending)
-      let pending = 0;
-      try {
-        const pendingResults = await vectorStore['client'].scroll(quarantine, {
-          limit: 200,
-          with_payload: false,
-          with_vector: false,
-        });
-        pending = pendingResults.points.length;
-      } catch {
-        /* collection may not exist */
-      }
-
-      const total = promoted + pending;
-      if (total < 5) {
+      const reviewed = promoted + rejected;
+      if (reviewed < 5) {
         this.thresholdCache.set(projectName, {
           value: DEFAULT,
           expiresAt: Date.now() + 30 * 60 * 1000,
@@ -99,7 +109,7 @@ class MemoryGovernanceService {
         return DEFAULT;
       }
 
-      const successRate = promoted / total;
+      const successRate = promoted / reviewed;
       // Map success rate to threshold: high success → lower threshold
       // successRate 0.0 → 0.8, successRate 1.0 → 0.4
       const threshold = Math.max(0.4, Math.min(0.8, 0.8 - successRate * 0.4));
@@ -109,7 +119,7 @@ class MemoryGovernanceService {
         expiresAt: Date.now() + 30 * 60 * 1000,
       });
       logger.debug(
-        `Adaptive threshold for ${projectName}: ${threshold.toFixed(2)} (${promoted}/${total} promoted)`,
+        `Adaptive threshold for ${projectName}: ${threshold.toFixed(2)} (${promoted}/${reviewed} reviewed promoted)`,
         { project: projectName }
       );
       return threshold;
@@ -195,6 +205,8 @@ class MemoryGovernanceService {
       source,
       confidence: confidence ?? 0.5,
       validated: false,
+      triggerDescription: memoryOptions.triggerDescription,
+      pin: memoryOptions.pin,
       metadata: {
         ...memoryOptions.metadata,
         source,
@@ -279,10 +291,9 @@ class MemoryGovernanceService {
     const point = results.points[0];
     const payload = point.payload as Record<string, unknown>;
 
-    // Delete from quarantine
-    await vectorStore.delete(quarantineCollection, [memoryId]);
-
-    // Promote to durable with metadata
+    // Write durable FIRST — if embed/upsert throws, the quarantine copy is still
+    // intact so the promotion can be retried (no data loss). The quarantine point
+    // is only deleted AFTER the durable write succeeds.
     const promotedMemory = await memoryService.remember({
       projectName,
       content: payload.content as string,
@@ -300,6 +311,38 @@ class MemoryGovernanceService {
       },
     });
 
+    // Durable write succeeded → remove the quarantine copy. A failure here leaves
+    // a harmless duplicate in quarantine (idempotent: a retry re-finds and re-deletes).
+    try {
+      await vectorStore.delete(quarantineCollection, [memoryId]);
+    } catch (err: any) {
+      logger.warn(`Promoted ${memoryId} but failed to remove quarantine copy`, {
+        project: projectName,
+        error: err.message,
+      });
+    }
+
+    // Record the review outcome for adaptive-threshold computation.
+    await this.incrCounter(this.promotedCounterKey(projectName));
+
+    // Append-only version audit: promotion is a governance-actor MODIFICATION of
+    // the memory (quarantine → durable). Fire-and-forget — never block the promote.
+    memoryVersions
+      .record(projectName, {
+        op: 'modified',
+        memoryId: promotedMemory.id,
+        actor: 'governance',
+        content: promotedMemory.content,
+        type: promotedMemory.type,
+        tags: promotedMemory.tags,
+        metadata: {
+          ...promotedMemory.metadata,
+          promotedFrom: memoryId,
+          promoteReason: reason,
+        },
+      })
+      .catch(() => {});
+
     logger.info(`Memory promoted: ${memoryId} → ${promotedMemory.id}`, {
       project: projectName,
       reason,
@@ -316,6 +359,8 @@ class MemoryGovernanceService {
 
     try {
       await vectorStore.delete(quarantineCollection, [memoryId]);
+      // Record the review outcome for adaptive-threshold computation.
+      await this.incrCounter(this.rejectedCounterKey(projectName));
       logger.info(`Memory rejected: ${memoryId}`, { project: projectName });
       return true;
     } catch (error: any) {

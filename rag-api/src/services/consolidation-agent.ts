@@ -62,6 +62,18 @@ interface AbstractedMemory {
   isEpisodic: boolean; // true = store as episodic, false = semantic
 }
 
+/**
+ * Raised when an LLM step (pattern detection / abstraction) fails or times out.
+ * Propagated out of consolidate() so the BullMQ job fails and is retried,
+ * rather than reporting a fake "success" with zero output.
+ */
+export class ConsolidationFailedError extends Error {
+  constructor(message: string) {
+    super(message);
+    this.name = 'ConsolidationFailedError';
+  }
+}
+
 // ── Prompts ───────────────────────────────────────────────
 
 const PATTERN_DETECTION_PROMPT = `Analyze these tool events from a coding session and identify important patterns.
@@ -232,9 +244,14 @@ class ConsolidationAgentService {
     } catch (error: any) {
       logger.warn('Consolidation failed', { error: error.message, projectName, sessionId });
       result.durationMs = Date.now() - startTime;
-      // Ingest consolidation failure into sensory buffer
+      // Ingest consolidation failure into sensory buffer (best-effort observability).
       this.ingestConsolidationEvent(projectName, sessionId, result, false, error.message);
-      return result;
+      // THROW instead of returning a partial "success": this fails the BullMQ job so
+      // it retries, and lets callers guard workingMemory.clear() (don't wipe the 24h
+      // buffer on a failed/empty run).
+      throw error instanceof ConsolidationFailedError
+        ? error
+        : new ConsolidationFailedError(`Consolidation failed: ${error.message}`);
     }
   }
 
@@ -284,7 +301,8 @@ class ConsolidationAgentService {
       return parsed?.patterns ?? [];
     } catch (error: any) {
       logger.warn('Pattern detection LLM call failed', { error: error.message });
-      return [];
+      // Surface as a failure so consolidate() can fail the job (BullMQ retry).
+      throw new ConsolidationFailedError(`Pattern detection failed: ${error.message}`);
     }
   }
 
@@ -331,6 +349,7 @@ class ConsolidationAgentService {
       });
 
       const parsed = this.parseJson<{ memories: AbstractedMemory[] }>(result);
+      // A well-formed empty list is a legitimate "nothing worth storing" outcome.
       if (!parsed?.memories) return [];
 
       // Validate and normalize
@@ -345,9 +364,10 @@ class ConsolidationAgentService {
           files: Array.isArray(m.files) ? m.files.slice(0, 20) : [],
           isEpisodic: m.isEpisodic ?? false,
         }));
-    } catch (error) {
+    } catch (error: any) {
       logger.debug('Abstraction LLM call failed', { error });
-      return [];
+      // Surface as a failure so consolidate() can fail the job (BullMQ retry).
+      throw new ConsolidationFailedError(`Abstraction failed: ${error?.message ?? error}`);
     }
   }
 
@@ -422,21 +442,40 @@ class ConsolidationAgentService {
   // ── Helpers ───────────────────────────────────────────────
 
   private async llmCall(prompt: string, systemPrompt: string, timeoutMs: number): Promise<string> {
+    // Enforce CONSOLIDATION_LLM_TIMEOUT_MS by aborting the in-flight provider call:
+    // completeWithBestProvider now threads `signal` into the actual HTTP/SDK request
+    // (axios + Anthropic SDK both honor it), so controller.abort() truly cancels the
+    // call rather than leaking it. The Promise.race against the timer remains as a
+    // backstop so we reject promptly even if a provider ignores the signal.
     const controller = new AbortController();
-    const timer = setTimeout(() => controller.abort(), timeoutMs);
+    let timer: NodeJS.Timeout | undefined;
 
-    try {
-      const result = await llm.completeWithBestProvider(prompt, {
+    const timeoutPromise = new Promise<never>((_, reject) => {
+      timer = setTimeout(
+        () => {
+          controller.abort();
+          reject(new Error(`Consolidation LLM call timed out after ${timeoutMs}ms`));
+        },
+        Math.max(1, timeoutMs)
+      );
+    });
+
+    const callPromise = llm
+      .completeWithBestProvider(prompt, {
         complexity: 'utility',
         systemPrompt,
         // Note: format:'json' causes empty responses on qwen3.5:9b — rely on prompt instruction instead
         maxTokens: 2000,
         temperature: 0.2,
         think: false,
-      });
-      return result.text;
+        signal: controller.signal,
+      })
+      .then((result) => result.text);
+
+    try {
+      return await Promise.race([callPromise, timeoutPromise]);
     } finally {
-      clearTimeout(timer);
+      if (timer) clearTimeout(timer);
     }
   }
 

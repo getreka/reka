@@ -10,6 +10,23 @@ const mockQdrantClient = vi.hoisted(() => ({
 const mockTimerEnd = vi.hoisted(() => vi.fn());
 const mockStartTimer = vi.hoisted(() => vi.fn(() => mockTimerEnd));
 
+// Redis-backed governance counters (promoted/rejected). The map mirrors what
+// cacheService.increment / getClient().get would do against Redis.
+const counters = vi.hoisted(() => new Map<string, number>());
+const mockCacheGet = vi.hoisted(() =>
+  vi.fn(async (key: string) => {
+    const v = counters.get(key);
+    return v === undefined ? null : String(v);
+  })
+);
+const mockCacheIncrement = vi.hoisted(() =>
+  vi.fn(async (key: string, amount = 1) => {
+    const next = (counters.get(key) ?? 0) + amount;
+    counters.set(key, next);
+    return next;
+  })
+);
+
 // Mock dependencies
 vi.mock('../../services/vector-store', () => ({
   vectorStore: {
@@ -55,6 +72,13 @@ vi.mock('../../services/feedback', () => ({
   },
 }));
 
+vi.mock('../../services/cache', () => ({
+  cacheService: {
+    increment: mockCacheIncrement,
+    getClient: vi.fn(() => ({ get: mockCacheGet })),
+  },
+}));
+
 vi.mock('../../utils/metrics', () => ({
   memoryGovernanceTotal: { inc: vi.fn() },
   maintenanceDuration: { startTimer: mockStartTimer },
@@ -66,6 +90,7 @@ import { vectorStore } from '../../services/vector-store';
 import { embeddingService } from '../../services/embedding';
 import { memoryService } from '../../services/memory';
 import { qualityGates } from '../../services/quality-gates';
+import { cacheService } from '../../services/cache';
 import { memoryGovernance } from '../../services/memory-governance';
 
 const mockedVS = vi.mocked(vectorStore);
@@ -80,6 +105,18 @@ describe('MemoryGovernanceService', () => {
     vi.resetAllMocks();
     // Re-set hoisted mocks that resetAllMocks clears
     mockStartTimer.mockImplementation(() => mockTimerEnd);
+    // Re-wire the counter-backed cache mocks (resetAllMocks clears implementations)
+    counters.clear();
+    mockCacheGet.mockImplementation(async (key: string) => {
+      const v = counters.get(key);
+      return v === undefined ? null : String(v);
+    });
+    mockCacheIncrement.mockImplementation(async (key: string, amount = 1) => {
+      const next = (counters.get(key) ?? 0) + amount;
+      counters.set(key, next);
+      return next;
+    });
+    vi.mocked(cacheService.getClient).mockReturnValue({ get: mockCacheGet } as any);
     // Clear the governance service's internal caches to prevent cross-test leaks
     (memoryGovernance as any).thresholdCache.clear();
     (memoryGovernance as any).compactionLocks.clear();
@@ -119,10 +156,7 @@ describe('MemoryGovernanceService', () => {
 
     it('routes auto-generated memory to quarantine', async () => {
       mockedVS.upsert.mockResolvedValue(undefined);
-      // For adaptive threshold: default with < 5 total
-      mockQdrantClient.scroll
-        .mockResolvedValueOnce({ points: [] })
-        .mockResolvedValueOnce({ points: [] });
+      // No review history → adaptive threshold stays at default 0.5, conf 0.8 > 0.5
 
       const result = await memoryGovernance.ingest({
         projectName: 'test',
@@ -149,12 +183,11 @@ describe('MemoryGovernanceService', () => {
     });
 
     it('skips auto-memory below adaptive confidence threshold', async () => {
-      // Return enough to compute a threshold > 0.7
-      mockQdrantClient.scroll
-        .mockResolvedValueOnce({ points: [] }) // promoted
-        .mockResolvedValueOnce({ points: Array.from({ length: 10 }, () => ({})) }); // pending (10 items)
+      // Review history dominated by rejections → threshold climbs toward 0.8.
+      // 0 promoted / 10 rejected → successRate=0 → threshold=0.8.
+      counters.set('governance:test:promoted', 0);
+      counters.set('governance:test:rejected', 10);
 
-      // With 0 promoted / 10 total → successRate=0 → threshold=0.8
       const result = await memoryGovernance.ingest({
         projectName: 'test',
         content: 'low confidence',
@@ -168,6 +201,23 @@ describe('MemoryGovernanceService', () => {
       );
       expect(mockedVS.upsert).not.toHaveBeenCalled();
       expect(mockedMemory.remember).not.toHaveBeenCalled();
+    });
+
+    it('does NOT raise the threshold from an unreviewed quarantine backlog', async () => {
+      // A normal backlog (many pending, ZERO reviews) must keep the default 0.5
+      // so a confidence-0.6 auto-memory is still quarantined, not silently dropped.
+      mockedVS.upsert.mockResolvedValue(undefined);
+
+      const result = await memoryGovernance.ingest({
+        projectName: 'test',
+        content: 'medium confidence',
+        type: 'note',
+        source: 'auto_conversation',
+        confidence: 0.6,
+      });
+
+      expect(result.metadata?.skipped).toBeUndefined();
+      expect(mockedVS.upsert).toHaveBeenCalled();
     });
   });
 
@@ -224,6 +274,36 @@ describe('MemoryGovernanceService', () => {
       ).rejects.toThrow('Memory not found in quarantine');
     });
 
+    it('does NOT delete from quarantine when durable write fails (no data loss)', async () => {
+      // Gate passes (no gates requested), memory found in quarantine...
+      mockQdrantClient.scroll.mockResolvedValue({
+        points: [
+          {
+            id: 'q-1',
+            payload: {
+              id: 'q-1',
+              type: 'insight',
+              content: 'precious content',
+              tags: [],
+              metadata: {},
+            },
+          },
+        ],
+      });
+      mockedVS.delete.mockResolvedValue(undefined);
+      // ...but the durable write throws (embed/upsert failure).
+      mockedMemory.remember.mockRejectedValue(new Error('embed service down'));
+
+      await expect(memoryGovernance.promote('test', 'q-1', 'human_validated')).rejects.toThrow(
+        'embed service down'
+      );
+
+      // Critical: quarantine copy must remain — delete never ran.
+      expect(mockedVS.delete).not.toHaveBeenCalled();
+      // And the promote counter must NOT advance on a failed promotion.
+      expect(counters.get('governance:test:promoted')).toBeUndefined();
+    });
+
     it('rejects promotion when quality gates fail', async () => {
       mockedGates.runGates.mockResolvedValue({
         passed: false,
@@ -277,27 +357,57 @@ describe('MemoryGovernanceService', () => {
   });
 
   describe('getAdaptiveThreshold', () => {
-    it('returns default 0.5 when < 5 total memories', async () => {
-      mockQdrantClient.scroll
-        .mockResolvedValueOnce({ points: [{}] }) // 1 promoted
-        .mockResolvedValueOnce({ points: [{}] }); // 1 pending
+    it('returns default 0.5 when < 5 reviewed memories', async () => {
+      counters.set('governance:fresh-proj:promoted', 1);
+      counters.set('governance:fresh-proj:rejected', 1);
 
       const threshold = await memoryGovernance.getAdaptiveThreshold('fresh-proj');
 
       expect(threshold).toBe(0.5);
     });
 
-    it('computes threshold from success rate', async () => {
-      // 8 promoted, 2 pending → successRate=0.8 → threshold = 0.8 - 0.8*0.4 = 0.48
-      mockQdrantClient.scroll
-        .mockResolvedValueOnce({ points: Array.from({ length: 8 }, () => ({})) })
-        .mockResolvedValueOnce({ points: Array.from({ length: 2 }, () => ({})) });
+    it('computes threshold from promote/reject success rate', async () => {
+      // 8 promoted, 2 rejected → successRate=0.8 → threshold = 0.8 - 0.8*0.4 = 0.48
+      counters.set('governance:newproj:promoted', 8);
+      counters.set('governance:newproj:rejected', 2);
 
       const threshold = await memoryGovernance.getAdaptiveThreshold('newproj');
 
       expect(threshold).toBeGreaterThanOrEqual(0.4);
       expect(threshold).toBeLessThanOrEqual(0.8);
       expect(threshold).toBeCloseTo(0.48, 1);
+    });
+
+    it('increments the promoted counter on promote()', async () => {
+      mockQdrantClient.scroll.mockResolvedValue({
+        points: [
+          {
+            id: 'q-1',
+            payload: { id: 'q-1', type: 'insight', content: 'c', tags: [], metadata: {} },
+          },
+        ],
+      });
+      mockedVS.delete.mockResolvedValue(undefined);
+      mockedMemory.remember.mockResolvedValue({
+        id: 'd-1',
+        type: 'insight',
+        content: 'c',
+        tags: [],
+        createdAt: '',
+        updatedAt: '',
+      });
+
+      await memoryGovernance.promote('counterproj', 'q-1', 'human_validated');
+
+      expect(counters.get('governance:counterproj:promoted')).toBe(1);
+    });
+
+    it('increments the rejected counter on reject()', async () => {
+      mockedVS.delete.mockResolvedValue(undefined);
+
+      await memoryGovernance.reject('counterproj', 'q-2');
+
+      expect(counters.get('governance:counterproj:rejected')).toBe(1);
     });
   });
 
