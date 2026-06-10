@@ -19,8 +19,13 @@
  *   ${project}_memory_versions:v:<versionId> → the immutable version record (JSON)
  *
  * Every mutation records: op (created|modified|deleted), memoryId, actor, ISO
- * timestamp, sha256 content hash, and a content snapshot. redact() clears the
- * snapshot but keeps actor + timestamp + hash for tamper-evidence.
+ * timestamp, sha256 content hash, a content snapshot, AND an optional full
+ * `snapshot` of the complete memory point payload (all fields, not just content).
+ * The full snapshot is what lets rollback() of a DELETED memory reconstruct every
+ * field — relatedTo, source, confidence, validated, trigger*, pin, tags, type,
+ * factCategory, … — since the Qdrant point is gone and can no longer be fetched.
+ * redact() clears both snapshots but keeps actor + timestamp + hash for
+ * tamper-evidence.
  */
 
 import { v4 as uuidv4 } from 'uuid';
@@ -44,6 +49,15 @@ export interface MemoryVersion {
   type?: string;
   tags?: string[];
   metadata?: Record<string, unknown>;
+  /**
+   * Full memory point payload at mutation time (all fields: relatedTo, source,
+   * confidence, validated, trigger*, pin, factCategory, …). Captured so a
+   * rollback-of-delete can reconstruct the COMPLETE memory, not just content.
+   * Optional / nullable: old records (and content-only mutations) won't have it,
+   * and redact() clears it. The triggerEmbedding vector is intentionally NOT
+   * stored here (rollback re-embeds content; trigger is re-embedded if present).
+   */
+  snapshot?: Record<string, unknown> | null;
   /** Set by redact() — actor+timestamp+hash are retained for audit. */
   redacted?: boolean;
 }
@@ -56,6 +70,8 @@ export interface RecordVersionInput {
   type?: string;
   tags?: string[];
   metadata?: Record<string, unknown>;
+  /** Full memory payload to snapshot (see MemoryVersion.snapshot). */
+  snapshot?: Record<string, unknown> | null;
 }
 
 // Cap list length so the audit log can't grow unbounded (newest kept).
@@ -64,6 +80,23 @@ const MAX_VERSIONS_PER_MEMORY = 500;
 
 function sha256(text: string): string {
   return crypto.createHash('sha256').update(text).digest('hex');
+}
+
+/**
+ * Strip a snapshot down to the fields rollback needs, dropping bulky/derived data.
+ * The triggerEmbedding (a 1024-d vector) is omitted — rollback re-derives it from
+ * triggerDescription — so the audit record stays small. The vector-store routing
+ * field `project` is also dropped (rollback re-applies it).
+ */
+function sanitizeSnapshot(
+  snapshot: Record<string, unknown> | null | undefined
+): Record<string, unknown> | undefined {
+  if (!snapshot) return undefined;
+  const { triggerEmbedding, project, vector, ...rest } = snapshot as Record<string, unknown>;
+  void triggerEmbedding;
+  void project;
+  void vector;
+  return rest;
 }
 
 class MemoryVersionsService {
@@ -100,6 +133,7 @@ class MemoryVersionsService {
       type: input.type,
       tags: input.tags,
       metadata: input.metadata,
+      snapshot: sanitizeSnapshot(input.snapshot),
     };
 
     try {
@@ -193,9 +227,25 @@ class MemoryVersionsService {
    * Returns the (unchanged) memoryId, or null if the version is missing/redacted
    * (no content to restore).
    *
+   * Field reconstruction precedence (lowest → highest):
+   *   1. the live point (memoryService.getById) — present only if it still exists;
+   *      for a rollback-of-DELETE the point is gone and this is null.
+   *   2. the version's FULL `snapshot` — every field captured at mutation time
+   *      (relatedTo, source, confidence, validated, trigger*, pin, tags, type,
+   *      factCategory, relationships, …). This is what makes delete-rollback
+   *      lossless: the deleted point is unrecoverable, but the snapshot carries
+   *      its complete payload.
+   *   3. explicit per-field overrides (content, fresh updatedAt, rollback metadata,
+   *      cleared supersededBy).
+   *
+   * BACKWARD-COMPAT: a version recorded before full snapshots existed has no
+   * `snapshot`. In that case we fall back to the prior content-only restore —
+   * the live point (if any) supplies the other fields, otherwise only
+   * content/type/tags are reconstructed.
+   *
    * The memory is re-embedded and upserted directly at id = version.memoryId
-   * (mirroring how MemoryService.remember persists: same `${project}_agent_memory`
-   * collection, same embedding-text format, same payload shape). Routing through
+   * (mirroring MemoryService.remember: same `${project}_agent_memory` collection,
+   * same embedding-text format, same payload shape). Routing through
    * memoryService.remember() would mint a BRAND-NEW uuid, orphaning every
    * supersededBy/relationship pointer to the original id and duplicating the
    * memory on a second rollback. Upserting the same id keeps existing references
@@ -217,13 +267,12 @@ class MemoryVersionsService {
     const memoryId = version.memoryId;
     const collectionName = `${projectName}_agent_memory`;
     const content = version.content;
-    const type = (version.type as any) ?? 'note';
-    const tags = version.tags ?? [];
+    const snapshot = version.snapshot ?? undefined;
 
-    // If the original point still exists, fetch it so we can preserve fields the
-    // snapshot doesn't carry (createdAt, source, confidence, relationships, …)
-    // and overwrite in place. If it's gone (rollback-of-delete), reconstruct from
-    // the snapshot. getById is best-effort — a failure just means no existing point.
+    // If the original point still exists, fetch it so we can preserve fields neither
+    // the snapshot nor the explicit overrides carry, and overwrite in place. If it's
+    // gone (rollback-of-delete), the full snapshot reconstructs everything. getById
+    // is best-effort — a failure just means no existing point.
     let existing: import('./memory').Memory | null = null;
     try {
       existing = await memoryService.getById(projectName, memoryId);
@@ -235,14 +284,20 @@ class MemoryVersionsService {
       });
     }
 
-    // relatedTo isn't carried on the version snapshot, so prefer the live point's
-    // value, then any value stashed in the snapshot metadata.
+    // type/tags/relatedTo: prefer the full snapshot, then the live point, then the
+    // flat version fields (backward-compat for snapshot-less records).
+    const type = (snapshot?.type as string) ?? (version.type as any) ?? existing?.type ?? 'note';
+    const tags = (snapshot?.tags as string[]) ?? version.tags ?? existing?.tags ?? [];
     const relatedTo =
-      existing?.relatedTo ?? (version.metadata?.relatedTo as string | undefined) ?? undefined;
+      (snapshot?.relatedTo as string | undefined) ??
+      existing?.relatedTo ??
+      (version.metadata?.relatedTo as string | undefined) ??
+      undefined;
 
     const nowIso = new Date().toISOString();
     const rollbackMetadata = {
       ...(existing?.metadata ?? {}),
+      ...((snapshot?.metadata as Record<string, unknown> | undefined) ?? {}),
       ...(version.metadata ?? {}),
       rolledBackFrom: versionId,
       rolledBackAt: nowIso,
@@ -254,16 +309,19 @@ class MemoryVersionsService {
       `${type}: ${content}${relatedTo ? ` (related to: ${relatedTo})` : ''}${tags.length > 0 ? ` [tags: ${tags.join(', ')}]` : ''}`
     );
 
-    // Build the payload from the existing memory when present (preserving its
-    // identity fields), otherwise from the snapshot. The id stays the ORIGINAL.
+    // Layer the payload: live point (lowest) < full snapshot < explicit overrides.
+    // The full snapshot is what restores ALL fields on a delete-rollback
+    // (source, confidence, validated, factCategory, pin, trigger*, relationships).
+    // The id stays the ORIGINAL.
     const payload: Record<string, unknown> = {
       ...(existing ?? {}),
+      ...(snapshot ?? {}),
       id: memoryId,
       type,
       content,
       tags,
       relatedTo,
-      createdAt: existing?.createdAt ?? nowIso,
+      createdAt: (snapshot?.createdAt as string | undefined) ?? existing?.createdAt ?? nowIso,
       updatedAt: nowIso,
       metadata: rollbackMetadata,
       // A restored memory is no longer superseded by anything.
@@ -271,10 +329,30 @@ class MemoryVersionsService {
       project: projectName,
     };
 
+    // Re-derive the trigger embedding from the restored triggerDescription so the
+    // stored vector matches the kept cue (the snapshot intentionally omits it).
+    // Best-effort — a failed trigger embed must not abort the rollback upsert.
+    const triggerDescription = payload.triggerDescription as string | undefined;
+    if (triggerDescription) {
+      try {
+        payload.triggerEmbedding = await embeddingService.embed(triggerDescription);
+      } catch (err: any) {
+        logger.debug('rollback trigger re-embed failed; restoring without trigger vector', {
+          project: projectName,
+          memoryId,
+          error: err?.message,
+        });
+        delete payload.triggerEmbedding;
+      }
+    } else {
+      delete payload.triggerEmbedding;
+    }
+
     await vectorStore.upsert(collectionName, [{ id: memoryId, vector: embedding, payload }]);
 
     // Record the restore against the SAME memoryId so the audit trail stays
-    // attached to the original memory (not a new orphan).
+    // attached to the original memory (not a new orphan). Carry the full restored
+    // payload forward so a rollback of THIS restore is itself lossless.
     await this.record(projectName, {
       op: 'modified',
       memoryId,
@@ -283,12 +361,14 @@ class MemoryVersionsService {
       type,
       tags,
       metadata: rollbackMetadata,
+      snapshot: payload,
     });
 
     logger.info('Memory rolled back from version', {
       project: projectName,
       versionId,
       memoryId,
+      restoredFromSnapshot: !!snapshot,
     });
     return { memoryId };
   }
@@ -310,6 +390,9 @@ class MemoryVersionsService {
       content: null,
       tags: undefined,
       metadata: undefined,
+      // Clear the full snapshot too — it carries the entire memory payload, which
+      // must not survive a redaction any more than the content snapshot does.
+      snapshot: null,
       redacted: true,
     };
 

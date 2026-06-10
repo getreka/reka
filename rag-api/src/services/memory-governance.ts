@@ -340,6 +340,17 @@ class MemoryGovernanceService {
           promotedFrom: memoryId,
           promoteReason: reason,
         },
+        // Snapshot the full promoted memory so a rollback restores every field
+        // (validated, confidence, source, relatedTo, …), not just content.
+        snapshot: {
+          ...promotedMemory,
+          project: projectName,
+          metadata: {
+            ...promotedMemory.metadata,
+            promotedFrom: memoryId,
+            promoteReason: reason,
+          },
+        },
       })
       .catch(() => {});
 

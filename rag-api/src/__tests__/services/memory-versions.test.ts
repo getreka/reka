@@ -258,6 +258,134 @@ describe('MemoryVersionsService', () => {
       );
     });
 
+    it('restores ALL payload fields of a deleted memory from the full snapshot', async () => {
+      // The point is GONE after delete, so getById returns null — every field must
+      // be reconstructed from the snapshot, not just content.
+      mockGetById.mockResolvedValue(null);
+
+      const v = await memoryVersions.record('proj', {
+        op: 'deleted',
+        memoryId: 'rich',
+        content: 'use postgres for the orders table',
+        type: 'decision',
+        tags: ['db', 'orders'],
+        snapshot: {
+          id: 'rich',
+          type: 'decision',
+          content: 'use postgres for the orders table',
+          tags: ['db', 'orders'],
+          relatedTo: 'orders-service',
+          createdAt: '2021-05-05T00:00:00.000Z',
+          updatedAt: '2021-05-05T00:00:00.000Z',
+          source: 'manual',
+          confidence: 0.92,
+          validated: true,
+          pin: 'repo',
+          factCategory: 'plan',
+          triggerDescription: 'when choosing a datastore for orders',
+          // bulky/derived fields that sanitizeSnapshot must drop:
+          triggerEmbedding: [0.9, 0.9, 0.9],
+          project: 'proj',
+          metadata: { author: 'andrii' },
+        },
+      });
+
+      // The stored version record must NOT carry the bulky triggerEmbedding/project.
+      expect(v!.snapshot).toBeDefined();
+      expect(v!.snapshot!.triggerEmbedding).toBeUndefined();
+      expect(v!.snapshot!.project).toBeUndefined();
+      expect(v!.snapshot!.confidence).toBe(0.92);
+
+      const result = await memoryVersions.rollback('proj', v!.versionId);
+      expect(result).toEqual({ memoryId: 'rich' });
+
+      const points = mockUpsert.mock.calls[0][1];
+      const payload = points[0].payload;
+      expect(points[0].id).toBe('rich');
+      expect(payload.id).toBe('rich');
+      expect(payload.content).toBe('use postgres for the orders table');
+      expect(payload.type).toBe('decision');
+      expect(payload.tags).toEqual(['db', 'orders']);
+      expect(payload.relatedTo).toBe('orders-service');
+      // Identity + governance fields restored from the snapshot, not lost.
+      expect(payload.createdAt).toBe('2021-05-05T00:00:00.000Z');
+      expect(payload.source).toBe('manual');
+      expect(payload.confidence).toBe(0.92);
+      expect(payload.validated).toBe(true);
+      expect(payload.pin).toBe('repo');
+      expect(payload.factCategory).toBe('plan');
+      expect(payload.triggerDescription).toBe('when choosing a datastore for orders');
+      expect(payload.metadata).toMatchObject({ author: 'andrii', rolledBackFrom: v!.versionId });
+      // A restored memory is never left superseded.
+      expect(payload.supersededBy).toBeUndefined();
+      expect(payload.project).toBe('proj');
+      // triggerEmbedding is re-derived from triggerDescription (not the stale vector).
+      expect(mockEmbed).toHaveBeenCalledWith('when choosing a datastore for orders');
+      expect(payload.triggerEmbedding).toEqual([0.1, 0.2, 0.3]);
+    });
+
+    it('is idempotent for a full-snapshot delete rollback (same id, fields preserved)', async () => {
+      mockGetById.mockResolvedValue(null);
+
+      const v = await memoryVersions.record('proj', {
+        op: 'deleted',
+        memoryId: 'rich2',
+        content: 'restore me fully',
+        type: 'insight',
+        tags: ['x'],
+        snapshot: {
+          id: 'rich2',
+          type: 'insight',
+          content: 'restore me fully',
+          tags: ['x'],
+          confidence: 0.7,
+          validated: true,
+          createdAt: '2022-02-02T00:00:00.000Z',
+        },
+      });
+
+      const first = await memoryVersions.rollback('proj', v!.versionId);
+      const second = await memoryVersions.rollback('proj', v!.versionId);
+
+      expect(first).toEqual({ memoryId: 'rich2' });
+      expect(second).toEqual({ memoryId: 'rich2' });
+      expect(mockUpsert).toHaveBeenCalledTimes(2);
+      // Same original id both times — no duplicate uuid.
+      expect(mockUpsert.mock.calls[0][1][0].id).toBe('rich2');
+      expect(mockUpsert.mock.calls[1][1][0].id).toBe('rich2');
+      // Governance fields survive a repeat rollback.
+      expect(mockUpsert.mock.calls[1][1][0].payload.confidence).toBe(0.7);
+      expect(mockUpsert.mock.calls[1][1][0].payload.validated).toBe(true);
+      expect(mockUpsert.mock.calls[1][1][0].payload.createdAt).toBe('2022-02-02T00:00:00.000Z');
+    });
+
+    it('falls back to content-only restore for a snapshot-less (legacy) version', async () => {
+      mockGetById.mockResolvedValue(null);
+
+      // No snapshot field — emulates a record written before full snapshots existed.
+      const v = await memoryVersions.record('proj', {
+        op: 'deleted',
+        memoryId: 'legacy',
+        content: 'old content',
+        type: 'note',
+        tags: ['t'],
+      });
+      expect(v!.snapshot).toBeUndefined();
+
+      const result = await memoryVersions.rollback('proj', v!.versionId);
+      expect(result).toEqual({ memoryId: 'legacy' });
+
+      const payload = mockUpsert.mock.calls[0][1][0].payload;
+      expect(payload.id).toBe('legacy');
+      expect(payload.content).toBe('old content');
+      expect(payload.type).toBe('note');
+      expect(payload.tags).toEqual(['t']);
+      // No governance fields available in a legacy record — none invented.
+      expect(payload.confidence).toBeUndefined();
+      expect(payload.validated).toBeUndefined();
+      expect(payload.triggerEmbedding).toBeUndefined();
+    });
+
     it('returns null for an unknown versionId', async () => {
       const result = await memoryVersions.rollback('proj', 'does-not-exist');
       expect(result).toBeNull();

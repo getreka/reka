@@ -10,7 +10,7 @@ import { embeddingService } from './embedding';
 import { llm } from './llm';
 import { relationshipClassifier } from './relationship-classifier';
 // reconsolidation moved to memory-effects worker
-import { spreadingActivation, type ActivatedMemory } from './spreading-activation';
+import { spreadingActivation } from './spreading-activation';
 import { memoryVersions, type VersionActor } from './memory-versions';
 import { logger } from '../utils/logger';
 import config from '../config';
@@ -391,6 +391,8 @@ class MemoryService {
     await vectorStore.upsert(collectionName, [point]);
 
     // Append-only version audit (fire-and-forget — never break a remember).
+    // Snapshot the freshly-built memory so a rollback can reconstruct ALL fields
+    // (relatedTo, trigger*, pin, factCategory, …), not just content.
     memoryVersions
       .record(projectName, {
         op: 'created',
@@ -400,6 +402,7 @@ class MemoryService {
         type,
         tags,
         metadata,
+        snapshot: { ...memory, project: projectName },
       })
       .catch(() => {});
 
@@ -858,6 +861,11 @@ class MemoryService {
         type: existing?.type,
         tags: existing?.tags,
         metadata: existing?.metadata,
+        // Snapshot the WHOLE memory before it's deleted: once the Qdrant point is
+        // gone, rollback can't getById() it, so the full payload (source, confidence,
+        // validated, relatedTo, trigger*, pin, factCategory, relationships, …) is
+        // only recoverable from this snapshot.
+        snapshot: existing ? { ...existing, project: projectName } : undefined,
       });
     } catch (err: any) {
       logger.debug('Failed to record deletion version', { memoryId, error: err?.message });
