@@ -100,16 +100,7 @@ router.post(
   validateProjectName,
   validate(recallMemorySchema),
   asyncHandler(async (req: Request, res: Response) => {
-    const {
-      projectName,
-      query,
-      type,
-      limit = 5,
-      tag,
-      graphRecall,
-      ragFusion,
-      recencyBoost,
-    } = req.body;
+    const { projectName, query, type, limit = 5, tag, graphRecall } = req.body;
     const config = (await import('../config')).default;
 
     // Always search durable (legacy) collection

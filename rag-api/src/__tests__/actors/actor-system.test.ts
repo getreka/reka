@@ -188,7 +188,7 @@ describe('ActorRef', () => {
     await ref.send('memory:created', { content: 'hello' });
 
     expect(mockQueue.add).toHaveBeenCalledOnce();
-    const [jobName, message, opts] = mockQueue.add.mock.calls[0];
+    const [jobName, message] = mockQueue.add.mock.calls[0];
 
     expect(jobName).toBe('memory:created');
     expect(message.type).toBe('memory:created');
@@ -1282,15 +1282,6 @@ describe('IndexActor', () => {
 // ---------------------------------------------------------------------------
 
 describe('ActorSystem', () => {
-  // Import the singleton but create isolated instances for most tests
-  // to avoid state leakage between test runs.
-  function makeIsolatedSystem() {
-    // Dynamically re-construct since actorSystem is a module singleton
-    // We need to test the class behaviour, so we access the class directly.
-    // ActorSystem is not exported — test via the exported singleton with cleanup.
-    return actorSystem;
-  }
-
   beforeEach(() => {
     vi.clearAllMocks();
     // Drain the singleton's actor map between tests using shutdown

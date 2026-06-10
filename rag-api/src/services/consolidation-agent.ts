@@ -18,13 +18,7 @@
 import { llm } from './llm';
 import { sensoryBuffer, type SensoryEvent } from './sensory-buffer';
 import { workingMemory, type WorkingMemorySlot } from './working-memory';
-import {
-  memoryLtm,
-  type SemanticSubtype,
-  type Anchor,
-  type StoreEpisodicOptions,
-  type StoreSemanticOptions,
-} from './memory-ltm';
+import { memoryLtm, type SemanticSubtype, type Anchor } from './memory-ltm';
 import { relationshipClassifier, type ClassifiedRelation } from './relationship-classifier';
 import { vectorStore } from './vector-store';
 import { embeddingService } from './embedding';

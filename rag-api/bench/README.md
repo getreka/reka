@@ -72,7 +72,13 @@ match `rate-limit.ts`.
 From the `rag-api` directory (so shared `node_modules` resolves):
 
 ```bash
-# Full run (retrieval + answer + tokens)
+# Convenience script (uses tsx). Pass dataset + flags after `--`.
+REKA_API_URL=http://localhost:3100 \
+REKA_API_KEY=rk_rag_xxx \
+BENCH_PROJECT=rag \
+  npm run bench -- bench/datasets/sample.json
+
+# Equivalent explicit invocation (full run: retrieval + answer + tokens)
 REKA_API_URL=http://localhost:3100 \
 REKA_API_KEY=rk_rag_xxx \
 BENCH_PROJECT=rag \
