@@ -157,13 +157,17 @@ Key settings:
 
 ## RAG Integration
 
-### Before ANY code change (REQUIRED):
+### Before non-trivial changes:
+
+Call `context_briefing` when a change spans multiple files, touches shared services/exports, or when prior decisions (patterns/ADRs) could affect the approach. Skip it for mechanical single-line edits (typos, renames, version bumps).
 
 ```
 context_briefing(task: "describe your change", files: ["path/to/file.ts"])
 ```
 
-### After completing changes (REQUIRED):
+### After meaningful work:
+
+Call `remember` once per work item, and only when you learned something non-obvious — a decision, a gotcha, or a new procedure. Don't save memories for mechanical changes (they just pollute recall).
 
 ```
 remember(content: "summary of what changed and why")
