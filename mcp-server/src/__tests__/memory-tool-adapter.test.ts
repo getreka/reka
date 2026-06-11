@@ -87,6 +87,33 @@ describe("MemoryToolAdapter", () => {
       expect(out).toContain("m1");
     });
 
+    it("attributes writes with source auto_memory_tool and NO confidence (M2 governance)", async () => {
+      mock.setResponse("POST /api/memory", {
+        data: { memory: { id: "m1", content: "hi" } },
+      });
+
+      await adapter.handle({
+        command: "create",
+        path: "/memories/auth.md",
+        file_text: "we use BGE-M3",
+      });
+
+      const post = mock.calls.find(
+        (c) => c.method === "POST" && c.path === "/api/memory",
+      )!;
+      const body = post.body as {
+        metadata?: Record<string, unknown>;
+        confidence?: number;
+      };
+      // source routes the write into quarantine; confidence must be ABSENT so
+      // governance can never threshold-drop it (create always succeeds).
+      expect(body.metadata).toEqual({ source: "auto_memory_tool" });
+      expect(body.confidence).toBeUndefined();
+      expect(
+        (body.metadata as Record<string, unknown>).confidence,
+      ).toBeUndefined();
+    });
+
     it("round-trips a 100+ char path (M2-1: tag cap is 256, not 50)", async () => {
       const longPath = `/memories/${"deeply/nested/".repeat(8)}decisions-and-context.md`;
       const tag = `${PATH_TAG_PREFIX}${longPath}`;
@@ -260,6 +287,82 @@ describe("MemoryToolAdapter", () => {
         view_range: [2, 3],
       });
       expect(out).toBe("l2\nl3");
+    });
+
+    it("merges unpromoted quarantine writes into view (read-your-writes, M2)", async () => {
+      const tag = `${PATH_TAG_PREFIX}/memories/fresh.md`;
+      // Durable tier: empty — the write has not been promoted yet.
+      mock.setResponse("GET /api/memory/list", { data: { memories: [] } });
+      // Quarantine tier: the just-created memory, found via ?tag=.
+      mock.setResponse("GET /api/memory/quarantine", {
+        data: {
+          memories: [{ id: "q1", content: "just written", tags: [tag] }],
+        },
+      });
+
+      const out = await adapter.handle({
+        command: "view",
+        path: "/memories/fresh.md",
+      });
+
+      // The quarantine endpoint must have been queried with the path tag.
+      const qGet = mock.calls.find(
+        (c) =>
+          c.method === "GET" && c.path.startsWith("/api/memory/quarantine"),
+      );
+      expect(qGet).toBeDefined();
+      expect(qGet!.path).toContain("tag=");
+      expect(out).toContain("just written");
+      // No semantic-recall fallback needed — the quarantine copy satisfied the view.
+      expect(mock.calls.some((c) => c.path === "/api/memory/recall")).toBe(
+        false,
+      );
+    });
+
+    it("dedupes by id when a memory appears in both tiers", async () => {
+      const tag = `${PATH_TAG_PREFIX}/memories/dup.md`;
+      const mem = { id: "same1", content: "one copy", tags: [tag] };
+      mock.setResponse("GET /api/memory/list", { data: { memories: [mem] } });
+      mock.setResponse("GET /api/memory/quarantine", {
+        data: { memories: [mem] },
+      });
+
+      const out = await adapter.handle({
+        command: "view",
+        path: "/memories/dup.md",
+      });
+
+      // Exactly one copy of the content (duplicate id dropped).
+      expect(out.split("one copy").length - 1).toBe(1);
+    });
+
+    it("survives a failing quarantine endpoint (additive read, M2)", async () => {
+      const tag = `${PATH_TAG_PREFIX}/memories/auth.md`;
+      mock.setResponse("GET /api/memory/list", {
+        data: {
+          memories: [{ id: "m1", content: "durable body", tags: [tag] }],
+        },
+      });
+      // Simulate a quarantine endpoint failure (e.g. older rag-api): the view
+      // must still return the durable content.
+      const apiGet = mock.api.get as ReturnType<typeof vi.fn>;
+      apiGet.mockImplementation(async (path: string) => {
+        mock.calls.push({ method: "GET", path });
+        if (path.startsWith("/api/memory/quarantine")) {
+          throw new Error("503");
+        }
+        return {
+          data: {
+            memories: [{ id: "m1", content: "durable body", tags: [tag] }],
+          },
+        };
+      });
+
+      const out = await adapter.handle({
+        command: "view",
+        path: "/memories/auth.md",
+      });
+      expect(out).toContain("durable body");
     });
 
     it("falls back to semantic recall when nothing is at the path", async () => {

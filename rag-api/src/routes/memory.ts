@@ -28,6 +28,7 @@ import {
   batchCreateMemorySchema,
   rollbackMemoryVersionSchema,
   redactMemoryVersionSchema,
+  memoryTagSchema,
 } from '../utils/validation';
 
 const router = Router();
@@ -227,6 +228,11 @@ router.get(
 /**
  * Delete a memory
  * DELETE /api/memory/:id
+ *
+ * Handles BOTH tiers: durable and quarantine. Memory-tool writes live in
+ * quarantine until promoted (read-your-writes), so delete/str_replace/rename
+ * on an unpromoted memory must reach the quarantine copy. A quarantine delete
+ * is NOT counted as a review outcome (see memoryGovernance.deleteFromQuarantine).
  */
 router.delete(
   '/memory/:id',
@@ -235,6 +241,22 @@ router.delete(
     const { projectName } = req.body;
     const { id } = req.params;
 
+    // Durable first (the common case).
+    const durable = await memoryService.getById(projectName, id);
+    if (durable) {
+      const success = await memoryService.forget(projectName, id);
+      return res.json({ success, tier: 'durable' });
+    }
+
+    // Not durable — the id may be an unpromoted quarantine write.
+    const quarantined = await memoryGovernance.getQuarantineById(projectName, id);
+    if (quarantined) {
+      const success = await memoryGovernance.deleteFromQuarantine(projectName, id);
+      return res.json({ success, tier: 'quarantine' });
+    }
+
+    // Unknown id — preserve the legacy idempotent durable delete semantics
+    // (Qdrant delete of a missing point succeeds).
     const success = await memoryService.forget(projectName, id);
     res.json({ success });
   })
@@ -405,7 +427,11 @@ router.post(
 
 /**
  * List quarantine memories for review
- * GET /api/memory/quarantine
+ * GET /api/memory/quarantine?tag=<exact tag>
+ *
+ * `tag` filters by exact tag match. The memory-tool adapter relies on it
+ * (mem:path=… tags) for read-your-writes: unpromoted writes are visible to
+ * path-based `view` but NOT to `recall` until promoted.
  */
 router.get(
   '/memory/quarantine',
@@ -414,8 +440,10 @@ router.get(
     const { projectName } = req.body;
     const limit = parseInt(req.query.limit as string) || 20;
     const offset = req.query.offset as string | undefined;
+    const tagRaw = req.query.tag as string | undefined;
+    const tag = tagRaw ? memoryTagSchema.parse(tagRaw) : undefined;
 
-    const memories = await memoryGovernance.listQuarantine(projectName, limit, offset);
+    const memories = await memoryGovernance.listQuarantine(projectName, limit, offset, tag);
     res.json({ memories, count: memories.length });
   })
 );

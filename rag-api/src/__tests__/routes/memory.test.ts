@@ -18,8 +18,11 @@ const mocks = vi.hoisted(() => ({
   ingest: vi.fn(),
   promote: vi.fn(),
   listQuarantine: vi.fn(),
+  getQuarantineById: vi.fn(),
+  deleteFromQuarantine: vi.fn(),
   recallDurable: vi.fn(),
   runMaintenance: vi.fn(),
+  getById: vi.fn(),
   analyze: vi.fn(),
   runGates: vi.fn(),
   ltmRecall: vi.fn(),
@@ -39,6 +42,7 @@ vi.mock('../../services/memory', () => ({
     mergeMemories: mocks.mergeMemories,
     validateMemory: mocks.validateMemory,
     getUnvalidatedMemories: mocks.getUnvalidatedMemories,
+    getById: mocks.getById,
   },
   MemoryType: {},
   TodoStatus: {},
@@ -49,6 +53,8 @@ vi.mock('../../services/memory-governance', () => ({
     ingest: mocks.ingest,
     promote: mocks.promote,
     listQuarantine: mocks.listQuarantine,
+    getQuarantineById: mocks.getQuarantineById,
+    deleteFromQuarantine: mocks.deleteFromQuarantine,
     recallDurable: mocks.recallDurable,
     runMaintenance: mocks.runMaintenance,
   },
@@ -123,6 +129,30 @@ describe('Memory Routes', () => {
       expect(res.body.success).toBe(true);
       expect(res.body.memory).toEqual(fakeMemory);
       expect(mocks.ingest).toHaveBeenCalledOnce();
+      expect(mocks.remember).not.toHaveBeenCalled();
+    });
+
+    it('memory-tool writes (source auto_memory_tool, no confidence) ingest with confidence undefined', async () => {
+      // M2: the adapter sends NO confidence so governance can never
+      // threshold-drop the write — it always quarantines instead.
+      const fakeMemory = { id: 'mem-mt', content: 'path write', type: 'note', metadata: {} };
+      mocks.ingest.mockResolvedValue(fakeMemory);
+
+      const res = await withProject(request(app).post('/api/memory'), 'testproject').send({
+        content: 'path write',
+        type: 'note',
+        tags: ['mem:path=/memories/auth.md'],
+        metadata: { source: 'auto_memory_tool' },
+      });
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(mocks.ingest).toHaveBeenCalledWith(
+        expect.objectContaining({
+          source: 'auto_memory_tool',
+          confidence: undefined,
+        })
+      );
       expect(mocks.remember).not.toHaveBeenCalled();
     });
 
@@ -302,7 +332,8 @@ describe('Memory Routes', () => {
   });
 
   describe('DELETE /api/memory/:id', () => {
-    it('returns success on delete', async () => {
+    it('deletes a durable memory', async () => {
+      mocks.getById.mockResolvedValue({ id: 'abc-123', content: 'x' });
       mocks.forget.mockResolvedValue(true);
 
       const res = await withProject(request(app).delete('/api/memory/abc-123'), 'testproject').send(
@@ -311,7 +342,37 @@ describe('Memory Routes', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.success).toBe(true);
+      expect(res.body.tier).toBe('durable');
       expect(mocks.forget).toHaveBeenCalledWith('testproject', 'abc-123');
+      expect(mocks.deleteFromQuarantine).not.toHaveBeenCalled();
+    });
+
+    it('falls back to quarantine when the id is an unpromoted memory-tool write (M2)', async () => {
+      mocks.getById.mockResolvedValue(null);
+      mocks.getQuarantineById.mockResolvedValue({ id: 'q-9', content: 'pending' });
+      mocks.deleteFromQuarantine.mockResolvedValue(true);
+
+      const res = await withProject(request(app).delete('/api/memory/q-9'), 'testproject').send({});
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(res.body.tier).toBe('quarantine');
+      expect(mocks.deleteFromQuarantine).toHaveBeenCalledWith('testproject', 'q-9');
+      expect(mocks.forget).not.toHaveBeenCalled();
+    });
+
+    it('keeps legacy idempotent semantics for unknown ids', async () => {
+      mocks.getById.mockResolvedValue(null);
+      mocks.getQuarantineById.mockResolvedValue(null);
+      mocks.forget.mockResolvedValue(true);
+
+      const res = await withProject(request(app).delete('/api/memory/ghost'), 'testproject').send(
+        {}
+      );
+
+      expect(res.status).toBe(200);
+      expect(res.body.success).toBe(true);
+      expect(mocks.forget).toHaveBeenCalledWith('testproject', 'ghost');
     });
   });
 
@@ -348,6 +409,20 @@ describe('Memory Routes', () => {
       expect(res.status).toBe(200);
       expect(res.body.memories).toEqual(fakeMemories);
       expect(res.body.count).toBe(1);
+      expect(mocks.listQuarantine).toHaveBeenCalledWith('testproject', 20, undefined, undefined);
+    });
+
+    it('forwards ?tag= to listQuarantine (M2 read-your-writes path lookup)', async () => {
+      const tag = 'mem:path=/memories/auth.md';
+      mocks.listQuarantine.mockResolvedValue([]);
+
+      const res = await withProject(
+        request(app).get(`/api/memory/quarantine?tag=${encodeURIComponent(tag)}`),
+        'testproject'
+      );
+
+      expect(res.status).toBe(200);
+      expect(mocks.listQuarantine).toHaveBeenCalledWith('testproject', 20, undefined, tag);
     });
   });
 

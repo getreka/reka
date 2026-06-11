@@ -425,13 +425,35 @@ class MemoryGovernanceService {
     }));
   }
 
+  /** Map a quarantine scroll point onto the Memory shape. */
+  private quarantinePointToMemory(id: unknown, payload: Record<string, unknown>): Memory {
+    return {
+      id: id as string,
+      type: payload.type as MemoryType,
+      content: payload.content as string,
+      tags: (payload.tags as string[]) || [],
+      relatedTo: payload.relatedTo as string | undefined,
+      createdAt: payload.createdAt as string,
+      updatedAt: payload.updatedAt as string,
+      metadata: payload.metadata as Record<string, unknown> | undefined,
+      source: payload.source as MemorySource | undefined,
+      confidence: payload.confidence as number | undefined,
+      validated: payload.validated as boolean | undefined,
+    };
+  }
+
   /**
    * List quarantine memories (non-semantic, for review UI).
+   *
+   * `tag` filters by exact tag match — the memory-tool adapter uses it with
+   * `mem:path=…` tags so unpromoted writes stay visible to path-based `view`
+   * (read-your-writes) while remaining excluded from `recall` until promoted.
    */
   async listQuarantine(
     projectName: string,
     limit: number = 20,
-    offset?: string | number
+    offset?: string | number,
+    tag?: string
   ): Promise<Memory[]> {
     const collectionName = this.getQuarantineCollection(projectName);
 
@@ -441,27 +463,60 @@ class MemoryGovernanceService {
         offset: offset || undefined,
         with_payload: true,
         with_vector: false,
+        ...(tag ? { filter: { must: [{ key: 'tags', match: { any: [tag] } }] } } : {}),
       });
 
-      return results.points.map((p) => {
-        const payload = p.payload as Record<string, unknown>;
-        return {
-          id: p.id as string,
-          type: payload.type as MemoryType,
-          content: payload.content as string,
-          tags: (payload.tags as string[]) || [],
-          relatedTo: payload.relatedTo as string | undefined,
-          createdAt: payload.createdAt as string,
-          updatedAt: payload.updatedAt as string,
-          metadata: payload.metadata as Record<string, unknown> | undefined,
-          source: payload.source as MemorySource | undefined,
-          confidence: payload.confidence as number | undefined,
-          validated: payload.validated as boolean | undefined,
-        };
-      });
+      return results.points.map((p) =>
+        this.quarantinePointToMemory(p.id, p.payload as Record<string, unknown>)
+      );
     } catch (error: any) {
       if (error.status === 404 || error.status === 400) return [];
       throw error;
+    }
+  }
+
+  /**
+   * Fetch a single quarantine memory by exact id. Returns null when not found
+   * or the quarantine collection does not exist yet.
+   */
+  async getQuarantineById(projectName: string, memoryId: string): Promise<Memory | null> {
+    const collectionName = this.getQuarantineCollection(projectName);
+    try {
+      const results = await vectorStore['client'].scroll(collectionName, {
+        limit: 1,
+        with_payload: true,
+        with_vector: false,
+        filter: { must: [{ key: 'id', match: { value: memoryId } }] },
+      });
+      const point = results.points[0];
+      if (!point) return null;
+      return this.quarantinePointToMemory(point.id, point.payload as Record<string, unknown>);
+    } catch (error: any) {
+      if (error.status === 404 || error.status === 400) return null;
+      throw error;
+    }
+  }
+
+  /**
+   * Delete a quarantine memory WITHOUT recording a review outcome.
+   *
+   * Used when the memory tool deletes/supersedes its own unpromoted writes
+   * (DELETE /api/memory/:id falling through to quarantine). Unlike reject(),
+   * this must not increment the rejected counter — a self-correction by the
+   * writing agent is not a human review signal and would skew the adaptive
+   * promote/reject threshold.
+   */
+  async deleteFromQuarantine(projectName: string, memoryId: string): Promise<boolean> {
+    const collectionName = this.getQuarantineCollection(projectName);
+    try {
+      await vectorStore.delete(collectionName, [memoryId]);
+      logger.info(`Quarantine memory deleted (not counted as review): ${memoryId}`, {
+        project: projectName,
+      });
+      return true;
+    } catch (error: any) {
+      logger.error(`Failed to delete quarantine memory: ${memoryId}`, { error: error.message });
+      return false;
     }
   }
   /**
