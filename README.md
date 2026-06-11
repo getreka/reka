@@ -45,12 +45,12 @@ The fastest way to use Reka. Two commands inside Claude Code:
 
 The plugin gives you the full Reka experience without any manual MCP configuration:
 
-| What you get    | Details                                                                                                                                                                  |
-| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
-| **10 commands** | `/reka:code`, `/reka:investigate`, `/reka:review`, `/reka:arch`, `/reka:debate`, `/reka:start`, `/reka:end`, `/reka:onboard`, `/reka:memory-review`, `/reka:restart-api` |
-| **5 agents**    | feature-builder, code-reviewer, test-writer, rag-researcher, rag-ops -- all with persistent memory                                                                       |
-| **4 hooks**     | Auto session lifecycle, context checks before edits, Prettier + tsc on save, memory consolidation on stop                                                                |
-| **MCP server**  | `@getreka/mcp` auto-configured with your API key (stored in OS keychain)                                                                                                 |
+| What you get   | Details                                                                                                                                             |
+| -------------- | --------------------------------------------------------------------------------------------------------------------------------------------------- |
+| **9 commands** | `/reka:code`, `/reka:investigate`, `/reka:review`, `/reka:arch`, `/reka:debate`, `/reka:start`, `/reka:end`, `/reka:onboard`, `/reka:memory-review` |
+| **4 agents**   | feature-builder, code-reviewer, rag-researcher, rag-ops -- internal subagents used by the workflows, all with persistent memory                     |
+| **2 hooks**    | Auto session lifecycle: SessionStart (context + session id) and SessionEnd (memory consolidation)                                                   |
+| **MCP server** | `@getreka/mcp` auto-configured with your API key (stored in OS keychain)                                                                            |
 
 ### Team auto-install
 
@@ -80,8 +80,9 @@ Add to your project's `.claude/settings.json` and every team member gets the plu
 ```
 /plugin marketplace add getreka/reka-plugin
 /plugin install reka@reka-plugins
-/reka:start
 ```
+
+Sessions start automatically (SessionStart hook); `/reka:start` shows session status.
 
 ### Option B: MCP Server + CLI
 
@@ -135,7 +136,7 @@ The generated `.mcp.json`:
 ```
  Claude Code + Reka Plugin
         │
-        │  10 commands · 5 agents · 4 hooks
+        │  9 commands · 4 agents · 2 hooks
         │
         ▼
  @getreka/mcp            ← npm package, auto-configured by plugin
@@ -185,7 +186,7 @@ No cross-contamination between projects. One backend serves them all.
 
 ### Platform
 
-- **Claude Code plugin** -- 10 commands, 5 agents, 4 hooks, auto-configured MCP
+- **Claude Code plugin** -- 9 commands, 4 agents, 2 hooks, auto-configured MCP
 - **MCP native** -- works with Claude Code, Cursor, Windsurf out of the box
 - **35 tools** -- search, memory, indexing, agents, architecture, review
 - **Dashboard** -- Vue 3 web UI for memory review and analytics
