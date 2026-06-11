@@ -233,7 +233,3 @@ export const vectorStoreCircuit = circuitBreakers.get('vectorStore', {
   timeout: 15000,
 });
 
-export const confluenceCircuit = circuitBreakers.get('confluence', {
-  failureThreshold: 3,
-  timeout: 60000,
-});

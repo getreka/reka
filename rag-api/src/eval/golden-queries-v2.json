@@ -314,13 +314,6 @@
       "k": 10
     },
     {
-      "id": "v2-045",
-      "query": "ConfluenceService class",
-      "expectedFiles": ["src/services/confluence.ts"],
-      "category": "exact-match",
-      "k": 10
-    },
-    {
       "id": "v2-046",
       "query": "cacheService class Redis methods",
       "expectedFiles": ["src/services/cache.ts"],

@@ -80,12 +80,6 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   record_tech_debt: UPSERT,
   get_tech_debt: RO,
 
-  // ── confluence (4) ─────────────────────────────────────
-  search_confluence: RO,
-  index_confluence: MUT,
-  get_confluence_status: RO,
-  list_confluence_spaces: RO,
-
   // ── session (2) ────────────────────────────────────────
   start_session: MUT,
   end_session: MUT,

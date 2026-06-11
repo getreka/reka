@@ -3,7 +3,6 @@ import { createSearchTools } from "../tools/search.js";
 import { createIndexingTools } from "../tools/indexing.js";
 import { createMemoryTools } from "../tools/memory.js";
 import { createArchitectureTools } from "../tools/architecture.js";
-import { createConfluenceTools } from "../tools/confluence.js";
 import { createSessionTools } from "../tools/session.js";
 import { createSuggestionTools } from "../tools/suggestions.js";
 import { createAgentTools } from "../tools/agents.js";
@@ -23,9 +22,8 @@ import { createQualityTools } from "../tools/quality.js";
  *
  * 0.5.0 surface: 28 = 41 (0.4.0) − 8 DB tools (PR-4.0)
  * − memory_maintenance (PR-4.2) − 4 Confluence tools (PR-4.3).
- * Current value reflects the cuts landed so far on this branch.
  */
-const EXPECTED_TOOL_COUNT = 32;
+const EXPECTED_TOOL_COUNT = 28;
 
 describe("tool registration surface", () => {
   const allSpecs = [
@@ -33,7 +31,6 @@ describe("tool registration surface", () => {
     ...createIndexingTools("testproject"),
     ...createMemoryTools("testproject"),
     ...createArchitectureTools("testproject"),
-    ...createConfluenceTools("testproject"),
     ...createSessionTools("testproject"),
     ...createSuggestionTools("testproject"),
     ...createAgentTools("testproject"),
