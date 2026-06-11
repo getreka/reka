@@ -100,9 +100,8 @@ describe("Tool Middleware", () => {
   });
 
   describe("constants", () => {
-    it("TRACKING_EXCLUDE contains meta tools", () => {
-      expect(TRACKING_EXCLUDE.has("get_tool_analytics")).toBe(true);
-      expect(TRACKING_EXCLUDE.has("get_knowledge_gaps")).toBe(true);
+    it("TRACKING_EXCLUDE is empty since 0.4.0 (no meta tools left)", () => {
+      expect(TRACKING_EXCLUDE.size).toBe(0);
     });
 
     it("SESSION_TOOLS contains session management", () => {

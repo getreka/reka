@@ -7,6 +7,7 @@ Thank you for your interest in contributing to Reka! This guide covers everythin
 - [Development Setup](#development-setup)
 - [Project Structure](#project-structure)
 - [Code Style](#code-style)
+- [Standing Repo Policy](#standing-repo-policy)
 - [Making Changes](#making-changes)
 - [Pull Request Process](#pull-request-process)
 - [Issue Guidelines](#issue-guidelines)
@@ -173,6 +174,15 @@ refactor: extract parser registry from indexer
 test: add memory governance unit tests
 chore: update dependencies
 ```
+
+---
+
+## Standing Repo Policy
+
+Two rules apply to every change in this repo:
+
+- **Subtraction rule** — capabilities are deleted, never hidden. No hidden tool tiers, no dead code kept "just in case". A deletion PR carries ALL of its sweeps (registrations, annotations, timeouts, skip-lists, tests, doc rows) in the same PR, and its diff is net-negative. Before any release, grep the repo (and the reka-plugin tree) for every removed tool name — zero live references is the gate.
+- **Proof rule** — no public surface (README, landing page, docs, plugin copy, dashboard) may claim a capability or count that has not been verified live. Tool counts state what is actually registered today (see `mcp-server/src/__tests__/tool-registration.test.ts`); feature claims require a working, observed code path.
 
 ---
 

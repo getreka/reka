@@ -2,6 +2,11 @@
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
 
+## Standing repo policy
+
+- **Subtraction rule:** capabilities are deleted, never hidden. No hidden tool tiers, no dead code kept "just in case". Every deletion lands with ALL of its sweeps (registrations, annotations, timeouts, skip-lists, tests, doc rows) in the same PR, and the deletion diff is net-negative. Before any release, grep the repo (and the reka-plugin tree) for every removed tool name — zero live references.
+- **Proof rule:** no public surface (README, landing page, docs, plugin copy, dashboard) may claim a capability or count that has not been verified live. Tool counts state what is actually registered today; feature claims require a working, observed code path.
+
 ## Build and Run Commands
 
 ### RAG API (main backend service)
@@ -103,11 +108,18 @@ Tool Call → Sensory Buffer (Redis Stream, 24h TTL)
 
 ### MCP Server Tools
 
-The MCP server exposes RAG capabilities as tools for AI assistants:
+The MCP server registers **41 tools, 0 hidden** (`MCP_PROFILE=full`, the default; `lite` registers a 6-tool subset). The canonical surface:
 
-- `search_codebase`, `ask_codebase`, `explain_code`, `find_feature`
-- `index_codebase`, `get_index_status`, `get_project_stats`
-- `remember`, `recall`, `record_adr`, `get_patterns`, etc.
+- **Search:** `hybrid_search` (the one retrieval tool — hybrid by default, `mode: "navigate"` for a file/symbol map), `find_symbol`, `search_graph`, `search_docs`, `get_project_stats`
+- **Indexing:** `index_codebase`, `get_index_status`
+- **Memory:** `remember`, `recall`, `list_memories`, `forget`, `batch_remember`, `review_memories`, `promote_memory`, `memory_maintenance`
+- **Architecture:** `record_adr`, `get_adrs`, `record_pattern`, `get_patterns`, `record_tech_debt`, `get_tech_debt`
+- **Context/setup:** `context_briefing`, `setup_project`; **Session:** `start_session`, `end_session`
+- **Database (8):** `record_table`, `get_table_info`, `record_db_rule`, `get_db_rules`, `record_enum`, `get_enums`, `check_db_schema`, `suggest_db_schema`
+- **Confluence (4):** `search_confluence`, `index_confluence`, `get_confluence_status`, `list_confluence_spaces`
+- **Agents/quality:** `run_agent`, `tribunal_debate`, `get_agent_types`, `get_quality_report`
+
+The registered count is asserted by `mcp-server/src/__tests__/tool-registration.test.ts` — change it in the same PR as any tool addition/deletion.
 
 ## Configuration
 

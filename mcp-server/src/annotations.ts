@@ -97,12 +97,6 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   get_confluence_status: RO,
   list_confluence_spaces: RO,
 
-  // ── analytics (4) ──────────────────────────────────────
-  get_tool_analytics: RO,
-  get_knowledge_gaps: RO,
-  get_analytics: RO,
-  get_platform_stats: RO,
-
   // ── session (2) ────────────────────────────────────────
   start_session: MUT,
   end_session: MUT,

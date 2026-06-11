@@ -31,13 +31,10 @@ export const DEFAULT_ENRICHABLE_TOOLS = new Set([
 ]);
 
 export const DEFAULT_SKIP_TOOLS = new Set([
-  "get_tool_analytics",
   "get_index_status",
   "get_project_stats",
   "list_memories",
-  "get_knowledge_gaps",
   "get_agent_types",
-  "get_platform_stats",
 ]);
 
 export class ContextEnricher {
