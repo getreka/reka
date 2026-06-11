@@ -89,18 +89,37 @@ Only include patterns with significance >= 0.5. If no significant patterns, retu
 
 const ABSTRACTION_PROMPT = `Convert these session observations into reusable knowledge.
 
-For each observation, decide:
-1. Should it be EPISODIC (a specific event worth remembering) or SEMANTIC (a general fact/rule)?
-2. If SEMANTIC, what subtype: "decision" (a choice made), "insight" (a discovery), "pattern" (a recurring approach), "procedure" (step-by-step how-to)?
-3. Abstract away session-specific details. Make it useful for future sessions.
+For each observation, classify it as EPISODIC or SEMANTIC:
+
+EPISODIC (isEpisodic: true) — an event-shaped, time-anchored narrative whose sequence of events is the knowledge, worth keeping verbatim:
+- Error-chain investigations: symptom → hypothesis → fix (the debugging path itself is what's valuable)
+- Deploy/release incidents: what broke, what was tried, how it was resolved
+- One-off session events where the order of steps explains the outcome
+Examples:
+- "Build failed with ECONNREFUSED to Qdrant; suspected a stale container; restarting docker-compose after pruning the network fixed it."
+- "Release deploy hung: tag was pushed before the lockfile sync, so CI npm ci failed; regenerated the lockfile and re-tagged."
+
+SEMANTIC (isEpisodic: false) — a durable, generalized fact, decision, or pattern that stays true independent of when it was learned:
+- API contracts, naming conventions, configuration rules
+- Architecture decisions and their rationale
+- Recurring approaches and step-by-step procedures
+Examples:
+- "The BGE-M3 batch endpoint is /embed/batch, not /embed_batch."
+- "Decision: all route validation uses centralized Zod schemas in utils/validation.ts."
+
+Classify as EPISODIC only when the item is genuinely event-shaped — a specific occurrence whose sequence matters. If the lasting value is a general rule or fact, strip the narrative and store it as SEMANTIC. When in doubt, prefer SEMANTIC.
+
+Always set a subtype: "decision" (a choice made), "insight" (a discovery), "pattern" (a recurring approach), "procedure" (step-by-step how-to). For EPISODIC items use the best fit (usually "insight").
+
+For SEMANTIC items, abstract away session-specific details so the fact is useful in future sessions. For EPISODIC items, keep the concrete event sequence — that is the value.
 
 Respond with JSON: {"memories": [{"content": "...", "subtype": "decision|insight|pattern|procedure", "confidence": 0.0-1.0, "tags": [...], "files": [...], "isEpisodic": true|false}]}
 
 Rules:
 - Don't store routine operations (just reading a file, listing memories)
 - Don't store things that can be derived from the code itself
-- Focus on: decisions made, bugs found, architectural insights, workflow procedures
-- Keep content concise but complete (1-3 sentences)
+- Focus on: decisions made, bugs found and how they were fixed, architectural insights, workflow procedures, notable incidents
+- Keep content concise but complete (1-3 sentences; episodic items may keep their step-by-step sequence)
 - Include file paths when relevant`;
 
 // ── Service ───────────────────────────────────────────────
