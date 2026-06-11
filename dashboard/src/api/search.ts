@@ -6,7 +6,7 @@ function getDefaultCollection(): string {
     localStorage.getItem("rag_project") ||
     import.meta.env.VITE_DEFAULT_PROJECT ||
     "rag";
-  return `${project}_code`;
+  return `${project}_codebase`;
 }
 
 function getProjectName(): string {

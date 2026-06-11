@@ -382,8 +382,12 @@ function formatDate(iso?: string) {
               stripedRows
               size="small"
               style="font-size: 0.85rem"
-              emptyMessage="No episodic memories found."
             >
+              <template #empty>
+                <span style="color: var(--p-text-muted-color)"
+                  >No episodic memories recorded for this project yet.</span
+                >
+              </template>
               <Column field="content" header="Content" style="min-width: 300px">
                 <template #body="{ data }">
                   <span :title="data.content">{{

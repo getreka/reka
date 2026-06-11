@@ -23,8 +23,10 @@ onMounted(async () => {
       .filter((c) => c.vectorsCount > 0)
       .map((c) => ({ label: `${c.name} (${c.vectorsCount})`, value: c.name }));
     if (collections.value.length > 0 && !selectedCollection.value) {
-      // Prefer _code collections
-      const codeCol = collections.value.find((c) => c.value.endsWith("_code"));
+      // Prefer _codebase collections
+      const codeCol = collections.value.find((c) =>
+        c.value.endsWith("_codebase"),
+      );
       selectedCollection.value = codeCol?.value || collections.value[0].value;
     }
   } catch {}

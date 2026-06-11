@@ -51,11 +51,6 @@ const router = createRouter({
       component: () => import("@/pages/GraphPage.vue"),
     },
     {
-      path: "/quality",
-      name: "quality",
-      component: () => import("@/pages/QualityPage.vue"),
-    },
-    {
       path: "/vectors",
       name: "vectors",
       component: () => import("@/pages/VectorSpacePage.vue"),
@@ -64,16 +59,6 @@ const router = createRouter({
       path: "/agents",
       name: "agents",
       component: () => import("@/pages/AgentsPage.vue"),
-    },
-    {
-      path: "/tribunal",
-      name: "tribunal",
-      component: () => import("@/pages/TribunalPage.vue"),
-    },
-    {
-      path: "/metrics",
-      name: "metrics",
-      component: () => import("@/pages/MetricsPage.vue"),
     },
     {
       path: "/settings",

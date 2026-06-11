@@ -56,3 +56,8 @@ export async function fetchActors(): Promise<ActorStatus[]> {
   const { data } = await client.get("/api/admin/actors");
   return data.actors ?? [];
 }
+
+export async function fetchPrometheusMetrics(): Promise<string> {
+  const { data } = await client.get("/metrics", { responseType: "text" });
+  return data;
+}

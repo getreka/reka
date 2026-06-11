@@ -9,12 +9,9 @@ import ToolUsageChart from "@/components/overview/ToolUsageChart.vue";
 import TopToolsChart from "@/components/overview/TopToolsChart.vue";
 import RecentSessionsList from "@/components/overview/RecentSessionsList.vue";
 import KnowledgeGapsAlert from "@/components/overview/KnowledgeGapsAlert.vue";
-import QualityMetricsCard from "@/components/overview/QualityMetricsCard.vue";
-import PredictionStatsCard from "@/components/overview/PredictionStatsCard.vue";
 import PlatformStatsCard from "@/components/overview/PlatformStatsCard.vue";
 import DeveloperProfileCard from "@/components/overview/DeveloperProfileCard.vue";
 import CacheStatsCard from "@/components/overview/CacheStatsCard.vue";
-import FeedbackTrendsCard from "@/components/overview/FeedbackTrendsCard.vue";
 import { useOverviewStore } from "@/stores/overview";
 import { useProjectWatch } from "@/composables/useProjectWatch";
 
@@ -60,9 +57,9 @@ onMounted(() => store.loadAll());
         <PlatformStatsCard :stats="store.platformStats" />
       </div>
 
-      <!-- Prediction Stats -->
+      <!-- Developer Profile -->
       <div style="grid-column: span 6">
-        <PredictionStatsCard :stats="store.predictionStats" />
+        <DeveloperProfileCard :profile="store.developerProfile" />
       </div>
 
       <!-- Tool Usage Chart -->
@@ -73,16 +70,6 @@ onMounted(() => store.loadAll());
         </template>
       </Card>
 
-      <!-- Quality Metrics -->
-      <div style="grid-column: span 4">
-        <QualityMetricsCard :metrics="store.qualityMetrics" />
-      </div>
-
-      <!-- Developer Profile -->
-      <div style="grid-column: span 4">
-        <DeveloperProfileCard :profile="store.developerProfile" />
-      </div>
-
       <!-- Top Tools -->
       <Card style="grid-column: span 4">
         <template #title>Top Tools</template>
@@ -90,11 +77,6 @@ onMounted(() => store.loadAll());
           <TopToolsChart :top-tools="store.toolStats?.topTools" />
         </template>
       </Card>
-
-      <!-- Cache Stats -->
-      <div style="grid-column: span 4">
-        <CacheStatsCard :stats="store.cacheStats" />
-      </div>
 
       <!-- Knowledge Gaps -->
       <Card style="grid-column: span 6">
@@ -104,9 +86,9 @@ onMounted(() => store.loadAll());
         </template>
       </Card>
 
-      <!-- Feedback Trends -->
+      <!-- Cache Stats -->
       <div style="grid-column: span 6">
-        <FeedbackTrendsCard :stats="store.feedbackStats" />
+        <CacheStatsCard :stats="store.cacheStats" />
       </div>
 
       <!-- Recent Sessions -->

@@ -1,5 +1,10 @@
 <script setup lang="ts">
 import { onMounted, ref, computed } from "vue";
+import VChart from "vue-echarts";
+import { use } from "echarts/core";
+import { BarChart } from "echarts/charts";
+import { GridComponent, TooltipComponent } from "echarts/components";
+import { CanvasRenderer } from "echarts/renderers";
 import Card from "primevue/card";
 import DataTable from "primevue/datatable";
 import Column from "primevue/column";
@@ -17,8 +22,11 @@ import {
   fetchActors,
   retryDLQJob,
   deleteDLQJob,
+  fetchPrometheusMetrics,
 } from "@/api/admin";
 import type { QueueStats, DLQJob, ActorStatus } from "@/api/admin";
+
+use([BarChart, GridComponent, TooltipComponent, CanvasRenderer]);
 
 const confirm = useConfirm();
 const toast = useToast();
@@ -27,26 +35,97 @@ const actors = ref<ActorStatus[]>([]);
 const queues = ref<QueueStats[]>([]);
 const dlqJobs = ref<DLQJob[]>([]);
 const totalFailed = ref(0);
+const prometheusText = ref("");
 const loading = ref(false);
 const error = ref<string | null>(null);
 
 async function loadAll() {
   try {
-    const [actorsData, queuesData, dlqData] = await Promise.all([
+    const [actorsData, queuesData, dlqData, metricsText] = await Promise.all([
       fetchActors(),
       fetchQueues(),
       fetchDLQ(50),
+      // /metrics may be auth-gated separately — don't fail the whole page
+      fetchPrometheusMetrics().catch(() => ""),
     ]);
     actors.value = actorsData;
     queues.value = queuesData;
     dlqJobs.value = dlqData.jobs;
     totalFailed.value = dlqData.totalFailed;
+    prometheusText.value = metricsText;
     error.value = null;
   } catch (e: any) {
     error.value =
       e?.response?.data?.error || e?.message || "Failed to load admin data";
   }
 }
+
+// --- Prometheus parser ---
+function parsePrometheusMetric(
+  text: string,
+  metricName: string,
+): Array<{ labels: Record<string, string>; value: number }> {
+  const results: Array<{ labels: Record<string, string>; value: number }> = [];
+  const lines = text.split("\n");
+  for (const line of lines) {
+    if (line.startsWith("#") || !line.startsWith(metricName)) continue;
+    const match = line.match(/^(\w+)(?:\{([^}]*)\})?\s+(\S+)/);
+    if (match && match[1] === metricName) {
+      const labels: Record<string, string> = {};
+      if (match[2]) {
+        for (const pair of match[2].split(",")) {
+          const [k, v] = pair.split("=");
+          labels[k.trim()] = v?.replace(/"/g, "").trim() || "";
+        }
+      }
+      results.push({ labels, value: parseFloat(match[3]) });
+    }
+  }
+  return results;
+}
+
+// --- Event Throughput (from /metrics) ---
+const emittedByType = computed(() => {
+  return parsePrometheusMetric(prometheusText.value, "rag_event_emitted_total");
+});
+
+const eventThroughputOption = computed(() => {
+  const groups: Record<string, number> = {};
+  for (const item of emittedByType.value) {
+    const eventType = item.labels["event_type"] || "unknown";
+    groups[eventType] = (groups[eventType] || 0) + item.value;
+  }
+  const types = Object.keys(groups);
+  const values = types.map((t) => groups[t]);
+
+  return {
+    tooltip: { trigger: "axis" as const },
+    grid: { left: 60, right: 20, top: 20, bottom: 80 },
+    xAxis: {
+      type: "category" as const,
+      data: types,
+      axisLabel: { rotate: 30, overflow: "truncate" as const, width: 100 },
+    },
+    yAxis: { type: "value" as const },
+    series: [
+      {
+        type: "bar" as const,
+        data: values,
+        name: "Events Emitted",
+        itemStyle: { color: "#6366f1" },
+      },
+    ],
+  };
+});
+
+// --- Lock Contentions (from /metrics) ---
+const totalLockContentions = computed(() => {
+  const items = parsePrometheusMetric(
+    prometheusText.value,
+    "rag_actor_lock_contentions_total",
+  );
+  return items.reduce((sum, i) => sum + i.value, 0);
+});
 
 async function initialLoad() {
   loading.value = true;
@@ -371,6 +450,85 @@ function handleDelete(job: DLQJob) {
             </template>
           </Column>
         </DataTable>
+      </section>
+
+      <!-- Event Throughput (Prometheus /metrics) -->
+      <section>
+        <h2 style="margin: 0 0 0.75rem; font-size: 1.1rem; font-weight: 600">
+          <i class="pi pi-chart-bar" style="margin-right: 0.5rem" />Event
+          Throughput
+        </h2>
+        <Card>
+          <template #subtitle
+            >Events emitted by type (rag_event_emitted_total)</template
+          >
+          <template #content>
+            <VChart
+              v-if="emittedByType.length > 0"
+              :option="eventThroughputOption"
+              style="height: 300px"
+              autoresize
+            />
+            <div
+              v-else
+              style="
+                height: 300px;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                color: var(--p-text-muted-color);
+                font-size: 0.875rem;
+              "
+            >
+              No event data — check that /metrics is reachable
+            </div>
+          </template>
+        </Card>
+      </section>
+
+      <!-- Lock Contentions (Prometheus /metrics) -->
+      <section>
+        <h2 style="margin: 0 0 0.75rem; font-size: 1.1rem; font-weight: 600">
+          <i class="pi pi-lock" style="margin-right: 0.5rem" />Lock Contentions
+        </h2>
+        <Card>
+          <template #subtitle>rag_actor_lock_contentions_total</template>
+          <template #content>
+            <div style="display: flex; align-items: center; gap: 1rem">
+              <div
+                style="font-size: 2.5rem; font-weight: 700"
+                :style="{
+                  color: totalLockContentions > 0 ? '#ef4444' : '#22c55e',
+                }"
+              >
+                {{ totalLockContentions.toLocaleString() }}
+              </div>
+              <Tag
+                v-if="totalLockContentions > 0"
+                severity="danger"
+                value="Contentions detected"
+                icon="pi pi-exclamation-triangle"
+              />
+              <Tag
+                v-else
+                severity="success"
+                value="No contentions"
+                icon="pi pi-check"
+              />
+            </div>
+            <div
+              v-if="totalLockContentions > 0"
+              style="
+                margin-top: 0.75rem;
+                font-size: 0.875rem;
+                color: var(--p-text-muted-color);
+              "
+            >
+              Lock contentions indicate actors are competing for shared state.
+              Consider reviewing actor concurrency settings.
+            </div>
+          </template>
+        </Card>
       </section>
     </template>
   </div>
