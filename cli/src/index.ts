@@ -10,7 +10,6 @@ import { createClient } from "./api";
 import { statusCommand } from "./commands/status";
 import { initCommand } from "./commands/init";
 import { indexCommand } from "./commands/index";
-import { searchCommand } from "./commands/search";
 import { modelsListCommand, modelsTestCommand } from "./commands/models";
 
 const program = new Command();
@@ -18,7 +17,7 @@ const program = new Command();
 program
   .name("reka")
   .description("Reka — Memory your AI can trust")
-  .version("0.1.0")
+  .version("0.3.0")
   .option("--api-url <url>", "RAG API URL")
   .option("--api-key <key>", "API key")
   .option("--project <name>", "Project name");
@@ -33,11 +32,26 @@ program
   .option("-p, --path <path>", "Project path")
   .option("-f, --force", "Overwrite existing .mcp.json")
   .option("--demo", "Connect to the Reka demo instance")
-  .option("--cloud", "Connect to Reka Cloud (coming soon)")
-  .option("--key <key>", "API key for cloud or demo")
+  .option(
+    "--cloud",
+    "Info on hosted Reka (none today; self-hosted Team license planned)",
+  )
+  .option("--key <key>", "Use an existing API key instead of minting one")
+  .option(
+    "--container <name>",
+    "rag-api Docker container used to mint keys (default: reka-api, env REKA_CONTAINER)",
+  )
   .option("--api-url <url>", "RAG API URL (default: http://localhost:3100)")
   .action(async (opts) => {
-    await initCommand(opts);
+    // Global options with the same name (--project, --api-url, --api-key)
+    // are captured by the program, not the subcommand — merge them in.
+    const globals = program.opts();
+    await initCommand({
+      ...opts,
+      project: opts.project ?? globals.project,
+      apiUrl: opts.apiUrl ?? globals.apiUrl,
+      key: opts.key ?? globals.apiKey,
+    });
   });
 
 // reka status
@@ -59,18 +73,6 @@ program
     const config = loadConfig(getOverrides());
     const client = createClient(config);
     await indexCommand(client, config, { path: indexPath, ...opts });
-  });
-
-// reka search <query>
-program
-  .command("search <query>")
-  .description("Search indexed codebase")
-  .option("-l, --limit <n>", "Number of results", "5")
-  .option("-t, --type <type>", "Collection type (codebase, docs, memory)")
-  .action(async (query, opts) => {
-    const config = loadConfig(getOverrides());
-    const client = createClient(config);
-    await searchCommand(client, config, query, opts);
   });
 
 // reka models
