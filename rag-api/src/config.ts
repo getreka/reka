@@ -229,6 +229,8 @@ const config: Config = {
   ANTHROPIC_API_KEY: process.env.ANTHROPIC_API_KEY || yamlConfig?.models?.llm?.complex?.api_key,
   ANTHROPIC_MODEL: envOrYaml('ANTHROPIC_MODEL', 'models.llm.complex.model', 'claude-sonnet-4-6'),
   ANTHROPIC_THINK: process.env.ANTHROPIC_THINK !== 'false',
+  // Global fallback for Anthropic output_config.effort. Per-call precedence:
+  // CompletionOptions.effort > complexity default (llm.ts) > this value.
   CLAUDE_EFFORT: (process.env.CLAUDE_EFFORT || 'high') as Config['CLAUDE_EFFORT'],
 
   // Vector size based on embedding provider

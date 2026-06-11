@@ -54,12 +54,16 @@ function mockAnthropicClient() {
 // config is globally mocked in setup.ts (LLM_PROVIDER: 'ollama')
 import config from '../../config';
 import { llm } from '../../services/llm';
+import { circuitBreakers } from '../../utils/circuit-breaker';
 
 const mockedConfig = vi.mocked(config, true) as Record<string, unknown>;
 
 describe('LLMService', () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    // Mocked provider failures accumulate in the shared breakers — reset between tests
+    // so an opened circuit from one test cannot fail the next.
+    circuitBreakers.resetAll();
     // Reset to defaults from setup.ts
     mockedConfig.LLM_PROVIDER = 'ollama';
     mockedConfig.OLLAMA_THINK = false;
@@ -661,6 +665,78 @@ describe('LLMService', () => {
       expect(params.tools[params.tools.length - 1].cache_control).toEqual({ type: 'ephemeral' });
       // sampling params not forwarded
       expect(params.temperature).toBeUndefined();
+    });
+  });
+
+  describe('per-call effort precedence (option > complexity default > config)', () => {
+    beforeEach(() => {
+      (llm as any).provider = 'anthropic';
+      (llm as any).anthropicClient = mockAnthropicClient();
+      mocks.anthropicCreate.mockResolvedValue({
+        content: [{ type: 'text', text: 'ok' }],
+        usage: { input_tokens: 5, output_tokens: 5 },
+      });
+    });
+
+    afterEach(() => {
+      (llm as any).provider = 'ollama';
+    });
+
+    it('per-call effort option overrides config.CLAUDE_EFFORT', async () => {
+      await llm.complete('prompt', { effort: 'max' });
+
+      const params = mocks.anthropicCreate.mock.calls[0][0];
+      expect(params.output_config?.effort).toBe('max');
+    });
+
+    it('falls back to config.CLAUDE_EFFORT when no effort option is set', async () => {
+      mockedConfig.CLAUDE_EFFORT = 'low';
+
+      await llm.complete('prompt');
+
+      const params = mocks.anthropicCreate.mock.calls[0][0];
+      expect(params.output_config?.effort).toBe('low');
+    });
+
+    it('complexity:complex defaults effort to high over config', async () => {
+      mockedConfig.CLAUDE_EFFORT = 'low';
+
+      await llm.completeWithBestProvider('prompt', { complexity: 'complex' });
+
+      const params = mocks.anthropicCreate.mock.calls[0][0];
+      expect(params.output_config?.effort).toBe('high');
+    });
+
+    it('explicit effort option beats the complexity default', async () => {
+      await llm.completeWithBestProvider('prompt', { complexity: 'complex', effort: 'xhigh' });
+
+      const params = mocks.anthropicCreate.mock.calls[0][0];
+      expect(params.output_config?.effort).toBe('xhigh');
+    });
+
+    it('threads effort into chat() requests', async () => {
+      await llm.chat([{ role: 'user', content: 'go' }], {
+        provider: 'anthropic',
+        effort: 'xhigh',
+      });
+
+      const params = mocks.anthropicCreate.mock.calls[0][0];
+      expect(params.output_config?.effort).toBe('xhigh');
+    });
+
+    it('preserves the per-call effort on the thinking-fallback retry', async () => {
+      mockedConfig.ANTHROPIC_THINK = true;
+      const err = Object.assign(new Error('Bad Request'), { status: 400 });
+      mocks.anthropicCreate.mockReset();
+      mocks.anthropicCreate.mockRejectedValueOnce(err).mockResolvedValueOnce({
+        content: [{ type: 'text', text: 'retry ok' }],
+        usage: { input_tokens: 5, output_tokens: 5 },
+      });
+
+      await llm.complete('prompt', { effort: 'medium' });
+
+      const retryParams = mocks.anthropicCreate.mock.calls[1][0];
+      expect(retryParams.output_config?.effort).toBe('medium');
     });
   });
 

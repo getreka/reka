@@ -604,6 +604,7 @@ class TribunalService {
         const framingResult = await llm.completeWithBestProvider(framingPrompt, {
           complexity: config.TRIBUNAL_JUDGE_COMPLEXITY,
           caller: 'tribunal-judge',
+          effort: 'xhigh',
           maxTokens: 2048,
           temperature: 0.3,
           think: config.TRIBUNAL_JUDGE_COMPLEXITY === 'complex',
@@ -820,6 +821,7 @@ class TribunalService {
       const verdictResult = await llm.completeWithBestProvider(verdictPrompt, {
         complexity: config.TRIBUNAL_JUDGE_COMPLEXITY,
         caller: 'tribunal-judge',
+        effort: 'xhigh',
         maxTokens: 4096,
         temperature: 0.2,
         think: config.TRIBUNAL_JUDGE_COMPLEXITY === 'complex',
@@ -970,6 +972,7 @@ class TribunalService {
     const result = await llm.completeWithBestProvider(prompt, {
       complexity: config.TRIBUNAL_ADVOCATE_COMPLEXITY,
       caller: 'tribunal-advocate',
+      effort: 'high',
       systemPrompt: advocateSystemPrompt(position),
       maxTokens: 2048,
       think: false,

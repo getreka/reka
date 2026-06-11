@@ -297,6 +297,7 @@ class AgentRuntime {
         think: true,
         provider: 'anthropic',
         caller: 'agent-loop',
+        effort: 'high',
       });
 
       agentTask.usage.totalTokens +=
@@ -427,6 +428,7 @@ class AgentRuntime {
           think: true,
           provider: 'anthropic',
           caller: 'agent-loop',
+          effort: 'high',
         });
         agentTask.usage.totalTokens +=
           (finalResponse.promptTokens || 0) + (finalResponse.completionTokens || 0);

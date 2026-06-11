@@ -477,6 +477,7 @@ class ConsolidationAgentService {
       .completeWithBestProvider(prompt, {
         complexity: 'utility',
         caller: 'consolidation',
+        effort: 'medium', // only takes effect if this call is ever routed to Anthropic (e.g. M4 batch path)
         systemPrompt,
         // Note: format:'json' causes empty responses on qwen3.5:9b — rely on prompt instruction instead
         maxTokens: 2000,

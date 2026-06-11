@@ -18,6 +18,8 @@ import { ollamaCircuit, anthropicCircuit, openaiCircuit } from '../utils/circuit
 import { llmUsageLogger } from './llm-usage-logger';
 import { llmRequestsTotal, llmTokensUsed, llmDuration } from '../utils/metrics';
 
+export type EffortLevel = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
+
 export interface CompletionOptions {
   maxTokens?: number;
   temperature?: number; // Forwarded to Ollama/OpenAI only — Anthropic rejects sampling params
@@ -28,6 +30,7 @@ export interface CompletionOptions {
   stream?: boolean; // Enable streaming (default false)
   signal?: AbortSignal; // Cancels the in-flight provider call (axios + Anthropic SDK honor it)
   caller?: string; // Usage attribution (e.g. 'consolidation', 'memory-merge', 'tribunal-judge', 'agent-loop')
+  effort?: EffortLevel; // Anthropic output_config.effort — precedence: option > complexity default > config.CLAUDE_EFFORT
 }
 
 export interface CompletionResult {
@@ -45,6 +48,12 @@ export interface CompletionResult {
 }
 
 export type ComplexityLevel = 'utility' | 'standard' | 'complex';
+
+// Default output_config.effort per complexity level. Per-call precedence is
+// option.effort > this complexity default > config.CLAUDE_EFFORT (no new env knobs).
+const COMPLEXITY_EFFORT_DEFAULTS: Partial<Record<ComplexityLevel, EffortLevel>> = {
+  complex: 'high',
+};
 
 // Failover chains: ordered list of providers to try
 type ProviderName = 'ollama' | 'anthropic' | 'openai';
@@ -105,6 +114,7 @@ class LLMService {
           return this.completeWithAnthropic(prompt, {
             ...completionOptions,
             think: completionOptions.think ?? true,
+            effort: completionOptions.effort ?? COMPLEXITY_EFFORT_DEFAULTS[complexity],
           });
         }
         // Fallback to configured provider if no Claude key
@@ -426,14 +436,15 @@ class LLMService {
    * Apply Anthropic-specific request config in one place:
    *  - adaptive thinking (`thinking: {type: 'adaptive'}`) when enabled; OMITTED when disabled
    *    (never send `{type: 'disabled'}` — it 400s on Fable 5)
-   *  - output_config.effort from config.CLAUDE_EFFORT (cast for SDK type — 'xhigh' / fable-5)
+   *  - output_config.effort: per-call effort when supplied, else config.CLAUDE_EFFORT
    *  - output_config.format json_schema for structured outputs
    * Sampling params are never set here — they 400 on current models.
    */
   private applyAnthropicOutputConfig(
     params: Anthropic.MessageCreateParams,
     enableThinking: boolean,
-    jsonSchema?: Record<string, unknown>
+    jsonSchema?: Record<string, unknown>,
+    effort?: EffortLevel
   ): void {
     if (enableThinking) {
       params.thinking = { type: 'adaptive' };
@@ -441,7 +452,7 @@ class LLMService {
 
     const outputConfig: Anthropic.OutputConfig = {
       // 'xhigh' is valid on Fable 5 / Opus 4.7+ but absent from the 0.78 SDK enum — cast.
-      effort: config.CLAUDE_EFFORT as Anthropic.OutputConfig['effort'],
+      effort: (effort ?? config.CLAUDE_EFFORT) as Anthropic.OutputConfig['effort'],
     };
     if (jsonSchema) {
       outputConfig.format = { type: 'json_schema', schema: jsonSchema };
@@ -483,7 +494,8 @@ class LLMService {
           enableThinking,
           maxTokens,
           options.jsonSchema,
-          options.signal
+          options.signal,
+          options.effort
         );
       }
 
@@ -499,7 +511,7 @@ class LLMService {
         params.system = systemPrompt;
       }
 
-      this.applyAnthropicOutputConfig(params, enableThinking, options.jsonSchema);
+      this.applyAnthropicOutputConfig(params, enableThinking, options.jsonSchema, options.effort);
 
       const response = await anthropicCircuit.execute(() =>
         withRetry(
@@ -538,7 +550,7 @@ class LLMService {
         if (systemPrompt) {
           params.system = systemPrompt;
         }
-        this.applyAnthropicOutputConfig(params, false, options.jsonSchema);
+        this.applyAnthropicOutputConfig(params, false, options.jsonSchema, options.effort);
         const response = await client.messages.create(params, { signal: options.signal });
         const result = this.parseAnthropicResponse(response);
         this.recordUsage(
@@ -579,7 +591,8 @@ class LLMService {
     enableThinking: boolean,
     maxTokens: number,
     jsonSchema?: Record<string, unknown>,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    effort?: EffortLevel
   ): Promise<CompletionResult> {
     const params: Anthropic.MessageCreateParams = {
       model: config.ANTHROPIC_MODEL,
@@ -592,7 +605,7 @@ class LLMService {
       params.system = systemPrompt;
     }
 
-    this.applyAnthropicOutputConfig(params, enableThinking, jsonSchema);
+    this.applyAnthropicOutputConfig(params, enableThinking, jsonSchema, effort);
 
     const stream = client.messages.stream(params, { signal });
     const response = await stream.finalMessage();
@@ -733,7 +746,7 @@ class LLMService {
       params.system = [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }];
     }
 
-    this.applyAnthropicOutputConfig(params, enableThinking, options.jsonSchema);
+    this.applyAnthropicOutputConfig(params, enableThinking, options.jsonSchema, options.effort);
 
     if (options.tools && options.tools.length > 0) {
       // Mark the last tool definition with cache_control so the (stable) tool list is cached
