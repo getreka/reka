@@ -75,6 +75,42 @@ export function modelCostUsd(
   );
 }
 
+// ── Usage Summary (read side of {project}_llm_usage) ───────
+
+export interface LLMUsageBucket {
+  requests: number;
+  promptTokens: number;
+  completionTokens: number;
+  cacheCreationTokens: number;
+  cacheReadTokens: number;
+  totalTokens: number;
+  costUsd: number;
+}
+
+export interface LLMUsageSummary {
+  project: string;
+  from?: string;
+  to?: string;
+  failures: number;
+  totals: LLMUsageBucket;
+  byModel: Record<string, LLMUsageBucket>;
+}
+
+function emptyBucket(): LLMUsageBucket {
+  return {
+    requests: 0,
+    promptTokens: 0,
+    completionTokens: 0,
+    cacheCreationTokens: 0,
+    cacheReadTokens: 0,
+    totalTokens: 0,
+    costUsd: 0,
+  };
+}
+
+// Safety cap when scrolling {project}_llm_usage (100 pages × 1000 points).
+const SUMMARY_MAX_PAGES = 100;
+
 class LLMUsageLogger {
   private buffer: LLMUsageEntry[] = [];
   private flushTimer: ReturnType<typeof setInterval>;
@@ -172,6 +208,64 @@ class LLMUsageLogger {
       logger.warn('LLM usage flush failed, entries lost', { error: error.message, count });
       return 0;
     }
+  }
+
+  /**
+   * Summarize a project's LLM usage from its `{project}_llm_usage` collection:
+   * request/token totals plus a per-model breakdown, optionally bounded by an
+   * ISO-8601 date range. Flushes the in-memory buffer first so just-recorded
+   * calls are visible. Cost is computed for Anthropic entries only — local
+   * (Ollama) usage is $0 and there is no OpenAI pricing table.
+   */
+  async summarize(
+    projectName: string,
+    range: { from?: string; to?: string } = {}
+  ): Promise<LLMUsageSummary> {
+    await this.flush();
+
+    const collection = `${projectName}_llm_usage`;
+    const fromTs = range.from ? Date.parse(range.from) : undefined;
+    const toTs = range.to ? Date.parse(range.to) : undefined;
+
+    const totals = emptyBucket();
+    const byModel: Record<string, LLMUsageBucket> = {};
+    let failures = 0;
+
+    let offset: string | undefined;
+    let pages = 0;
+    do {
+      const { points, nextOffset } = await vectorStore.scrollCollection(collection, 1000, offset);
+      for (const point of points) {
+        const entry = point.payload as unknown as LLMUsageEntry;
+        const ts = Date.parse(entry.timestamp);
+        if (fromTs !== undefined && !(ts >= fromTs)) continue;
+        if (toTs !== undefined && !(ts <= toTs)) continue;
+
+        const costUsd = entry.provider === 'anthropic' ? modelCostUsd(entry.model, entry) : 0;
+        const bucket = (byModel[entry.model] ??= emptyBucket());
+        for (const b of [totals, bucket]) {
+          b.requests += 1;
+          b.promptTokens += entry.promptTokens || 0;
+          b.completionTokens += entry.completionTokens || 0;
+          b.cacheCreationTokens += entry.cacheCreationTokens || 0;
+          b.cacheReadTokens += entry.cacheReadTokens || 0;
+          b.totalTokens += entry.totalTokens || 0;
+          b.costUsd += costUsd;
+        }
+        if (entry.success === false) failures++;
+      }
+      offset = nextOffset as string | undefined;
+      pages++;
+    } while (offset !== undefined && pages < SUMMARY_MAX_PAGES);
+
+    // Round accumulated costs to micro-dollars to drop float noise.
+    const round = (b: LLMUsageBucket) => {
+      b.costUsd = Math.round(b.costUsd * 1e6) / 1e6;
+    };
+    round(totals);
+    Object.values(byModel).forEach(round);
+
+    return { project: projectName, from: range.from, to: range.to, failures, totals, byModel };
   }
 
   /**

@@ -12,6 +12,7 @@ const mocks = vi.hoisted(() => ({
   getBehaviorPatterns: vi.fn(),
   listCollections: vi.fn(),
   getCollectionInfo: vi.fn(),
+  summarize: vi.fn(),
 }));
 
 vi.mock('../../services/conversation-analyzer', () => ({
@@ -43,6 +44,10 @@ vi.mock('../../utils/metrics', () => ({
   enrichmentDuration: { observe: vi.fn() },
   enrichmentRecallCount: { observe: vi.fn() },
   registry: { getSingleMetricAsString: vi.fn().mockResolvedValue('') },
+}));
+
+vi.mock('../../services/llm-usage-logger', () => ({
+  llmUsageLogger: { summarize: mocks.summarize },
 }));
 
 import analyticsRoutes from '../../routes/analytics';
@@ -218,6 +223,65 @@ describe('Analytics Routes', () => {
 
       expect(res.status).toBe(200);
       expect(res.body.totalProjects).toBeGreaterThanOrEqual(1);
+    });
+  });
+
+  describe('GET /api/analytics/llm-usage', () => {
+    const summary = {
+      project: 'test',
+      failures: 0,
+      totals: {
+        requests: 2,
+        promptTokens: 100,
+        completionTokens: 50,
+        cacheCreationTokens: 0,
+        cacheReadTokens: 0,
+        totalTokens: 150,
+        costUsd: 0.001,
+      },
+      byModel: { 'claude-opus-4-8': { requests: 2 } },
+    };
+
+    it('returns usage summary for the project', async () => {
+      mocks.summarize.mockResolvedValue(summary);
+
+      const res = await withProject(request(app).get('/api/analytics/llm-usage'));
+
+      expect(res.status).toBe(200);
+      expect(res.body.totals.requests).toBe(2);
+      expect(res.body.byModel['claude-opus-4-8']).toBeDefined();
+      expect(mocks.summarize).toHaveBeenCalledWith('test', { from: undefined, to: undefined });
+    });
+
+    it('passes the from/to date range through', async () => {
+      mocks.summarize.mockResolvedValue(summary);
+
+      const res = await withProject(
+        request(app).get(
+          '/api/analytics/llm-usage?from=2026-06-01T00:00:00Z&to=2026-06-10T00:00:00Z'
+        )
+      );
+
+      expect(res.status).toBe(200);
+      expect(mocks.summarize).toHaveBeenCalledWith('test', {
+        from: '2026-06-01T00:00:00Z',
+        to: '2026-06-10T00:00:00Z',
+      });
+    });
+
+    it('returns 400 without projectName', async () => {
+      const res = await request(app).get('/api/analytics/llm-usage');
+
+      expect(res.status).toBe(400);
+      expect(mocks.summarize).not.toHaveBeenCalled();
+    });
+
+    it('returns 400 for a malformed date', async () => {
+      const res = await withProject(request(app).get('/api/analytics/llm-usage?from=not-a-date'));
+
+      expect(res.status).toBe(400);
+      expect(res.body.error).toContain('from');
+      expect(mocks.summarize).not.toHaveBeenCalled();
     });
   });
 });

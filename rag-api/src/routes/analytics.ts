@@ -6,6 +6,7 @@ import { Router, Request, Response } from 'express';
 import { conversationAnalyzer } from '../services/conversation-analyzer';
 import { usageTracker } from '../services/usage-tracker';
 import { workRegistry, type WorkType, type WorkState } from '../services/work-handler';
+import { llmUsageLogger } from '../services/llm-usage-logger';
 import { asyncHandler } from '../middleware/async-handler';
 import {
   validate,
@@ -270,6 +271,32 @@ router.post(
 // ============================================
 // Cost Tracking
 // ============================================
+
+/**
+ * LLM usage summary — totals + per-model breakdown from {project}_llm_usage.
+ * GET /api/analytics/llm-usage?from=ISO&to=ISO
+ *
+ * Note: routes/index.ts defines GET /api/analytics/:collection and is mounted
+ * before this router; its handler explicitly falls through for `llm-usage`.
+ */
+router.get(
+  '/analytics/llm-usage',
+  validateProjectName,
+  asyncHandler(async (req: Request, res: Response) => {
+    const { projectName } = req.body;
+    const from = req.query.from as string | undefined;
+    const to = req.query.to as string | undefined;
+
+    for (const [name, value] of Object.entries({ from, to })) {
+      if (value !== undefined && Number.isNaN(Date.parse(value))) {
+        return res.status(400).json({ error: `${name} must be an ISO-8601 date` });
+      }
+    }
+
+    const summary = await llmUsageLogger.summarize(projectName, { from, to });
+    res.json(summary);
+  })
+);
 
 // ============================================
 // Platform Analytics (cross-project)

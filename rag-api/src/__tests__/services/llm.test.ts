@@ -6,10 +6,22 @@ const mocks = vi.hoisted(() => ({
   anthropicStream: vi.fn(),
 }));
 
+const metricsMocks = vi.hoisted(() => ({
+  requestsInc: vi.fn(),
+  tokensInc: vi.fn(),
+  durationObserve: vi.fn(),
+}));
+
 vi.mock('axios', () => ({
   default: {
     post: mocks.post,
   },
+}));
+
+vi.mock('../../utils/metrics', () => ({
+  llmRequestsTotal: { inc: metricsMocks.requestsInc },
+  llmTokensUsed: { inc: metricsMocks.tokensInc },
+  llmDuration: { observe: metricsMocks.durationObserve },
 }));
 
 // Mock the SDK module so the import in llm.ts resolves to a dummy
@@ -643,6 +655,82 @@ describe('LLMService', () => {
       expect(params.tools[params.tools.length - 1].cache_control).toEqual({ type: 'ephemeral' });
       // sampling params not forwarded
       expect(params.temperature).toBeUndefined();
+    });
+  });
+
+  describe('Prometheus metrics wiring (recordUsage)', () => {
+    it('increments llm_requests_total and input/output token classes on ollama success', async () => {
+      mocks.post.mockResolvedValue({
+        data: {
+          message: { content: 'ok' },
+          prompt_eval_count: 7,
+          eval_count: 13,
+        },
+      });
+
+      await llm.complete('prompt');
+
+      expect(metricsMocks.requestsInc).toHaveBeenCalledWith({
+        provider: 'ollama',
+        model: 'qwen2.5:32b',
+        status: 'success',
+      });
+      expect(metricsMocks.durationObserve).toHaveBeenCalledWith(
+        { provider: 'ollama', model: 'qwen2.5:32b' },
+        expect.any(Number)
+      );
+      expect(metricsMocks.tokensInc).toHaveBeenCalledWith(
+        { provider: 'ollama', model: 'qwen2.5:32b', type: 'input' },
+        7
+      );
+      expect(metricsMocks.tokensInc).toHaveBeenCalledWith(
+        { provider: 'ollama', model: 'qwen2.5:32b', type: 'output' },
+        13
+      );
+      // No cache token classes for non-Anthropic providers
+      const types = metricsMocks.tokensInc.mock.calls.map((c) => c[0].type);
+      expect(types).not.toContain('cache_read');
+      expect(types).not.toContain('cache_write');
+    });
+
+    it('increments cache_read/cache_write token classes from Anthropic cache usage', async () => {
+      (llm as any).provider = 'anthropic';
+      (llm as any).anthropicClient = mockAnthropicClient();
+      mocks.anthropicCreate.mockResolvedValue({
+        content: [{ type: 'text', text: 'cached' }],
+        usage: {
+          input_tokens: 5,
+          output_tokens: 6,
+          cache_creation_input_tokens: 100,
+          cache_read_input_tokens: 200,
+        },
+      });
+
+      await llm.complete('prompt');
+
+      expect(metricsMocks.tokensInc).toHaveBeenCalledWith(
+        { provider: 'anthropic', model: 'claude-sonnet-4-6', type: 'cache_write' },
+        100
+      );
+      expect(metricsMocks.tokensInc).toHaveBeenCalledWith(
+        { provider: 'anthropic', model: 'claude-sonnet-4-6', type: 'cache_read' },
+        200
+      );
+
+      (llm as any).provider = 'ollama';
+    });
+
+    it('increments llm_requests_total with status=error and no token classes on failure', async () => {
+      mocks.post.mockRejectedValue(new Error('boom'));
+
+      await expect(llm.complete('prompt')).rejects.toThrow('boom');
+
+      expect(metricsMocks.requestsInc).toHaveBeenCalledWith({
+        provider: 'ollama',
+        model: 'qwen2.5:32b',
+        status: 'error',
+      });
+      expect(metricsMocks.tokensInc).not.toHaveBeenCalled();
     });
   });
 

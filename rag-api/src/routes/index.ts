@@ -2,7 +2,7 @@
  * Index Routes - Indexing and stats endpoints
  */
 
-import { Router, Request, Response } from 'express';
+import { Router, Request, Response, NextFunction } from 'express';
 import {
   indexProject,
   indexFiles,
@@ -560,8 +560,12 @@ router.delete(
  */
 router.get(
   '/analytics/:collection',
-  asyncHandler(async (req: Request, res: Response) => {
+  asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
     const { collection } = req.params;
+
+    // GET /api/analytics/llm-usage is served by routes/analytics.ts (mounted after
+    // this router) — fall through so the :collection param route doesn't shadow it.
+    if (collection === 'llm-usage') return next();
 
     const analytics = await vectorStore.getCollectionAnalytics(collection);
     res.json(analytics);

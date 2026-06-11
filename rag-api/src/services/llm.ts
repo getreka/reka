@@ -16,6 +16,7 @@ import { logger } from '../utils/logger';
 import { withRetry } from '../utils/retry';
 import { ollamaCircuit, anthropicCircuit, openaiCircuit } from '../utils/circuit-breaker';
 import { llmUsageLogger } from './llm-usage-logger';
+import { llmRequestsTotal, llmTokensUsed, llmDuration } from '../utils/metrics';
 
 export interface CompletionOptions {
   maxTokens?: number;
@@ -166,7 +167,7 @@ class LLMService {
   }
 
   /**
-   * Record LLM usage for cost tracking.
+   * Record LLM usage for cost tracking and Prometheus metrics.
    */
   private recordUsage(
     provider: string,
@@ -183,6 +184,23 @@ class LLMService {
     caller: string,
     opts: { thinking?: boolean; success?: boolean; error?: string; projectName?: string } = {}
   ): void {
+    // Prometheus: llm_requests_total / llm_duration_seconds / llm_tokens_total with
+    // token-class labels (input|output|cache_read|cache_write). Cache classes are only
+    // incremented when non-zero so non-Anthropic providers don't emit dead series.
+    const status = opts.success === false ? 'error' : 'success';
+    llmRequestsTotal.inc({ provider, model, status });
+    llmDuration.observe({ provider, model }, durationMs / 1000);
+    if (usage) {
+      llmTokensUsed.inc({ provider, model, type: 'input' }, usage.promptTokens || 0);
+      llmTokensUsed.inc({ provider, model, type: 'output' }, usage.completionTokens || 0);
+      if (usage.cacheCreationTokens) {
+        llmTokensUsed.inc({ provider, model, type: 'cache_write' }, usage.cacheCreationTokens);
+      }
+      if (usage.cacheReadTokens) {
+        llmTokensUsed.inc({ provider, model, type: 'cache_read' }, usage.cacheReadTokens);
+      }
+    }
+
     llmUsageLogger.record({
       provider,
       model,
