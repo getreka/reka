@@ -96,23 +96,6 @@ vi.mock('../../services/reconsolidation', () => ({
   },
 }));
 
-const mockGetSession = vi.hoisted(() => vi.fn().mockResolvedValue(null));
-const mockPredict = vi.hoisted(() => vi.fn().mockResolvedValue([]));
-const mockPrefetch = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
-
-vi.mock('../../services/session-context', () => ({
-  sessionContext: {
-    getSession: mockGetSession,
-  },
-}));
-
-vi.mock('../../services/predictive-loader', () => ({
-  predictiveLoader: {
-    predict: mockPredict,
-    prefetch: mockPrefetch,
-  },
-}));
-
 const mockConsolidate = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
 vi.mock('../../services/consolidation-agent', () => ({
   consolidationAgent: {
@@ -787,7 +770,6 @@ describe('SessionActor', () => {
     startedAt: new Date().toISOString(),
     activitiesCount: 0,
     sensoryEventsProcessed: 0,
-    prefetchesRun: 0,
     status: 'active',
   });
 
@@ -843,66 +825,6 @@ describe('SessionActor', () => {
 
       expect(newState.projectName).toBe('proj-x');
       expect(newState.sessionId).toBe('sid-1');
-    });
-
-    it('runs predictive prefetch when session context has a session', async () => {
-      mockGetSession.mockResolvedValueOnce({
-        currentFiles: ['src/index.ts'],
-        recentQueries: ['how does indexing work?'],
-        toolsUsed: ['search_codebase'],
-        activeFeatures: ['indexing'],
-      });
-      mockPredict.mockResolvedValueOnce(['src/services/indexer.ts']);
-
-      const state = defaultState();
-      const payload = { projectName: 'beep', sessionId: 'sess-abc' };
-
-      const newState = await actor.handle(
-        'session:beep:sess-abc',
-        makeMessage('session:started', payload, 'session:beep:sess-abc'),
-        state
-      );
-
-      expect(mockPredict).toHaveBeenCalled();
-      expect(mockPrefetch).toHaveBeenCalled();
-      expect(newState.prefetchesRun).toBe(1);
-    });
-
-    it('does not increment prefetchesRun when predictions is empty', async () => {
-      mockGetSession.mockResolvedValueOnce({
-        currentFiles: [],
-        recentQueries: [],
-        toolsUsed: [],
-        activeFeatures: [],
-      });
-      mockPredict.mockResolvedValueOnce([]); // no predictions
-
-      const state = defaultState();
-      const payload = { projectName: 'beep', sessionId: 'sess-abc' };
-
-      const newState = await actor.handle(
-        'session:beep:sess-abc',
-        makeMessage('session:started', payload, 'session:beep:sess-abc'),
-        state
-      );
-
-      expect(mockPrefetch).not.toHaveBeenCalled();
-      expect(newState.prefetchesRun).toBe(0);
-    });
-
-    it('tolerates getSession() throwing', async () => {
-      mockGetSession.mockRejectedValueOnce(new Error('redis down'));
-
-      const state = defaultState();
-      const payload = { projectName: 'beep', sessionId: 'sess-abc' };
-
-      await expect(
-        actor.handle(
-          'session:beep:sess-abc',
-          makeMessage('session:started', payload, 'session:beep:sess-abc'),
-          state
-        )
-      ).resolves.toBeDefined();
     });
   });
 

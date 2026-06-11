@@ -4,7 +4,7 @@
  * Tiers:
  * - auth: 10 req/min (login, signup, waitlist — pre-auth, brute-force surface)
  * - default: 100 req/min (search, memory, health)
- * - llm: 20 req/min (ask, agent, review — expensive LLM calls)
+ * - llm: 20 req/min (ask, agent, quality — expensive LLM calls)
  * - indexing: 5 req/min (index operations — very expensive)
  *
  * Keyed by API key when present (so a single client can't multiply its quota by
@@ -50,7 +50,7 @@ const TIERS: Record<string, RateLimitTier> = {
 
 // Path-to-tier mapping
 const AUTH_PATHS = ['/api/auth', '/api/waitlist'];
-const LLM_PATHS = ['/api/ask', '/api/agent', '/api/review', '/api/quality'];
+const LLM_PATHS = ['/api/ask', '/api/agent', '/api/quality'];
 const INDEXING_PATHS = ['/api/index'];
 const SKIP_PATHS = ['/health', '/metrics', '/api/health'];
 

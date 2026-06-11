@@ -3,14 +3,6 @@ import { logger } from '../utils/logger';
 import type { SensoryEvent } from '../services/sensory-buffer';
 
 // Lazy imports — avoid circular deps and defer service initialization
-async function getSessionContext() {
-  const mod = await import('../services/session-context');
-  return mod.sessionContext;
-}
-async function getPredictiveLoader() {
-  const mod = await import('../services/predictive-loader');
-  return mod.predictiveLoader;
-}
 async function getConsolidationAgent() {
   const mod = await import('../services/consolidation-agent');
   return mod.consolidationAgent;
@@ -30,7 +22,6 @@ export interface SessionActorState {
   startedAt: string;
   activitiesCount: number;
   sensoryEventsProcessed: number;
-  prefetchesRun: number;
   status: 'active' | 'ending' | 'ended';
 }
 
@@ -46,7 +37,6 @@ const DEFAULT_STATE: SessionActorState = {
   startedAt: '',
   activitiesCount: 0,
   sensoryEventsProcessed: 0,
-  prefetchesRun: 0,
   status: 'active',
 };
 
@@ -99,30 +89,6 @@ class SessionActor extends Actor<SessionActorState, SessionActorMessage> {
         newState.startedAt = newState.startedAt || new Date().toISOString();
         newState.status = 'active';
 
-        // Predictive prefetch
-        try {
-          const ctx = await getSessionContext();
-          const session = await ctx.getSession(projectName, sessionId);
-          if (session) {
-            const loader = await getPredictiveLoader();
-            const predictions = await loader.predict(projectName, sessionId, {
-              currentFiles: session.currentFiles,
-              recentQueries: session.recentQueries,
-              toolsUsed: session.toolsUsed,
-              activeFeatures: session.activeFeatures,
-            });
-            if (predictions.length > 0) {
-              await loader.prefetch(projectName, sessionId, predictions);
-              newState.prefetchesRun += 1;
-            }
-          }
-        } catch (err: any) {
-          logger.debug('Predictive prefetch failed on session:started', {
-            error: err.message,
-            sessionId,
-          });
-        }
-
         // Auto-merge similar memories on session start.
         // NOTE: mergeMemories is non-destructive — originals are marked
         // supersededBy (not deleted) and the merged memory carries over
@@ -150,34 +116,7 @@ class SessionActor extends Actor<SessionActorState, SessionActorMessage> {
       }
 
       case 'session:activity': {
-        const { projectName, sessionId } = message.payload as {
-          projectName: string;
-          sessionId: string;
-        };
-
         newState.activitiesCount += 1;
-
-        // Predictive prefetch on activity
-        try {
-          const ctx = await getSessionContext();
-          const session = await ctx.getSession(projectName, sessionId);
-          if (session) {
-            const loader = await getPredictiveLoader();
-            const predictions = await loader.predict(projectName, sessionId, {
-              currentFiles: session.currentFiles,
-              recentQueries: session.recentQueries,
-              toolsUsed: session.toolsUsed,
-              activeFeatures: session.activeFeatures,
-            });
-            if (predictions.length > 0) {
-              await loader.prefetch(projectName, sessionId, predictions);
-              newState.prefetchesRun += 1;
-            }
-          }
-        } catch (err: any) {
-          logger.debug('Activity prefetch failed', { error: err.message, sessionId });
-        }
-
         break;
       }
 

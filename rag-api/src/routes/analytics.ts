@@ -6,7 +6,6 @@ import { Router, Request, Response } from 'express';
 import { conversationAnalyzer } from '../services/conversation-analyzer';
 import { usageTracker } from '../services/usage-tracker';
 import { workRegistry, type WorkType, type WorkState } from '../services/work-handler';
-// predictiveLoader removed — 0 calls in production audit
 import { asyncHandler } from '../middleware/async-handler';
 import {
   validate,
