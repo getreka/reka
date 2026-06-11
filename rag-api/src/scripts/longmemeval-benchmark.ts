@@ -35,7 +35,7 @@ const OLLAMA_URL = process.env.OLLAMA_URL || 'http://localhost:11434';
 const OLLAMA_MODEL = process.env.OLLAMA_MODEL || 'qwen3:14b';
 const ANTHROPIC_API_KEY = process.env.ANTHROPIC_API_KEY || '';
 const PROJECT_NAME = 'longmemeval-bench';
-const ANSWER_MODEL = 'claude-sonnet-4-20250514';
+const ANSWER_MODEL = 'claude-sonnet-4-6';
 const POLL_INTERVAL_MS = 30_000;
 
 // Map question_type → ability
@@ -593,7 +593,7 @@ async function submitAnswerBatch(client: Anthropic, recalls: RecallResult[]): Pr
   const requests = recalls.map((r) => ({
     custom_id: r.questionId,
     params: {
-      model: ANSWER_MODEL as 'claude-sonnet-4-20250514',
+      model: ANSWER_MODEL as 'claude-sonnet-4-6',
       max_tokens: 300,
       messages: [
         {
@@ -621,7 +621,7 @@ async function submitJudgeBatch(
     return {
       custom_id: r.questionId,
       params: {
-        model: ANSWER_MODEL as 'claude-sonnet-4-20250514',
+        model: ANSWER_MODEL as 'claude-sonnet-4-6',
         max_tokens: 5,
         messages: [
           {
