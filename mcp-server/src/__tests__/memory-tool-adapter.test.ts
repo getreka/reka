@@ -87,6 +87,34 @@ describe("MemoryToolAdapter", () => {
       expect(out).toContain("m1");
     });
 
+    it("round-trips a 100+ char path (M2-1: tag cap is 256, not 50)", async () => {
+      const longPath = `/memories/${"deeply/nested/".repeat(8)}decisions-and-context.md`;
+      const tag = `${PATH_TAG_PREFIX}${longPath}`;
+      expect(tag.length).toBeGreaterThan(100);
+
+      // create: the full path is encoded as a single tag
+      mock.setResponse("POST /api/memory", {
+        data: { memory: { id: "long1", content: "deep fact" } },
+      });
+      const created = await adapter.handle({
+        command: "create",
+        path: longPath,
+        file_text: "deep fact",
+      });
+      expect(created).toContain(`Created memory file ${longPath}`);
+      const post = mock.calls.find((c) => c.path === "/api/memory")!;
+      expect((post.body as { tags: string[] }).tags).toContain(tag);
+
+      // view: the same path tag finds the content again
+      mock.setResponse("GET /api/memory/list", {
+        data: {
+          memories: [{ id: "long1", content: "deep fact", tags: [tag] }],
+        },
+      });
+      const viewed = await adapter.handle({ command: "view", path: longPath });
+      expect(viewed).toContain("deep fact");
+    });
+
     it("normalizes a path missing the leading slash", async () => {
       mock.setResponse("POST /api/memory", {
         data: { memory: { id: "m2", content: "x" } },
