@@ -66,12 +66,6 @@ vi.mock('../../services/quality-gates', () => ({
   },
 }));
 
-vi.mock('../../services/feedback', () => ({
-  feedbackService: {
-    getMemoryFeedbackCounts: vi.fn(),
-  },
-}));
-
 vi.mock('../../services/cache', () => ({
   cacheService: {
     increment: mockCacheIncrement,
@@ -577,21 +571,17 @@ describe('MemoryGovernanceService', () => {
   });
 
   describe('runMaintenance', () => {
-    it('defaults to quarantine_cleanup + feedback_maintenance', async () => {
+    it('defaults to quarantine_cleanup', async () => {
       const fresh = new Date().toISOString();
       // quarantine_cleanup scroll
       mockQdrantClient.scroll.mockResolvedValue({
         points: [{ id: 'f-1', payload: { createdAt: fresh } }],
         next_page_offset: undefined,
       });
-      // feedback: no feedback data
-      const { feedbackService } = await import('../../services/feedback');
-      vi.mocked(feedbackService.getMemoryFeedbackCounts).mockResolvedValue(new Map());
 
       const result = await memoryGovernance.runMaintenance('test');
 
       expect(result.quarantine_cleanup).toBeDefined();
-      expect(result.feedback_maintenance).toBeDefined();
       expect(result.compaction).toBeUndefined();
     });
 
@@ -604,13 +594,11 @@ describe('MemoryGovernanceService', () => {
 
       const result = await memoryGovernance.runMaintenance('test', {
         quarantine_cleanup: false,
-        feedback_maintenance: false,
         compaction: true,
         compaction_dry_run: true,
       });
 
       expect(result.quarantine_cleanup).toBeUndefined();
-      expect(result.feedback_maintenance).toBeUndefined();
       expect(result.compaction).toBeDefined();
       expect(result.compaction!.dryRun).toBe(true);
     });

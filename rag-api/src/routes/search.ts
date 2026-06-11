@@ -6,7 +6,6 @@ import { Router, Request, Response } from 'express';
 import { vectorStore, SearchResult } from '../services/vector-store';
 import { embeddingService } from '../services/embedding';
 import { llm } from '../services/llm';
-import { contextPackBuilder } from '../services/context-pack';
 import { smartDispatch } from '../services/smart-dispatch';
 import { symbolIndex } from '../services/symbol-index';
 import { asyncHandler } from '../middleware/async-handler';
@@ -19,7 +18,6 @@ import {
   askSchema,
   explainSchema,
   findFeatureSchema,
-  contextPackSchema,
   smartDispatchSchema,
 } from '../utils/validation';
 import { buildSearchFilter } from '../utils/filters';
@@ -61,8 +59,6 @@ function applyChunkTypeBoost<T extends { payload: Record<string, unknown>; score
     score: r.payload?.chunkType === 'code' ? r.score * CODE_BOOST : r.score,
   }));
 }
-
-// feedbackBoost removed — 0 feedback submissions in production audit
 
 /**
  * Graph-boosted search: expand results by adding 1-hop neighbors from dependency graph.
@@ -704,38 +700,6 @@ router.post(
       })),
       expandedFiles,
     });
-  })
-);
-
-/**
- * Build a context pack with faceted retrieval and reranking
- * POST /api/context-pack
- */
-router.post(
-  '/context-pack',
-  validate(contextPackSchema),
-  asyncHandler(async (req: Request, res: Response) => {
-    const {
-      projectName,
-      query,
-      maxTokens,
-      semanticWeight,
-      includeADRs,
-      includeTests,
-      graphExpand,
-    } = req.body;
-
-    const pack = await contextPackBuilder.build({
-      projectName,
-      query,
-      maxTokens,
-      semanticWeight,
-      includeADRs,
-      includeTests,
-      graphExpand,
-    });
-
-    res.json(pack);
   })
 );
 

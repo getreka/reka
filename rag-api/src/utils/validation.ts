@@ -306,28 +306,6 @@ export const trackUsageSchema = z.object({
   metadata: z.record(z.string(), z.unknown()).optional(),
 });
 
-export const searchFeedbackSchema = z.object({
-  projectName: projectNameSchema.optional(),
-  queryId: z.string().min(1),
-  query: z.string().min(1),
-  resultId: z.string().min(1),
-  resultFile: z.string().optional(),
-  feedbackType: z.string().min(1),
-  betterQuery: z.string().optional(),
-  comment: z.string().optional(),
-  sessionId: z.string().optional(),
-});
-
-export const memoryFeedbackSchema = z.object({
-  projectName: projectNameSchema.optional(),
-  memoryId: z.string().min(1),
-  memoryContent: z.string().min(1),
-  feedbackType: z.string().min(1),
-  correction: z.string().optional(),
-  comment: z.string().optional(),
-  sessionId: z.string().optional(),
-});
-
 // ============================================
 // Sensory Buffer & Working Memory Schemas
 // ============================================
@@ -445,12 +423,14 @@ export const mergeMemoriesSchema = z.object({
   limit: z.number().int().min(1).max(200).default(50),
 });
 
+// Note: legacy op flags (e.g. `feedback_maintenance`, removed with the feedback
+// service) are tolerated and silently stripped — zod objects drop unknown keys.
+// Keep this tolerance until mcp 0.5.0 stops sending the option.
 export const maintenanceSchema = z.object({
   projectName: projectNameSchema.optional(),
   operations: z
     .object({
       quarantine_cleanup: z.boolean().default(true),
-      feedback_maintenance: z.boolean().default(true),
       compaction: z.boolean().default(false),
       compaction_dry_run: z.boolean().default(true),
     })
@@ -580,22 +560,6 @@ export const workflowSchema = z.object({
 });
 
 export type WorkflowInput = z.infer<typeof workflowSchema>;
-
-// ============================================
-// Context Pack Schemas
-// ============================================
-
-export const contextPackSchema = z.object({
-  projectName: projectNameSchema,
-  query: z.string().min(1).max(10000),
-  maxTokens: z.number().int().min(500).max(32000).default(8000),
-  semanticWeight: z.number().min(0).max(1).default(0.7),
-  includeADRs: z.boolean().default(true),
-  includeTests: z.boolean().default(false),
-  graphExpand: z.boolean().default(true),
-});
-
-export type ContextPackInput = z.infer<typeof contextPackSchema>;
 
 export const smartDispatchSchema = z.object({
   projectName: projectNameSchema.optional(),

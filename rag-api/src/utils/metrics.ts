@@ -302,34 +302,6 @@ export const graphExpansionDuration = new Histogram({
 });
 
 // ============================================
-// Context Pack Metrics
-// ============================================
-
-export const contextPackDuration = new Histogram({
-  name: 'context_pack_duration_seconds',
-  help: 'Duration of context pack assembly',
-  labelNames: ['project'],
-  buckets: [0.1, 0.25, 0.5, 1, 2, 5, 10],
-  registers: [registry],
-});
-
-export const contextPackTokens = new Histogram({
-  name: 'context_pack_tokens',
-  help: 'Tokens in assembled context packs',
-  labelNames: ['project'],
-  buckets: [500, 1000, 2000, 4000, 8000, 16000],
-  registers: [registry],
-});
-
-export const rerankDuration = new Histogram({
-  name: 'rerank_duration_seconds',
-  help: 'Duration of LLM reranking',
-  labelNames: [] as string[],
-  buckets: [0.1, 0.5, 1, 2, 5, 10],
-  registers: [registry],
-});
-
-// ============================================
 // Quality Gate Metrics
 // ============================================
 
