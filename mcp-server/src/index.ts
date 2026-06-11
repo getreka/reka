@@ -30,22 +30,13 @@ configureConnectionPool({
 
 // Tool modules
 import { createSearchTools } from "./tools/search.js";
-import { createAskTools } from "./tools/ask.js";
 import { createIndexingTools } from "./tools/indexing.js";
 import { createMemoryTools } from "./tools/memory.js";
 import { createArchitectureTools } from "./tools/architecture.js";
 import { createDatabaseTools } from "./tools/database.js";
 import { createConfluenceTools } from "./tools/confluence.js";
-import { createPmTools } from "./tools/pm.js";
-import { createReviewTools } from "./tools/review.js";
-import { createAnalyticsTools } from "./tools/analytics.js";
-import { createClusteringTools } from "./tools/clustering.js";
 import { createSessionTools } from "./tools/session.js";
-import { createFeedbackTools } from "./tools/feedback.js";
 import { createSuggestionTools } from "./tools/suggestions.js";
-import { createCacheTools } from "./tools/cache.js";
-import { createGuidelinesTools } from "./tools/guidelines.js";
-import { createAdvancedTools } from "./tools/advanced.js";
 import { createAgentTools } from "./tools/agents.js";
 import { createQualityTools } from "./tools/quality.js";
 
@@ -115,90 +106,27 @@ const enricher = new ContextEnricher({
 // Collect all tool specs from modules
 const allSpecs: ToolSpec[] = [
   ...createSearchTools(PROJECT_NAME),
-  ...createAskTools(PROJECT_NAME),
   ...createIndexingTools(PROJECT_NAME),
   ...createMemoryTools(PROJECT_NAME),
   ...createArchitectureTools(PROJECT_NAME),
   ...createDatabaseTools(PROJECT_NAME),
   ...createConfluenceTools(PROJECT_NAME),
-  ...createPmTools(PROJECT_NAME),
-  ...createReviewTools(PROJECT_NAME),
-  ...createAnalyticsTools(PROJECT_NAME),
-  ...createClusteringTools(PROJECT_NAME),
   ...createSessionTools(PROJECT_NAME, ctx),
-  ...createFeedbackTools(PROJECT_NAME),
   ...createSuggestionTools(PROJECT_NAME),
-  ...createCacheTools(PROJECT_NAME),
-  ...createGuidelinesTools(PROJECT_NAME),
-  ...createAdvancedTools(PROJECT_NAME),
   ...createAgentTools(PROJECT_NAME),
   ...createQualityTools(PROJECT_NAME),
 ];
 
-// Core tools exposed directly to Claude (~35 tools).
-// Hidden tools remain accessible via run_agent (agent runtime calls API directly).
-const CORE_TOOLS = new Set([
-  // Search (6)
-  "search_codebase",
-  "hybrid_search",
-  "search_graph",
-  "find_symbol",
-  "search_docs",
-  "find_feature",
-  // Ask (2)
-  "ask_codebase",
-  "explain_code",
-  // Index (3)
-  "index_codebase",
-  "get_index_status",
-  "get_project_stats",
-  // Memory (7)
-  "remember",
-  "recall",
-  "list_memories",
-  "forget",
-  "batch_remember",
-  "promote_memory",
-  "review_memories",
-  // Architecture (6)
-  "record_adr",
-  "get_adrs",
-  "record_pattern",
-  "get_patterns",
-  "record_tech_debt",
-  "get_tech_debt",
-  // Context (3)
-  "context_briefing",
-  "smart_dispatch",
-  "setup_project",
-  // Session (2)
-  "start_session",
-  "end_session",
-  // Confluence (2)
-  "search_confluence",
-  "index_confluence",
-  // DB (4)
-  "record_table",
-  "get_table_info",
-  "check_db_schema",
-  "get_db_rules",
-  // Agents (2)
-  "run_agent",
-  "tribunal_debate",
-]);
-
 // LITE PROFILE (~6 tools): the highest-frequency tools registered eagerly.
-// Rationale: the Claude host now supports ToolSearch / deferred tool-schema
-// loading (~85% token reduction with accuracy UP), which makes the older
-// Hick's-law CORE_TOOLS allowlist largely obsolete. The installed MCP SDK
+// Rationale: hosts that support ToolSearch / deferred tool-schema loading
+// don't need a server-side allowlist, but the installed MCP SDK
 // (@modelcontextprotocol/sdk 1.25.x) exposes NO per-tool defer/lazy-loading
 // flag on registerTool (only enable()/disable() visibility toggles), so we
 // cannot ask the server to defer schemas. Deferred loading is a CLIENT-side
-// (host) capability. Therefore 'lite' simply registers this minimal set and
-// the remaining tools stay reachable via run_agent (the agent runtime calls
-// the RAG API directly), exactly like hidden tools under 'core'.
+// (host) capability. 'lite' simply registers this minimal set; the remaining
+// tools stay reachable via run_agent (the agent runtime calls the RAG API
+// directly).
 const LITE_TOOLS = new Set([
-  "search_codebase",
   "hybrid_search",
   "find_symbol",
   "context_briefing",
@@ -212,10 +140,8 @@ const LITE_TOOLS = new Set([
 // when…") so ToolSearch / the host ranks them well. Only overrides the lite
 // tools; all other tools keep their module-defined descriptions.
 const LITE_DESCRIPTIONS: Record<string, string> = {
-  search_codebase:
-    "Call this when you need to find code by meaning across the codebase (functions, classes, where a feature lives). Semantic + keyword search over indexed source.",
   hybrid_search:
-    "Call this when a question is conceptual ('how does X work', 'where is auth handled') — runs dense + sparse hybrid retrieval with reranking for the best matches.",
+    "Call this when you need to find code and don't know the exact file or symbol name — conceptual questions ('how does X work', 'where is auth handled') or locating a feature. Hybrid semantic + keyword retrieval; mode: 'navigate' returns a file/symbol map instead of code.",
   find_symbol:
     "Call this when you know a function/class/type NAME and want its exact definition and location. Fast symbol-index lookup, faster and more precise than search.",
   context_briefing:
@@ -226,29 +152,23 @@ const LITE_DESCRIPTIONS: Record<string, string> = {
     "Call this when you need past decisions, insights, ADRs, or notes about this project — semantic search over agent memory.",
 };
 
-// Profile selection. Default 'core' preserves CURRENT behavior so nothing breaks.
-type McpProfile = "lite" | "core" | "full";
+// Profile selection. Default 'full' — every tool that survived the 0.4.0
+// subtraction is registered; there is no hidden tier.
+type McpProfile = "lite" | "full";
 const MCP_PROFILE = (
-  process.env.MCP_PROFILE || "core"
+  process.env.MCP_PROFILE || "full"
 ).toLowerCase() as McpProfile;
 
-let activeSpecs: ToolSpec[];
-if (MCP_PROFILE === "full") {
-  activeSpecs = allSpecs;
-} else if (MCP_PROFILE === "lite") {
-  activeSpecs = allSpecs
-    .filter((s) => LITE_TOOLS.has(s.name))
-    .map((s) =>
-      LITE_DESCRIPTIONS[s.name]
-        ? { ...s, description: LITE_DESCRIPTIONS[s.name] }
-        : s,
-    );
-} else {
-  // 'core' (default) — unchanged ~35-tool allowlist.
-  activeSpecs = allSpecs.filter((s) => CORE_TOOLS.has(s.name));
-}
-
-const coreSpecs = activeSpecs;
+const activeSpecs: ToolSpec[] =
+  MCP_PROFILE === "lite"
+    ? allSpecs
+        .filter((s) => LITE_TOOLS.has(s.name))
+        .map((s) =>
+          LITE_DESCRIPTIONS[s.name]
+            ? { ...s, description: LITE_DESCRIPTIONS[s.name] }
+            : s,
+        )
+    : allSpecs;
 
 // MCP Server (modern McpServer API with native Zod validation)
 const server = new McpServer(
@@ -256,8 +176,8 @@ const server = new McpServer(
   { capabilities: { tools: {} } },
 );
 
-// Register core tools with McpServer using wrapHandler middleware
-for (const spec of coreSpecs) {
+// Register tools with McpServer using wrapHandler middleware
+for (const spec of activeSpecs) {
   const wrapped = wrapHandler(spec.name, spec.handler, { enricher, ctx });
 
   server.registerTool(
@@ -325,7 +245,9 @@ async function main() {
     `${PROJECT_NAME} RAG MCP server running (transport: ${MCP_TRANSPORT}, prefix: ${COLLECTION_PREFIX_FN()})`,
   );
   console.error(
-    `Registered ${coreSpecs.length}/${allSpecs.length} tools [profile: ${MCP_PROFILE}] (${allSpecs.length - coreSpecs.length} hidden, accessible via run_agent)`,
+    MCP_PROFILE === "lite"
+      ? `Registered ${activeSpecs.length}/${allSpecs.length} tools [profile: lite] (the rest of the RAG API is reachable via run_agent)`
+      : `Registered ${activeSpecs.length} tools [profile: full] (0 hidden)`,
   );
 }
 

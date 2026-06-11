@@ -25,41 +25,16 @@ interface RecalledMemory {
  * Default sets of tools that should/shouldn't be enriched.
  */
 export const DEFAULT_ENRICHABLE_TOOLS = new Set([
-  "search_codebase",
   "hybrid_search",
-  "ask_codebase",
-  "explain_code",
-  "find_feature",
-  "review_code",
-  "generate_tests",
-  "suggest_implementation",
-  "suggest_related_code",
-  "check_architecture",
   "context_briefing",
   "run_agent",
 ]);
 
 export const DEFAULT_SKIP_TOOLS = new Set([
-  "get_cache_stats",
-  "warm_cache",
-  "get_prediction_stats",
-  "get_tool_analytics",
-  "list_aliases",
-  "backup_collection",
-  "enable_quantization",
-  "list_backups",
   "get_index_status",
   "get_project_stats",
-  "get_rag_guidelines",
   "list_memories",
-  "get_behavior_patterns",
-  "merge_memories",
-  "feedback_search",
-  "feedback_memory",
-  "get_quality_metrics",
-  "get_knowledge_gaps",
   "get_agent_types",
-  "get_platform_stats",
 ]);
 
 export class ContextEnricher {

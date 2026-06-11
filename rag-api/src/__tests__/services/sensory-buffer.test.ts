@@ -32,12 +32,12 @@ describe('computeSalience', () => {
     expect(computeSalience('error', true)).toBe(0.9);
   });
 
-  it('returns 0.5 for search_codebase success', () => {
-    expect(computeSalience('search_codebase', true)).toBe(0.5);
+  it('returns 0.5 for hybrid_search success', () => {
+    expect(computeSalience('hybrid_search', true)).toBe(0.5);
   });
 
   it('boosts salience by 0.3 on failure (capped at 1.0)', () => {
-    expect(computeSalience('search_codebase', false)).toBe(0.8);
+    expect(computeSalience('hybrid_search', false)).toBe(0.8);
     expect(computeSalience('error', false)).toBe(1.0); // 0.9 + 0.3 = 1.2 → capped to 1.0
   });
 

@@ -1,12 +1,9 @@
 /**
  * Tool Middleware — standalone middleware functions for MCP tool handlers.
  *
- * Extracted from ToolRegistry.handle() so that McpServer.registerTool()
- * (Phase 3) can reuse the same pipeline:
- *   auto-session → enrichment.before → handler → enrichment.after → trackUsage
- *
- * During Phase 2 migration, ToolRegistry continues to use its own copy.
- * Phase 3 replaces ToolRegistry with wrapHandler() + McpServer.registerTool().
+ * wrapHandler() composes the full pipeline used by McpServer.registerTool():
+ *   auto-session → validation → enrichment.before → handler
+ *   → enrichment.after → trackUsage → sensory buffer
  */
 
 import type { ToolContext, ToolHandler, ToolHandlerResult } from "./types.js";
@@ -20,20 +17,11 @@ const DEFAULT_TIMEOUT_MS = 30_000;
 
 /** Per-tool timeout overrides (ms) */
 export const TOOL_TIMEOUTS: Record<string, number> = {
-  // Indexing / heavy analysis — up to 2 min
+  // Indexing — up to 2 min
   index_codebase: 120_000,
-  reindex_zero_downtime: 120_000,
-  cluster_code: 60_000,
-  find_duplicates: 60_000,
-  run_quality_gates: 60_000,
-  analyze_project_structure: 60_000,
-  estimate_feature: 60_000,
   // Quick search — 15 s
-  search_codebase: 15_000,
   hybrid_search: 15_000,
-  search_similar: 15_000,
   search_graph: 15_000,
-  grouped_search: 15_000,
   search_docs: 10_000,
   find_symbol: 10_000,
   // Session lifecycle — consolidation can take up to 2 min
@@ -67,24 +55,15 @@ async function withTimeout<T>(
 
 // ── Constants ───────────────────────────────────────────────
 
-/** Tools excluded from usage tracking (meta/admin, avoid recursion) */
-export const TRACKING_EXCLUDE = new Set([
-  "get_tool_analytics",
-  "get_knowledge_gaps",
-  "analyze_usage_patterns",
-  "get_behavior_patterns",
-  "get_quality_metrics",
-  "get_cache_stats",
-  "get_prediction_stats",
-  "get_rag_guidelines",
-]);
+/**
+ * Tools excluded from usage tracking (meta/admin, avoid recursion).
+ * Currently empty — every meta/analytics tool was deleted in 0.4.0.
+ * The mechanism stays for future opt-outs.
+ */
+export const TRACKING_EXCLUDE = new Set<string>([]);
 
 /** Session management tools — skip auto-session to avoid recursion */
-export const SESSION_TOOLS = new Set([
-  "start_session",
-  "end_session",
-  "get_session_context",
-]);
+export const SESSION_TOOLS = new Set(["start_session", "end_session"]);
 
 // ── Helpers ─────────────────────────────────────────────────
 
@@ -298,8 +277,7 @@ export interface MiddlewareDeps {
  * Wrap a raw ToolHandler with the full middleware pipeline:
  * auto-session → enrichment.before → handler → enrichment.after → trackUsage
  *
- * Returns a ToolHandler with the same signature, so it works both
- * with the legacy ToolRegistry and the Phase 3 McpServer adapter.
+ * Returns a ToolHandler with the same signature as the input handler.
  */
 export function wrapHandler(
   name: string,

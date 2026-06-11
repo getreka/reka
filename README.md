@@ -188,7 +188,7 @@ No cross-contamination between projects. One backend serves them all.
 
 - **Claude Code plugin** -- 9 commands, 4 agents, 2 hooks, auto-configured MCP
 - **MCP native** -- works with Claude Code, Cursor, Windsurf out of the box
-- **35 tools** -- search, memory, indexing, agents, architecture, review
+- **41 tools, 0 hidden** -- search, memory, indexing, agents, architecture, database
 - **Dashboard** -- Vue 3 web UI for memory review and analytics
 
 ### LLM & Embedding
@@ -243,15 +243,14 @@ Default config runs fully local -- no API keys needed.
 
 ## MCP Tools
 
-Reka exposes ~35 tools to your AI assistant. The most used:
+Reka exposes 41 tools to your AI assistant (none hidden). The most used:
 
 | Tool                            | What it does                                |
 | ------------------------------- | ------------------------------------------- |
-| `search_codebase`               | Semantic search across your indexed code    |
-| `hybrid_search`                 | Vector + keyword search combined            |
+| `hybrid_search`                 | Semantic + keyword search over your code    |
 | `find_symbol`                   | Fast lookup: functions, classes, types      |
 | `search_graph`                  | Traverse imports, find dependencies         |
-| `ask_codebase`                  | Natural language Q&A over your code         |
+| `search_docs`                   | Search indexed documentation                |
 | `context_briefing`              | Multi-strategy lookup before making changes |
 | `remember`                      | Store a decision, insight, or pattern       |
 | `recall`                        | Retrieve relevant memories                  |

@@ -53,13 +53,7 @@ export const destructiveGuard: ValidationHook = (toolName, args) => {
  */
 export const requiredFieldsValidator: ValidationHook = (toolName, args) => {
   // Search tools must have a query
-  const searchTools = [
-    "search_codebase",
-    "hybrid_search",
-    "search_docs",
-    "find_feature",
-    "ask_codebase",
-  ];
+  const searchTools = ["hybrid_search", "search_docs"];
   if (searchTools.includes(toolName)) {
     const query = args.query || args.question;
     if (!query || (typeof query === "string" && query.trim().length < 3)) {

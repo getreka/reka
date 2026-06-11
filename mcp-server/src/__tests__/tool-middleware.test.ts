@@ -100,9 +100,8 @@ describe("Tool Middleware", () => {
   });
 
   describe("constants", () => {
-    it("TRACKING_EXCLUDE contains meta tools", () => {
-      expect(TRACKING_EXCLUDE.has("get_tool_analytics")).toBe(true);
-      expect(TRACKING_EXCLUDE.has("get_quality_metrics")).toBe(true);
+    it("TRACKING_EXCLUDE is empty since 0.4.0 (no meta tools left)", () => {
+      expect(TRACKING_EXCLUDE.size).toBe(0);
     });
 
     it("SESSION_TOOLS contains session management", () => {
@@ -112,7 +111,7 @@ describe("Tool Middleware", () => {
 
     it("TOOL_TIMEOUTS has correct tiers", () => {
       expect(TOOL_TIMEOUTS["index_codebase"]).toBe(120_000);
-      expect(TOOL_TIMEOUTS["search_codebase"]).toBe(15_000);
+      expect(TOOL_TIMEOUTS["hybrid_search"]).toBe(15_000);
       expect(TOOL_TIMEOUTS["recall"]).toBe(10_000);
     });
   });
