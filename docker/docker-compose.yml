@@ -85,6 +85,12 @@ services:
       - "127.0.0.1:3100:3100"
     volumes:
       - api_data:/app/data
+    # Anthropic credentials + model config (ANTHROPIC_API_KEY / ANTHROPIC_MODEL /
+    # CLAUDE_EFFORT). Optional: the stack boots Ollama-only without the file.
+    # Copy docker/anthropic.env.example → docker/anthropic.env (gitignored) to enable.
+    env_file:
+      - path: ./anthropic.env
+        required: false
     environment:
       - QDRANT_URL=http://qdrant:6333
       - OLLAMA_URL=http://ollama:11434

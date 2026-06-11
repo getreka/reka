@@ -137,7 +137,8 @@ Key settings:
 - `EMBEDDING_PROVIDER`: `ollama` (used everywhere) | `bge-m3-server` | `openai`
 - `OLLAMA_EMBEDDING_MODEL`: `qwen3-embedding:4b` (both contexts below)
 - `LLM_PROVIDER`: `ollama` | `openai` | `anthropic`
-- `ANTHROPIC_MODEL`: `claude-sonnet-4-6` (complex tasks)
+- `ANTHROPIC_MODEL`: default `claude-opus-4-8` (complex tasks)
+- `CLAUDE_EFFORT`: default `high` — global fallback for Anthropic `output_config.effort`; per-call precedence is `CompletionOptions.effort` > complexity default > this
 - `CONSOLIDATION_ENABLED`: `true` — async consolidation via BullMQ worker
 - `ALLOW_ANONYMOUS`: `true` — skip auth (dev only)
 
@@ -149,6 +150,11 @@ There are **two distinct configs** — do not mix their values:
 | `VECTOR_SIZE`  | `1024` (qwen3-embedding:4b, MRL-truncated) | `2560` (qwen3-embedding:4b, full dims)                |
 
 Other `VECTOR_SIZE` values: 1536 (OpenAI), 1024 (BGE-M3, if you opt into it).
+
+**Anthropic credentials** are supplied per context, never committed:
+
+- Local dev: `ANTHROPIC_API_KEY` (+ optional `ANTHROPIC_MODEL`/`CLAUDE_EFFORT`) in `rag-api/.env`.
+- Docker prod: the `rag-api` service loads `docker/anthropic.env` via an **optional** `env_file` (`required: false`) — copy `docker/anthropic.env.example`, fill in the key. Without the file the stack still boots Ollama-only (no Anthropic spend). `docker/anthropic.env` is gitignored; the example also carries the deferred ops knobs (`TRUST_PROXY=1`, `ADMIN_API_KEY`) commented out.
 
 ### MCP Server Config (in consumer project's .mcp.json)
 
