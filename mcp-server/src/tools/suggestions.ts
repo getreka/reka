@@ -647,7 +647,9 @@ export function createSuggestionTools(projectName: string): ToolSpec[] {
 
         const apiUrl =
           ragApiUrl || process.env.RAG_API_URL || "http://localhost:3100";
-        const apiKey = ragApiKey || process.env.RAG_API_KEY;
+        // Priority mirrors index.ts: REKA_API_KEY (new) > RAG_API_KEY (legacy)
+        const apiKey =
+          ragApiKey || process.env.REKA_API_KEY || process.env.RAG_API_KEY;
         const serverName = `${targetProject}-rag`;
         const changes: string[] = [];
 
