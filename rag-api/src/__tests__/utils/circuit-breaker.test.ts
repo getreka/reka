@@ -6,7 +6,6 @@ import {
   embeddingCircuit,
   llmCircuit,
   vectorStoreCircuit,
-  confluenceCircuit,
 } from '../../utils/circuit-breaker';
 import { CircuitOpenError } from '../../utils/errors';
 
@@ -207,12 +206,12 @@ describe('CircuitBreakerRegistry', () => {
   it('getAll() returns all breakers', () => {
     // Pre-configured breakers already exist
     const all = circuitBreakers.getAll();
-    expect(all.length).toBeGreaterThanOrEqual(4); // embedding, llm, vectorStore, confluence
+    expect(all.length).toBeGreaterThanOrEqual(3); // embedding, llm, vectorStore
   });
 
   it('getAllStats() returns stats for all breakers', () => {
     const stats = circuitBreakers.getAllStats();
-    expect(stats.length).toBeGreaterThanOrEqual(4);
+    expect(stats.length).toBeGreaterThanOrEqual(3);
     expect(stats[0]).toHaveProperty('name');
     expect(stats[0]).toHaveProperty('state');
     expect(stats[0]).toHaveProperty('failures');
@@ -242,10 +241,5 @@ describe('Pre-configured breakers', () => {
   it('vectorStoreCircuit exists', () => {
     expect(vectorStoreCircuit).toBeInstanceOf(CircuitBreaker);
     expect(vectorStoreCircuit.getStats().name).toBe('vectorStore');
-  });
-
-  it('confluenceCircuit exists', () => {
-    expect(confluenceCircuit).toBeInstanceOf(CircuitBreaker);
-    expect(confluenceCircuit.getStats().name).toBe('confluence');
   });
 });

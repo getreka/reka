@@ -76,6 +76,7 @@ class ScheduledMaintenance {
       const projects = await this.getActiveProjects();
       let totalMerged = 0;
       let totalDeleted = 0;
+      let totalExpired = 0;
 
       for (const project of projects) {
         try {
@@ -89,6 +90,17 @@ class ScheduledMaintenance {
           }).catch(() => {});
         } catch (err: any) {
           logger.error(`Maintenance failed for ${project}`, { error: err.message });
+        }
+
+        // Governance maintenance (quarantine cleanup) per project — this
+        // scheduled run replaces the removed mcp `memory_maintenance` tool.
+        // Per-project duration/counter metrics are recorded inside
+        // memoryGovernance (maintenanceDuration / memoryGovernanceTotal).
+        try {
+          const expired = await this.runGovernanceMaintenance(project);
+          totalExpired += expired;
+        } catch (err: any) {
+          logger.error(`Governance maintenance failed for ${project}`, { error: err.message });
         }
       }
 
@@ -105,6 +117,7 @@ class ScheduledMaintenance {
         projects: projects.length,
         totalMerged,
         totalDeleted,
+        totalExpired,
         totalSnapshots,
         durationMs,
       });
@@ -114,10 +127,36 @@ class ScheduledMaintenance {
         projectsProcessed: projects.length,
         totalMerged,
         totalDeleted,
+        totalExpired,
       }).catch(() => {});
     } catch (err: any) {
       logger.error('Maintenance cycle failed', { error: err.message });
     }
+  }
+
+  /**
+   * Run memory-governance maintenance for one project (quarantine cleanup
+   * by default). Scheduled here since mcp 0.5.0 removed the
+   * `memory_maintenance` tool. Returns the number of expired quarantine
+   * memories removed.
+   */
+  async runGovernanceMaintenance(projectName: string): Promise<number> {
+    const { memoryGovernance } = await import('./memory-governance');
+    const result = await memoryGovernance.runMaintenance(projectName);
+    const expired = result.quarantine_cleanup?.rejected.length ?? 0;
+    const errors = result.quarantine_cleanup?.errors ?? [];
+
+    logger.info(`Governance maintenance: ${projectName}`, {
+      expired,
+      errors: errors.length,
+    });
+
+    publishEvent('maintenance:governance.completed', {
+      projectName,
+      expired,
+    }).catch(() => {});
+
+    return expired;
   }
 
   async deduplicateProject(projectName: string): Promise<{ merged: number; deleted: number }> {

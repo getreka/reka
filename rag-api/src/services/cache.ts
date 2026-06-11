@@ -24,7 +24,6 @@ const TTL = {
   EMBEDDING: 3600, // 1 hour
   SEARCH: 1800, // 30 minutes
   COLLECTION_INFO: 30, // 30 seconds
-  CONFLUENCE_PAGE: 3600, // 1 hour
 
   // Cross-project (L3) - cold cache
   GLOBAL_EMBEDDING: 86400, // 24 hours

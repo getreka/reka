@@ -2,7 +2,7 @@
  * Memory tools module - Agent memory management tools.
  *
  * Tools: remember, recall, list_memories, forget, batch_remember,
- *        review_memories, promote_memory, memory_maintenance
+ *        review_memories, promote_memory
  */
 
 import type { ToolSpec, ToolContext } from "../types.js";
@@ -502,131 +502,6 @@ export function createMemoryTools(projectName: string): ToolSpec[] {
           (runGates ? `- **Quality Gates:** passed\n` : "") +
           `- **Content:** ${truncate(memory.content, 200)}`
         );
-      },
-    },
-
-    {
-      name: "memory_maintenance",
-      description: `Run memory maintenance for ${projectName}: quarantine cleanup (expire old auto-memories), feedback-driven promote/prune, and compaction (merge similar durable memories).`,
-      schema: z.object({
-        operations: z
-          .object({
-            quarantine_cleanup: z
-              .boolean()
-              .optional()
-              .describe("Remove expired quarantine memories (default: true)"),
-            feedback_maintenance: z
-              .boolean()
-              .optional()
-              .describe("Auto-promote/prune by feedback (default: true)"),
-            compaction: z
-              .boolean()
-              .optional()
-              .describe("Merge similar durable memories (default: false)"),
-            compaction_dry_run: z
-              .boolean()
-              .optional()
-              .describe("Preview compaction without changes (default: true)"),
-          })
-          .optional()
-          .describe(
-            "Which operations to run (default: quarantine_cleanup + feedback_maintenance)",
-          ),
-      }),
-      annotations: TOOL_ANNOTATIONS["memory_maintenance"],
-      handler: async (
-        args: Record<string, unknown>,
-        ctx: ToolContext,
-      ): Promise<string> => {
-        const operations = args.operations as
-          | Record<string, boolean>
-          | undefined;
-
-        const response = await ctx.api.post("/api/memory/maintenance", {
-          projectName: ctx.projectName,
-          operations,
-        });
-
-        const data = response.data;
-        let result = `# \u{1F9F9} Memory Maintenance Results\n\n`;
-
-        // Quarantine cleanup section
-        if (data.quarantine_cleanup) {
-          const qc = data.quarantine_cleanup;
-          result += `## Quarantine Cleanup\n`;
-          if (qc.rejected.length > 0) {
-            result += `**Expired** (${qc.rejected.length}): removed from quarantine\n`;
-            qc.rejected.slice(0, 10).forEach((id: string) => {
-              result += `  \u{1F5D1}\u{FE0F} ${id}\n`;
-            });
-            if (qc.rejected.length > 10)
-              result += `  ... and ${qc.rejected.length - 10} more\n`;
-          } else {
-            result += `No expired quarantine memories.\n`;
-          }
-          if (qc.errors.length > 0) {
-            qc.errors.forEach((e: string) => {
-              result += `  \u26A0\u{FE0F} ${e}\n`;
-            });
-          }
-          result += `\n`;
-        }
-
-        // Feedback maintenance section
-        if (data.feedback_maintenance) {
-          const fm = data.feedback_maintenance;
-          result += `## Feedback Maintenance\n`;
-          if (fm.promoted.length > 0) {
-            result += `**Promoted** (${fm.promoted.length}): moved to durable\n`;
-            fm.promoted.forEach((id: string) => {
-              result += `  \u2705 ${id}\n`;
-            });
-          }
-          if (fm.pruned.length > 0) {
-            result += `**Pruned** (${fm.pruned.length}): removed\n`;
-            fm.pruned.forEach((id: string) => {
-              result += `  \u{1F5D1}\u{FE0F} ${id}\n`;
-            });
-          }
-          if (fm.promoted.length === 0 && fm.pruned.length === 0) {
-            result += `No feedback-based actions needed.\n`;
-          }
-          if (fm.errors.length > 0) {
-            fm.errors.forEach((e: string) => {
-              result += `  \u26A0\u{FE0F} ${e}\n`;
-            });
-          }
-          result += `\n`;
-        }
-
-        // Compaction section
-        if (data.compaction) {
-          const cp = data.compaction;
-          result += `## Compaction${cp.dryRun ? " (dry run)" : ""}\n`;
-          if (cp.clusters.length > 0) {
-            result += `**${cp.totalClusters} cluster(s)** of similar memories found\n\n`;
-            cp.clusters.slice(0, 5).forEach(
-              (
-                c: {
-                  originalIds: string[];
-                  mergedId?: string;
-                  mergedContent: string;
-                },
-                i: number,
-              ) => {
-                result += `${i + 1}. ${c.originalIds.length} memories → ${truncate(c.mergedContent, 120)}\n`;
-                if (c.mergedId) result += `   Merged ID: \`${c.mergedId}\`\n`;
-              },
-            );
-            if (cp.clusters.length > 5)
-              result += `... and ${cp.clusters.length - 5} more clusters\n`;
-          } else {
-            result += `No similar memory clusters found.\n`;
-          }
-          result += `\n`;
-        }
-
-        return result;
       },
     },
   ];

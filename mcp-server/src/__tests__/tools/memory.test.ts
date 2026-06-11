@@ -161,23 +161,6 @@ describe("Memory Tools", () => {
     });
   });
 
-  describe("memory_maintenance", () => {
-    it("formats maintenance results", async () => {
-      (ctx.api.post as any).mockResolvedValue({
-        data: {
-          quarantine_cleanup: { rejected: ["q-1", "q-2"], errors: [] },
-          feedback_maintenance: { promoted: ["f-1"], pruned: [], errors: [] },
-        },
-      });
-
-      const result = await findTool("memory_maintenance").handler({}, ctx);
-
-      expect(result).toContain("Maintenance Results");
-      expect(result).toContain("Quarantine Cleanup");
-      expect(result).toContain("Feedback Maintenance");
-    });
-  });
-
   describe("batch_remember", () => {
     it("stores multiple memories", async () => {
       (ctx.api.post as any).mockResolvedValue({

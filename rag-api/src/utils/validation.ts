@@ -85,20 +85,6 @@ export const indexUploadSchema = z.object({
   done: z.boolean().default(false),
 });
 
-export const indexConfluenceSchema = z.object({
-  projectName: projectNameSchema.optional(),
-  spaceKeys: z.array(z.string()).optional(),
-  pageIds: z.array(z.string()).optional(),
-  labels: z.array(z.string()).optional(),
-  maxPages: z.number().int().min(1).max(5000).default(500),
-  force: z.boolean().default(false),
-});
-
-export const confluenceSearchSchema = z.object({
-  cql: z.string().min(1).max(2000),
-  limit: z.number().int().min(1).max(100).default(20),
-});
-
 // ============================================
 // Memory Schemas
 // ============================================
@@ -369,9 +355,6 @@ export const mergeMemoriesSchema = z.object({
   limit: z.number().int().min(1).max(200).default(50),
 });
 
-// Note: legacy op flags (e.g. `feedback_maintenance`, removed with the feedback
-// service) are tolerated and silently stripped — zod objects drop unknown keys.
-// Keep this tolerance until mcp 0.5.0 stops sending the option.
 export const maintenanceSchema = z.object({
   projectName: projectNameSchema.optional(),
   operations: z
@@ -486,7 +469,6 @@ export type SearchSimilarInput = z.infer<typeof searchSimilarSchema>;
 export type AskInput = z.infer<typeof askSchema>;
 export type IndexInput = z.infer<typeof indexSchema>;
 export type IndexUploadInput = z.infer<typeof indexUploadSchema>;
-export type IndexConfluenceInput = z.infer<typeof indexConfluenceSchema>;
 export type CreateMemoryInput = z.infer<typeof createMemorySchema>;
 export type RecallMemoryInput = z.infer<typeof recallMemorySchema>;
 export type ListMemoryInput = z.infer<typeof listMemorySchema>;

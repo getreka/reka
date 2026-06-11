@@ -74,7 +74,6 @@ Each project gets namespaced collections in Qdrant:
 
 - `{project}_codebase` - indexed source code
 - `{project}_docs` - documentation
-- `{project}_confluence` - Confluence pages
 - `{project}_agent_memory` - durable agent memory (decisions, insights, ADRs)
 - `{project}_memory_pending` - quarantine for auto-captured memories awaiting promotion/rejection
 
@@ -104,22 +103,21 @@ Tool Call → Sensory Buffer (Redis Stream, 24h TTL)
 | `working-memory.ts`      | Attention filter, capacity management             |
 | `consolidation-agent.ts` | 7-step LLM pipeline (session → LTM)               |
 | `session-context.ts`     | Session lifecycle, auto-continuity                |
-| `confluence.ts`          | Confluence integration                            |
 
 ### MCP Server Tools
 
-The MCP server registers **41 tools, 0 hidden** (`MCP_PROFILE=full`, the default; `lite` registers a 6-tool subset). The canonical surface:
+The MCP server registers **28 tools, 0 hidden** (`MCP_PROFILE=full`, the default; `lite` registers a 6-tool subset). The canonical surface:
 
 - **Search:** `hybrid_search` (the one retrieval tool — hybrid by default, `mode: "navigate"` for a file/symbol map), `find_symbol`, `search_graph`, `search_docs`, `get_project_stats`
 - **Indexing:** `index_codebase`, `get_index_status`
-- **Memory:** `remember`, `recall`, `list_memories`, `forget`, `batch_remember`, `review_memories`, `promote_memory`, `memory_maintenance`
+- **Memory:** `remember`, `recall`, `list_memories`, `forget`, `batch_remember`, `review_memories`, `promote_memory` (governance maintenance runs on the rag-api scheduler — `scheduled-maintenance.ts` — not via a tool)
 - **Architecture:** `record_adr`, `get_adrs`, `record_pattern`, `get_patterns`, `record_tech_debt`, `get_tech_debt`
 - **Context/setup:** `context_briefing`, `setup_project`; **Session:** `start_session`, `end_session`
-- **Database (8):** `record_table`, `get_table_info`, `record_db_rule`, `get_db_rules`, `record_enum`, `get_enums`, `check_db_schema`, `suggest_db_schema`
-- **Confluence (4):** `search_confluence`, `index_confluence`, `get_confluence_status`, `list_confluence_spaces`
 - **Agents/quality:** `run_agent`, `tribunal_debate`, `get_agent_types`, `get_quality_report`
 
 The registered count is asserted by `mcp-server/src/__tests__/tool-registration.test.ts` — change it in the same PR as any tool addition/deletion.
+
+**DB schema knowledge** has no dedicated tools (the 8 `record_table`-style tools were removed in 0.5.0 — they were thin `remember`/`recall` wrappers). Use the tag convention instead, same as the reka-plugin `/reka:code` DB flow: save schema facts with `remember(type: "context", tags: ["db-schema", "<table>"])` and rules/constraints with `remember(type: "decision", tags: ["db-rule", "<table>"])`; before schema changes, `recall(query: "<table name> schema")` — include the table name and those tags in the query. Existing DB memories stay recallable (no migration needed).
 
 ## Configuration
 

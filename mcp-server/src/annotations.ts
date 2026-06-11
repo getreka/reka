@@ -63,7 +63,7 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   index_codebase: MUT,
   get_index_status: RO,
 
-  // ── memory (8) ─────────────────────────────────────────
+  // ── memory (7) ─────────────────────────────────────────
   remember: MUT,
   recall: RO,
   list_memories: RO,
@@ -71,7 +71,6 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   batch_remember: MUT,
   review_memories: RO,
   promote_memory: UPSERT, // idempotent promotion
-  memory_maintenance: DESTRUCT, // prunes old memories
 
   // ── architecture (6) ───────────────────────────────────
   record_adr: UPSERT,
@@ -80,22 +79,6 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   get_patterns: RO,
   record_tech_debt: UPSERT,
   get_tech_debt: RO,
-
-  // ── database (8) ───────────────────────────────────────
-  record_table: UPSERT,
-  get_table_info: RO,
-  record_db_rule: UPSERT,
-  get_db_rules: RO,
-  record_enum: UPSERT,
-  get_enums: RO,
-  check_db_schema: RO,
-  suggest_db_schema: RO,
-
-  // ── confluence (4) ─────────────────────────────────────
-  search_confluence: RO,
-  index_confluence: MUT,
-  get_confluence_status: RO,
-  list_confluence_spaces: RO,
 
   // ── session (2) ────────────────────────────────────────
   start_session: MUT,
