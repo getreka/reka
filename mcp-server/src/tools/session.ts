@@ -1,6 +1,6 @@
 /**
  * Session tools module - context summarization, session lifecycle management,
- * change tracking, and usage pattern analysis.
+ * and change tracking.
  */
 
 import type { ToolSpec, ToolContext } from "../types.js";
@@ -129,130 +129,6 @@ export function createSessionTools(
           result += `\n**Key Actions:**\n`;
           result += data.keyActions
             .map((a: string, i: number) => `${i + 1}. ${a}`)
-            .join("\n");
-          result += "\n";
-        }
-
-        return result;
-      },
-    },
-    {
-      name: "analyze_usage_patterns",
-      description: `Analyze tool usage patterns for ${projectName}. Shows common workflows, detected patterns, and recommendations for improving productivity.`,
-      schema: z.object({
-        days: z.coerce
-          .number()
-          .optional()
-          .describe("Number of days to analyze (default: 7)."),
-      }),
-      annotations: TOOL_ANNOTATIONS["analyze_usage_patterns"],
-      handler: async (
-        args: Record<string, unknown>,
-        ctx: ToolContext,
-      ): Promise<string> => {
-        const { days = 7 } = args as { days?: number };
-        const response = await ctx.api.get(
-          `/api/patterns/${ctx.projectName}?days=${days}`,
-        );
-        const data = response.data;
-
-        let result = `**Usage Patterns for ${ctx.projectName}** (last ${days} days)\n\n`;
-
-        if (data.insights && data.insights.length > 0) {
-          result += `**Insights:**\n`;
-          result += data.insights
-            .map((insight: string) => `- ${insight}`)
-            .join("\n");
-          result += "\n\n";
-        }
-
-        if (data.commonWorkflows && data.commonWorkflows.length > 0) {
-          result += `**Common Workflows:**\n`;
-          result += data.commonWorkflows
-            .map(
-              (w: { tools: string[]; count: number; successRate: number }) =>
-                `- ${w.tools.join(" -> ")} (${w.count}x, ${(w.successRate * 100).toFixed(0)}% success)`,
-            )
-            .join("\n");
-          result += "\n\n";
-        }
-
-        if (data.detectedPatterns && data.detectedPatterns.length > 0) {
-          result += `**Detected Patterns:**\n`;
-          result += data.detectedPatterns
-            .map(
-              (p: { name: string; description: string; suggestion: string }) =>
-                `- **${p.name}:** ${p.description}\n  *Suggestion:* ${p.suggestion}`,
-            )
-            .join("\n");
-          result += "\n\n";
-        }
-
-        if (data.recommendations && data.recommendations.length > 0) {
-          result += `**Recommendations:**\n`;
-          result += data.recommendations
-            .map((r: string, i: number) => `${i + 1}. ${r}`)
-            .join("\n");
-          result += "\n";
-        }
-
-        return result;
-      },
-    },
-    {
-      name: "get_developer_profile",
-      description: `Get accumulated developer profile for ${projectName}: frequent files, preferred tools, peak hours, common patterns.`,
-      schema: z.object({}),
-      annotations: TOOL_ANNOTATIONS["get_developer_profile"],
-      handler: async (
-        _args: Record<string, unknown>,
-        ctx: ToolContext,
-      ): Promise<string> => {
-        const response = await ctx.api.get(`/api/developer-profile`, {
-          headers: { "X-Project-Name": ctx.projectName },
-        });
-        const p = response.data;
-
-        if (!p.totalToolCalls) {
-          return "No usage data yet. Use tools to build your developer profile.";
-        }
-
-        let result = `**Developer Profile** (${p.totalSessions} sessions, ${p.totalToolCalls} tool calls)\n\n`;
-
-        if (p.frequentFiles.length > 0) {
-          result += "**Frequent Files:**\n";
-          result += p.frequentFiles
-            .slice(0, 10)
-            .map((f: any) => `- ${f.file} (${f.count}x)`)
-            .join("\n");
-          result += "\n\n";
-        }
-
-        if (p.preferredTools.length > 0) {
-          result += "**Preferred Tools:**\n";
-          result += p.preferredTools
-            .slice(0, 8)
-            .map(
-              (t: any) =>
-                `- ${t.tool}: ${t.count}x (avg ${Math.round(t.avgDurationMs)}ms)`,
-            )
-            .join("\n");
-          result += "\n\n";
-        }
-
-        if (p.peakHours.length > 0) {
-          result += "**Peak Hours:** ";
-          result += p.peakHours
-            .map((h: any) => `${h.hour}:00 (${h.count})`)
-            .join(", ");
-          result += "\n\n";
-        }
-
-        if (p.commonPatterns.length > 0) {
-          result += "**Common Patterns:**\n";
-          result += p.commonPatterns
-            .slice(0, 5)
-            .map((q: string) => `- "${truncate(q, 60)}"`)
             .join("\n");
           result += "\n";
         }

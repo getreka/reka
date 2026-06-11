@@ -23,7 +23,6 @@ export const TOOL_TIMEOUTS: Record<string, number> = {
   // Indexing / heavy analysis — up to 2 min
   index_codebase: 120_000,
   reindex_zero_downtime: 120_000,
-  run_quality_gates: 60_000,
   analyze_project_structure: 60_000,
   estimate_feature: 60_000,
   // Quick search — 15 s
@@ -69,8 +68,6 @@ async function withTimeout<T>(
 export const TRACKING_EXCLUDE = new Set([
   "get_tool_analytics",
   "get_knowledge_gaps",
-  "analyze_usage_patterns",
-  "get_behavior_patterns",
   "get_cache_stats",
   "get_rag_guidelines",
 ]);

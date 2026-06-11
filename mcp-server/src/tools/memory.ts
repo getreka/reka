@@ -1,9 +1,8 @@
 /**
  * Memory tools module - Agent memory management tools.
  *
- * Tools: remember, recall, list_memories, forget, update_todo,
- *        batch_remember, validate_memory, review_memories,
- *        promote_memory, run_quality_gates, memory_maintenance
+ * Tools: remember, recall, list_memories, forget, batch_remember,
+ *        review_memories, promote_memory, memory_maintenance
  */
 
 import type { ToolSpec, ToolContext } from "../types.js";
@@ -24,13 +23,6 @@ const typeEmojis: Record<string, string> = {
   conversation: "\u{1F4AC}",
   note: "\u{1F4DD}",
   procedure: "\u{1F4D6}",
-};
-
-const statusEmojis: Record<string, string> = {
-  pending: "\u23F3",
-  in_progress: "\u{1F504}",
-  done: "\u2705",
-  cancelled: "\u274C",
 };
 
 export function createMemoryTools(projectName: string): ToolSpec[] {
@@ -289,45 +281,6 @@ export function createMemoryTools(projectName: string): ToolSpec[] {
     },
 
     {
-      name: "update_todo",
-      description: "Update status of a todo/task in memory.",
-      schema: z.object({
-        todoId: z.string().describe("Todo memory ID"),
-        status: z
-          .enum(["pending", "in_progress", "done", "cancelled"])
-          .describe("New status"),
-        note: z.string().optional().describe("Optional note about the update"),
-      }),
-      annotations: TOOL_ANNOTATIONS["update_todo"],
-      handler: async (
-        args: Record<string, unknown>,
-        ctx: ToolContext,
-      ): Promise<string> => {
-        const todoId = args.todoId as string;
-        const status = args.status as string;
-        const note = args.note as string | undefined;
-
-        const response = await ctx.api.patch(`/api/memory/todo/${todoId}`, {
-          projectName: ctx.projectName,
-          status,
-          note,
-        });
-
-        if (!response.data.memory) {
-          return `\u274C Todo not found: ${todoId}`;
-        }
-
-        return (
-          `${statusEmojis[status] || "\u{1F4CB}"} **Todo updated**\n\n` +
-          `- **ID:** ${todoId}\n` +
-          `- **Status:** ${status}\n` +
-          (note ? `- **Note:** ${note}\n` : "") +
-          `- **Content:** ${response.data.memory.content}`
-        );
-      },
-    },
-
-    {
       name: "batch_remember",
       description: `Efficiently store multiple memories at once in ${projectName}. Faster than individual remember calls.`,
       schema: z.object({
@@ -432,44 +385,6 @@ export function createMemoryTools(projectName: string): ToolSpec[] {
     },
 
     {
-      name: "validate_memory",
-      description: `Validate or reject an auto-extracted memory in ${projectName}. Helps improve future extraction accuracy.`,
-      schema: z.object({
-        memoryId: z.string().describe("ID of the memory to validate"),
-        validated: z
-          .boolean()
-          .describe(
-            "true to confirm the memory is valuable, false to reject it",
-          ),
-      }),
-      annotations: TOOL_ANNOTATIONS["validate_memory"],
-      handler: async (
-        args: Record<string, unknown>,
-        ctx: ToolContext,
-      ): Promise<string> => {
-        const memoryId = args.memoryId as string;
-        const validated = args.validated as boolean;
-
-        const response = await ctx.api.patch(
-          `/api/memory/${memoryId}/validate`,
-          {
-            validated,
-          },
-        );
-
-        const { memory } = response.data;
-
-        return (
-          `\u2705 Memory ${validated ? "validated" : "rejected"}\n\n` +
-          `- **ID**: ${memory.id}\n` +
-          `- **Type**: ${memory.type}\n` +
-          `- **Content**: ${truncate(memory.content, PREVIEW.SHORT)}\n` +
-          `- **Validated**: ${memory.validated}`
-        );
-      },
-    },
-
-    {
       name: "review_memories",
       description: `Get auto-extracted memories pending review in ${projectName}. Shows unvalidated learnings that need human confirmation.`,
       schema: z.object({
@@ -522,8 +437,8 @@ export function createMemoryTools(projectName: string): ToolSpec[] {
             if (m.tags && m.tags.length > 0) {
               result += `**Tags**: ${m.tags.join(", ")}\n`;
             }
-            result += `\nTo validate: \`validate_memory(memoryId="${m.id}", validated=true)\`\n`;
-            result += `To reject: \`validate_memory(memoryId="${m.id}", validated=false)\`\n\n`;
+            result += `\nTo keep: \`promote_memory(memoryId="${m.id}", reason="human_validated")\`\n`;
+            result += `To reject: \`forget(memoryId="${m.id}")\`\n\n`;
           },
         );
 
@@ -587,60 +502,6 @@ export function createMemoryTools(projectName: string): ToolSpec[] {
           (runGates ? `- **Quality Gates:** passed\n` : "") +
           `- **Content:** ${truncate(memory.content, 200)}`
         );
-      },
-    },
-
-    {
-      name: "run_quality_gates",
-      description: `Run quality gates (typecheck, tests, blast radius) for ${projectName}.`,
-      schema: z.object({
-        affectedFiles: z
-          .array(z.string())
-          .optional()
-          .describe("Files to check (for related tests and blast radius)"),
-        skipGates: z
-          .array(z.string())
-          .optional()
-          .describe("Gates to skip (typecheck, test, blast_radius)"),
-      }),
-      annotations: TOOL_ANNOTATIONS["run_quality_gates"],
-      handler: async (
-        args: Record<string, unknown>,
-        ctx: ToolContext,
-      ): Promise<string> => {
-        const affectedFiles = args.affectedFiles as string[] | undefined;
-        const skipGates = args.skipGates as string[] | undefined;
-
-        const response = await ctx.api.post("/api/quality/run", {
-          projectName: ctx.projectName,
-          projectPath: ctx.projectPath,
-          affectedFiles,
-          skipGates,
-        });
-
-        const report = response.data;
-        let result = `**Quality Report**: ${report.passed ? "\u2705 All gates passed" : "\u274C Some gates failed"}\n\n`;
-
-        for (const gate of report.gates) {
-          const icon = gate.passed ? "\u2705" : "\u274C";
-          result += `${icon} **${gate.gate}** (${(gate.duration / 1000).toFixed(1)}s)\n`;
-          result += `   ${gate.details.slice(0, 500)}\n\n`;
-        }
-
-        if (report.blastRadius) {
-          result += `\n**Blast Radius**: ${report.blastRadius.affectedFiles.length} files, depth ${report.blastRadius.depth}\n`;
-          if (report.blastRadius.affectedFiles.length > 0) {
-            result += report.blastRadius.affectedFiles
-              .slice(0, 10)
-              .map((f: string) => `  - ${f}`)
-              .join("\n");
-            if (report.blastRadius.affectedFiles.length > 10) {
-              result += `\n  ... and ${report.blastRadius.affectedFiles.length - 10} more`;
-            }
-          }
-        }
-
-        return result;
       },
     },
 

@@ -42,7 +42,6 @@ import { createSessionTools } from "./tools/session.js";
 import { createSuggestionTools } from "./tools/suggestions.js";
 import { createCacheTools } from "./tools/cache.js";
 import { createGuidelinesTools } from "./tools/guidelines.js";
-import { createAdvancedTools } from "./tools/advanced.js";
 import { createAgentTools } from "./tools/agents.js";
 import { createQualityTools } from "./tools/quality.js";
 
@@ -124,7 +123,6 @@ const allSpecs: ToolSpec[] = [
   ...createSuggestionTools(PROJECT_NAME),
   ...createCacheTools(PROJECT_NAME),
   ...createGuidelinesTools(PROJECT_NAME),
-  ...createAdvancedTools(PROJECT_NAME),
   ...createAgentTools(PROJECT_NAME),
   ...createQualityTools(PROJECT_NAME),
 ];

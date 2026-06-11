@@ -68,17 +68,14 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   reindex_zero_downtime: MUT,
   list_aliases: RO,
 
-  // ── memory (11) ────────────────────────────────────────
+  // ── memory (8) ─────────────────────────────────────────
   remember: MUT,
   recall: RO,
   list_memories: RO,
   forget: DESTRUCT,
-  update_todo: MUT,
   batch_remember: MUT,
-  validate_memory: UPSERT, // idempotent status update
   review_memories: RO,
   promote_memory: UPSERT, // idempotent promotion
-  run_quality_gates: MUT, // may update memory status
   memory_maintenance: DESTRUCT, // prunes old memories
 
   // ── architecture (9) ───────────────────────────────────
@@ -131,22 +128,15 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   enable_quantization: DESTRUCT, // irreversible vector re-encoding
   get_platform_stats: RO,
 
-  // ── session (7) ────────────────────────────────────────
+  // ── session (5) ────────────────────────────────────────
   summarize_context: RO,
   summarize_changes: RO,
-  analyze_usage_patterns: RO,
-  get_developer_profile: RO,
   start_session: MUT,
   get_session_context: RO,
   end_session: MUT,
 
-  // ── suggestions (7) ────────────────────────────────────
+  // ── suggestions (2) ────────────────────────────────────
   context_briefing: RO,
-  get_contextual_suggestions: RO,
-  suggest_related_code: RO,
-  suggest_implementation: RO,
-  suggest_tests: RO,
-  get_code_context: RO,
   setup_project: UPSERT, // writes config (idempotent)
 
   // ── cache (2) ──────────────────────────────────────────
@@ -155,13 +145,6 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
 
   // ── guidelines (1) ─────────────────────────────────────
   get_rag_guidelines: RO,
-
-  // ── advanced (5) ───────────────────────────────────────
-  merge_memories: DESTRUCT, // merges → deletes originals
-  get_completion_context: RO,
-  get_import_suggestions: RO,
-  get_type_context: RO,
-  get_behavior_patterns: RO,
 
   // ── agents (2) ─────────────────────────────────────────
   run_agent: MUT, // side-effects depend on agent type
