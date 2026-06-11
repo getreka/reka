@@ -1,6 +1,5 @@
 /**
- * Suggestions tools module - context briefing, smart dispatch, and
- * project setup.
+ * Suggestions tools module - context briefing and project setup.
  */
 
 import * as fs from "fs";
@@ -118,7 +117,7 @@ export function createSuggestionTools(projectName: string): ToolSpec[] {
           files?: string[];
         };
 
-        // Use smart_dispatch for intelligent routing
+        // Use the /api/smart-dispatch service for intelligent routing
         try {
           const dispatchRes = await ctx.api.post("/api/smart-dispatch", {
             projectName: ctx.projectName,
@@ -256,42 +255,6 @@ export function createSuggestionTools(projectName: string): ToolSpec[] {
         }
 
         return result;
-      },
-    },
-
-    {
-      name: "smart_dispatch",
-      description: `Intelligent task routing for ${projectName}. LLM analyzes your task and runs only the needed lookups (2-5 of 7 available) in parallel. More efficient than context_briefing for narrow tasks.`,
-      schema: z.object({
-        task: z.string().describe("What you will implement/change"),
-        files: z
-          .array(z.string())
-          .optional()
-          .describe("Files you plan to modify"),
-        intent: z
-          .enum(["code", "research", "debug", "review", "architecture"])
-          .optional()
-          .describe("Task intent for better routing"),
-      }),
-      annotations: TOOL_ANNOTATIONS["context_briefing"], // Same annotations as context_briefing
-      handler: async (
-        args: Record<string, unknown>,
-        ctx: ToolContext,
-      ): Promise<string> => {
-        const { task, files, intent } = args as {
-          task: string;
-          files?: string[];
-          intent?: string;
-        };
-
-        const response = await ctx.api.post("/api/smart-dispatch", {
-          projectName: ctx.projectName,
-          task,
-          files,
-          intent,
-        });
-
-        return formatSmartDispatchResult(task, response.data);
       },
     },
 

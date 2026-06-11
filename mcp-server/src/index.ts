@@ -130,8 +130,7 @@ const allSpecs: ToolSpec[] = [
 // Core tools exposed directly to Claude (~35 tools).
 // Hidden tools remain accessible via run_agent (agent runtime calls API directly).
 const CORE_TOOLS = new Set([
-  // Search (5)
-  "search_codebase",
+  // Search (4)
   "hybrid_search",
   "search_graph",
   "find_symbol",
@@ -155,9 +154,8 @@ const CORE_TOOLS = new Set([
   "get_patterns",
   "record_tech_debt",
   "get_tech_debt",
-  // Context (3)
+  // Context (2)
   "context_briefing",
-  "smart_dispatch",
   "setup_project",
   // Session (2)
   "start_session",
@@ -186,7 +184,6 @@ const CORE_TOOLS = new Set([
 // the remaining tools stay reachable via run_agent (the agent runtime calls
 // the RAG API directly), exactly like hidden tools under 'core'.
 const LITE_TOOLS = new Set([
-  "search_codebase",
   "hybrid_search",
   "find_symbol",
   "context_briefing",
@@ -200,10 +197,8 @@ const LITE_TOOLS = new Set([
 // when…") so ToolSearch / the host ranks them well. Only overrides the lite
 // tools; all other tools keep their module-defined descriptions.
 const LITE_DESCRIPTIONS: Record<string, string> = {
-  search_codebase:
-    "Call this when you need to find code by meaning across the codebase (functions, classes, where a feature lives). Semantic + keyword search over indexed source.",
   hybrid_search:
-    "Call this when a question is conceptual ('how does X work', 'where is auth handled') — runs dense + sparse hybrid retrieval with reranking for the best matches.",
+    "Call this when you need to find code and don't know the exact file or symbol name — conceptual questions ('how does X work', 'where is auth handled') or locating a feature. Hybrid semantic + keyword retrieval; mode: 'navigate' returns a file/symbol map instead of code.",
   find_symbol:
     "Call this when you know a function/class/type NAME and want its exact definition and location. Fast symbol-index lookup, faster and more precise than search.",
   context_briefing:

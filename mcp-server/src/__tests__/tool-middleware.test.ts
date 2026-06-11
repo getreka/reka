@@ -112,7 +112,7 @@ describe("Tool Middleware", () => {
 
     it("TOOL_TIMEOUTS has correct tiers", () => {
       expect(TOOL_TIMEOUTS["index_codebase"]).toBe(120_000);
-      expect(TOOL_TIMEOUTS["search_codebase"]).toBe(15_000);
+      expect(TOOL_TIMEOUTS["hybrid_search"]).toBe(15_000);
       expect(TOOL_TIMEOUTS["recall"]).toBe(10_000);
     });
   });

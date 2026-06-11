@@ -159,7 +159,7 @@ cd rag-api && npm run lint:fix
 | Functions  | `camelCase`        | `consolidateMemories()` |
 | Constants  | `UPPER_SNAKE_CASE` | `MAX_BATCH_SIZE`        |
 | Interfaces | `PascalCase`       | `MemoryEntry`           |
-| MCP tools  | `snake_case`       | `search_codebase`       |
+| MCP tools  | `snake_case`       | `hybrid_search`         |
 
 ### Commit Messages
 

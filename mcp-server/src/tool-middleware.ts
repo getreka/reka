@@ -26,11 +26,8 @@ export const TOOL_TIMEOUTS: Record<string, number> = {
   analyze_project_structure: 60_000,
   estimate_feature: 60_000,
   // Quick search — 15 s
-  search_codebase: 15_000,
   hybrid_search: 15_000,
-  search_similar: 15_000,
   search_graph: 15_000,
-  grouped_search: 15_000,
   search_docs: 10_000,
   find_symbol: 10_000,
   // Session lifecycle — consolidation can take up to 2 min
@@ -73,11 +70,7 @@ export const TRACKING_EXCLUDE = new Set([
 ]);
 
 /** Session management tools — skip auto-session to avoid recursion */
-export const SESSION_TOOLS = new Set([
-  "start_session",
-  "end_session",
-  "get_session_context",
-]);
+export const SESSION_TOOLS = new Set(["start_session", "end_session"]);
 
 // ── Helpers ─────────────────────────────────────────────────
 

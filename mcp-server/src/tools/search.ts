@@ -1,6 +1,6 @@
 /**
- * Search tools module - codebase search, similarity search, grouped/hybrid search,
- * documentation search, and project statistics.
+ * Search tools module - hybrid codebase search (the retrieval canon),
+ * documentation search, symbol lookup, graph search, and project statistics.
  */
 
 import type { ToolSpec, ToolContext } from "../types.js";
@@ -8,7 +8,6 @@ import {
   formatCodeResults,
   formatNavigationResults,
   truncate,
-  pct,
 } from "../formatters.js";
 import { z } from "zod";
 import { TOOL_ANNOTATIONS } from "../annotations.js";
@@ -19,162 +18,20 @@ import { TOOL_ANNOTATIONS } from "../annotations.js";
 export function createSearchTools(projectName: string): ToolSpec[] {
   return [
     {
-      name: "search_codebase",
-      description: `Search the ${projectName} codebase. Returns file locations, symbols, and graph connections. Use Read tool to view the actual code at returned locations.`,
+      name: "hybrid_search",
+      description:
+        `Call this when you need to find code in ${projectName} and you don't already know the exact file or symbol name — conceptual questions ("how does X work", "where is Y handled") or locating the code behind a feature. ` +
+        `Runs hybrid retrieval (semantic + keyword) over the indexed codebase and returns the best-matching code. ` +
+        `Set mode: "navigate" for a compact map of file locations, symbols, and graph connections (no code bodies) — then use the Read tool on the returned paths. ` +
+        `Prefer Grep for exact strings and find_symbol when you already know a function/class/type name.`,
       schema: z.object({
-        query: z.string().describe("Search query for finding code"),
-        limit: z.coerce
-          .number()
-          .optional()
-          .describe("Max results to return (default: 5)"),
-        language: z
-          .string()
-          .optional()
-          .describe("Filter by language (typescript, python, vue, etc.)"),
-        path: z
-          .string()
-          .optional()
-          .describe("Filter by path pattern (e.g., 'src/modules/*')"),
-        layer: z
-          .string()
+        query: z.string().describe("Search query"),
+        mode: z
+          .enum(["content", "navigate"])
           .optional()
           .describe(
-            "Filter by architectural layer (api, service, util, model, middleware, test, parser, types, config, other)",
+            "content (default): return matching code. navigate: return file locations, symbols, and graph connections only",
           ),
-        service: z
-          .string()
-          .optional()
-          .describe("Filter by service/class name (e.g., 'EmbeddingService')"),
-      }),
-      annotations: TOOL_ANNOTATIONS["search_codebase"],
-      handler: async (
-        args: Record<string, unknown>,
-        ctx: ToolContext,
-      ): Promise<string> => {
-        const {
-          query,
-          limit = 5,
-          language,
-          path,
-          layer,
-          service,
-        } = args as {
-          query: string;
-          limit?: number;
-          language?: string;
-          path?: string;
-          layer?: string;
-          service?: string;
-        };
-        const response = await ctx.api.post("/api/search", {
-          collection: `${ctx.collectionPrefix}codebase`,
-          query,
-          limit,
-          mode: "navigate",
-          filters: { language, path, layer, service },
-        });
-        const results = response.data.results;
-        if (!results || results.length === 0) {
-          return "No results found for this query.";
-        }
-        return formatNavigationResults(results);
-      },
-    },
-    {
-      name: "search_similar",
-      description: "Find code similar to a given snippet.",
-      schema: z.object({
-        code: z.string().describe("Code snippet to find similar code for"),
-        limit: z.coerce
-          .number()
-          .optional()
-          .describe("Max results (default: 5)"),
-      }),
-      annotations: TOOL_ANNOTATIONS["search_similar"],
-      handler: async (
-        args: Record<string, unknown>,
-        ctx: ToolContext,
-      ): Promise<string> => {
-        const { code, limit = 5 } = args as { code: string; limit?: number };
-        const response = await ctx.api.post("/api/search-similar", {
-          collection: `${ctx.collectionPrefix}codebase`,
-          code,
-          limit,
-        });
-        const results = response.data.results;
-        if (!results || results.length === 0) {
-          return "No similar code found.";
-        }
-        return formatCodeResults(results, 400);
-      },
-    },
-    {
-      name: "grouped_search",
-      description: `Search ${projectName} codebase grouped by file. Returns file locations with symbols and connections. Use Read tool to view the actual code.`,
-      schema: z.object({
-        query: z.string().describe("Search query"),
-        groupBy: z
-          .string()
-          .optional()
-          .describe("Field to group by (default: 'file')"),
-        limit: z.coerce
-          .number()
-          .optional()
-          .describe("Max groups to return (default: 10)"),
-        language: z.string().optional().describe("Filter by language"),
-        layer: z
-          .string()
-          .optional()
-          .describe("Filter by architectural layer (api, service, util, etc.)"),
-        service: z.string().optional().describe("Filter by service/class name"),
-      }),
-      annotations: TOOL_ANNOTATIONS["grouped_search"],
-      handler: async (
-        args: Record<string, unknown>,
-        ctx: ToolContext,
-      ): Promise<string> => {
-        const {
-          query,
-          groupBy = "file",
-          limit = 10,
-          language,
-          layer,
-          service,
-        } = args as {
-          query: string;
-          groupBy?: string;
-          limit?: number;
-          language?: string;
-          layer?: string;
-          service?: string;
-        };
-        const filters: Record<string, string | undefined> = {
-          language,
-          layer,
-          service,
-        };
-        const hasFilters = Object.values(filters).some((v) => v !== undefined);
-        const response = await ctx.api.post("/api/search-grouped", {
-          collection: `${ctx.collectionPrefix}codebase`,
-          query,
-          groupBy,
-          limit,
-          mode: "navigate",
-          filters: hasFilters ? filters : undefined,
-        });
-        const groups = response.data.groups;
-        if (!groups || groups.length === 0) {
-          return "No results found.";
-        }
-        const allResults = groups.flatMap((g: any) => g.results);
-        return formatNavigationResults(allResults);
-      },
-    },
-    {
-      name: "hybrid_search",
-      description: `Hybrid search combining keyword matching and semantic similarity for ${projectName}. Returns file locations with symbols and connections. Use Read tool to view code.`,
-      schema: z.object({
-        query: z.string().describe("Search query"),
         limit: z.coerce
           .number()
           .optional()
@@ -183,7 +40,14 @@ export function createSearchTools(projectName: string): ToolSpec[] {
           .number()
           .optional()
           .describe("Weight for semantic vs keyword (0-1, default: 0.7)"),
-        language: z.string().optional().describe("Filter by language"),
+        language: z
+          .string()
+          .optional()
+          .describe("Filter by language (typescript, python, vue, etc.)"),
+        path: z
+          .string()
+          .optional()
+          .describe("Filter by path pattern (e.g., 'src/modules/*')"),
         layer: z
           .string()
           .optional()
@@ -197,21 +61,26 @@ export function createSearchTools(projectName: string): ToolSpec[] {
       ): Promise<string> => {
         const {
           query,
+          mode = "content",
           limit = 10,
           semanticWeight = 0.7,
           language,
+          path,
           layer,
           service,
         } = args as {
           query: string;
+          mode?: "content" | "navigate";
           limit?: number;
           semanticWeight?: number;
           language?: string;
+          path?: string;
           layer?: string;
           service?: string;
         };
         const filters: Record<string, string | undefined> = {
           language,
+          path,
           layer,
           service,
         };
@@ -221,14 +90,16 @@ export function createSearchTools(projectName: string): ToolSpec[] {
           query,
           limit,
           semanticWeight,
-          mode: "navigate",
+          mode,
           filters: hasFilters ? filters : undefined,
         });
         const results = response.data.results;
         if (!results || results.length === 0) {
           return "No results found.";
         }
-        return formatNavigationResults(results);
+        return mode === "navigate"
+          ? formatNavigationResults(results)
+          : formatCodeResults(results, 400);
       },
     },
     {

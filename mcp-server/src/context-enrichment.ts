@@ -25,7 +25,6 @@ interface RecalledMemory {
  * Default sets of tools that should/shouldn't be enriched.
  */
 export const DEFAULT_ENRICHABLE_TOOLS = new Set([
-  "search_codebase",
   "hybrid_search",
   "review_code",
   "generate_tests",

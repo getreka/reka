@@ -52,10 +52,7 @@ const DESTRUCT: ToolAnnotations = {
 // ── Per-tool annotations ────────────────────────────────────
 
 export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
-  // ── search (8) ──────────────────────────────────────────
-  search_codebase: RO,
-  search_similar: RO,
-  grouped_search: RO,
+  // ── search (5) ──────────────────────────────────────────
   hybrid_search: RO,
   search_docs: RO,
   get_project_stats: RO,
@@ -128,11 +125,8 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   enable_quantization: DESTRUCT, // irreversible vector re-encoding
   get_platform_stats: RO,
 
-  // ── session (5) ────────────────────────────────────────
-  summarize_context: RO,
-  summarize_changes: RO,
+  // ── session (2) ────────────────────────────────────────
   start_session: MUT,
-  get_session_context: RO,
   end_session: MUT,
 
   // ── suggestions (2) ────────────────────────────────────
