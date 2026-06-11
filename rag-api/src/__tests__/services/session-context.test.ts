@@ -10,8 +10,6 @@ const mocks = vi.hoisted(() => ({
   extractEntities: vi.fn().mockResolvedValue({ files: [], functions: [], concepts: [] }),
   analyze: vi.fn().mockResolvedValue({ learnings: [] }),
   summarizeChanges: vi.fn().mockResolvedValue({ toolsUsed: [], filesAffected: [], summary: '' }),
-  predict: vi.fn().mockResolvedValue([]),
-  prefetch: vi.fn().mockResolvedValue(undefined),
   cacheGet: vi.fn().mockResolvedValue(null),
   cacheSet: vi.fn().mockResolvedValue(undefined),
   cacheDelete: vi.fn().mockResolvedValue(undefined),
@@ -44,9 +42,6 @@ vi.mock('../../services/usage-patterns', () => ({
     buildDeveloperProfile: mocks.buildDeveloperProfile,
   },
 }));
-vi.mock('../../services/predictive-loader', () => ({
-  predictiveLoader: { predict: mocks.predict, prefetch: mocks.prefetch },
-}));
 vi.mock('../../services/cache', () => ({
   cacheService: {
     get: mocks.cacheGet,
@@ -67,7 +62,6 @@ describe('SessionContextService', () => {
     mocks.embed.mockResolvedValue(Array(1024).fill(0));
     mocks.scroll.mockResolvedValue({ points: [] });
     mocks.cacheGet.mockResolvedValue(null);
-    mocks.predict.mockResolvedValue([]);
     mocks.mergeMemories.mockResolvedValue({ totalMerged: 0 });
     mocks.buildDeveloperProfile.mockResolvedValue({ totalToolCalls: 0 });
     // Reset auto-merge throttle

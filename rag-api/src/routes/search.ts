@@ -13,7 +13,6 @@ import { validate } from '../utils/validation';
 import {
   searchSchema,
   searchSimilarSchema,
-  searchGroupedSchema,
   searchHybridSchema,
   askSchema,
   smartDispatchSchema,
@@ -222,68 +221,6 @@ router.post(
         language: r.payload.language,
         score: r.score,
       })),
-    });
-  })
-);
-
-/**
- * Search with grouping (one result per file/group)
- * POST /api/search-grouped
- */
-router.post(
-  '/search-grouped',
-  validate(searchGroupedSchema),
-  asyncHandler(async (req: Request, res: Response) => {
-    const {
-      collection,
-      query,
-      groupBy = 'file',
-      limit = 10,
-      groupSize = 1,
-      filters,
-      scoreThreshold,
-      mode = 'content',
-    } = req.body;
-
-    const queryEmbedding = await embeddingService.embedQuery(query, 'code_search');
-    const filter = buildSearchFilter(filters);
-
-    const projectName = (req.headers['x-project-name'] as string) || collection.split('_')[0];
-    const groups = await vectorStore.searchGroups(
-      collection,
-      queryEmbedding,
-      groupBy,
-      limit,
-      groupSize,
-      filter,
-      scoreThreshold
-    );
-
-    if (mode === 'navigate') {
-      const allFiles = groups.flatMap((g) => g.results.map((r) => r.payload.file as string));
-      const connectionsMap = await getConnectionsMap(projectName, allFiles);
-      return res.json({
-        groups: groups.map((g) => ({
-          [groupBy]: g.group,
-          results: g.results.map((r) =>
-            toNavigateResult(r, connectionsMap.get(r.payload.file as string))
-          ),
-        })),
-        totalGroups: groups.length,
-      });
-    }
-
-    res.json({
-      groups: groups.map((g) => ({
-        [groupBy]: g.group,
-        results: g.results.map((r) => ({
-          file: r.payload.file,
-          content: r.payload.content,
-          language: r.payload.language,
-          score: r.score,
-        })),
-      })),
-      totalGroups: groups.length,
     });
   })
 );
@@ -517,7 +454,7 @@ router.post(
       return res.status(400).json({ error: 'collection and query are required' });
     }
 
-    const projectName = collection.replace(/_codebase$|_code$/, '');
+    const projectName = collection.replace(/_codebase$/, '');
 
     // 1. Semantic search
     const queryEmbedding = await embeddingService.embedQuery(query, 'code_search');

@@ -216,24 +216,6 @@ export const redactMemoryVersionSchema = z.object({
 // Additional Schemas
 // ============================================
 
-export const searchGroupedSchema = z.object({
-  collection: collectionNameSchema,
-  query: z.string().min(1).max(10000),
-  groupBy: z.string().default('file'),
-  limit: z.number().int().min(1).max(100).default(10),
-  groupSize: z.number().int().min(1).max(10).default(1),
-  mode: searchModeSchema,
-  filters: z
-    .object({
-      language: z.string().optional(),
-      path: z.string().optional(),
-      layer: z.string().optional(),
-      service: z.string().optional(),
-    })
-    .optional(),
-  scoreThreshold: z.number().min(0).max(1).optional(),
-});
-
 export const searchHybridSchema = z.object({
   collection: collectionNameSchema,
   query: z.string().min(1).max(10000),
@@ -404,30 +386,6 @@ export const maintenanceSchema = z.object({
 export const forgetOlderThanSchema = z.object({
   projectName: projectNameSchema.optional(),
   olderThanDays: z.number().int().min(1).max(365),
-});
-
-export const completionContextSchema = z.object({
-  projectName: projectNameSchema.optional(),
-  currentFile: z.string().min(1),
-  currentCode: z.string().min(1).max(50000),
-  language: z.string().optional(),
-  limit: z.number().int().min(1).max(20).default(5),
-});
-
-export const importSuggestionsSchema = z.object({
-  projectName: projectNameSchema.optional(),
-  currentFile: z.string().min(1),
-  currentCode: z.string().min(1).max(50000),
-  language: z.string().optional(),
-  limit: z.number().int().min(1).max(30).default(10),
-});
-
-export const typeContextSchema = z.object({
-  projectName: projectNameSchema.optional(),
-  typeName: z.string().max(200).optional(),
-  code: z.string().max(50000).optional(),
-  currentFile: z.string().optional(),
-  limit: z.number().int().min(1).max(20).default(5),
 });
 
 export const behaviorPatternsSchema = z.object({

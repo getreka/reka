@@ -16,9 +16,7 @@ import { eventBus } from '../services/event-bus';
 import { vectorStore } from '../services/vector-store';
 import { confluenceService } from '../services/confluence';
 import { usagePatterns } from '../services/usage-patterns';
-import { proactiveSuggestions } from '../services/proactive-suggestions';
 import { sessionContext } from '../services/session-context';
-import { codeSuggestions } from '../services/code-suggestions';
 import { cacheService } from '../services/cache';
 import { embeddingService } from '../services/embedding';
 import { graphStore } from '../services/graph-store';
@@ -31,9 +29,6 @@ import {
   indexUploadSchema,
   indexConfluenceSchema,
   confluenceSearchSchema,
-  completionContextSchema,
-  importSuggestionsSchema,
-  typeContextSchema,
 } from '../utils/validation';
 
 const router = Router();
@@ -194,7 +189,7 @@ router.get(
  */
 router.get('/index/status/:collection/stream', (req: Request, res: Response) => {
   const { collection } = req.params;
-  const projectName = collection.replace(/_codebase$|_docs$|_code$/, '');
+  const projectName = collection.replace(/_codebase$|_docs$/, '');
 
   res.writeHead(200, {
     'Content-Type': 'text/event-stream',
@@ -428,81 +423,6 @@ router.get(
 );
 
 // ============================================
-// Clustering & Similarity Routes
-// ============================================
-
-/**
- * Find code clusters based on seed IDs
- * POST /api/clusters
- */
-router.post(
-  '/clusters',
-  asyncHandler(async (req: Request, res: Response) => {
-    const { collection, seedIds, limit = 10, threshold = 0.8 } = req.body;
-
-    if (!collection || !seedIds || !Array.isArray(seedIds)) {
-      return res.status(400).json({ error: 'collection and seedIds array are required' });
-    }
-
-    const clusters = await vectorStore.findClusters(collection, seedIds, limit, threshold);
-    res.json({ clusters });
-  })
-);
-
-/**
- * Find duplicate code in a collection
- * POST /api/duplicates
- */
-router.post(
-  '/duplicates',
-  asyncHandler(async (req: Request, res: Response) => {
-    const { collection, limit = 100, threshold = 0.95 } = req.body;
-
-    if (!collection) {
-      return res.status(400).json({ error: 'collection is required' });
-    }
-
-    const duplicates = await vectorStore.findDuplicates(collection, limit, threshold);
-    res.json({
-      duplicates: duplicates.map((d) => ({
-        files: d.group.map((g) => ({
-          id: g.id,
-          file: g.payload.file,
-          content: (g.payload.content as string)?.slice(0, 200),
-        })),
-        similarity: d.similarity,
-      })),
-      totalGroups: duplicates.length,
-    });
-  })
-);
-
-/**
- * Get recommendations based on positive/negative examples
- * POST /api/recommend
- */
-router.post(
-  '/recommend',
-  asyncHandler(async (req: Request, res: Response) => {
-    const { collection, positiveIds, negativeIds = [], limit = 10 } = req.body;
-
-    if (!collection || !positiveIds || !Array.isArray(positiveIds)) {
-      return res.status(400).json({ error: 'collection and positiveIds array are required' });
-    }
-
-    const results = await vectorStore.recommend(collection, positiveIds, negativeIds, limit);
-    res.json({
-      results: results.map((r) => ({
-        id: r.id,
-        file: r.payload.file,
-        content: r.payload.content,
-        score: r.score,
-      })),
-    });
-  })
-);
-
-// ============================================
 // Usage Patterns Routes
 // ============================================
 
@@ -661,36 +581,6 @@ router.get(
 );
 
 // ============================================
-// Proactive Suggestions Routes
-// ============================================
-
-/**
- * Get contextual suggestions
- * POST /api/suggestions
- */
-router.post(
-  '/suggestions',
-  validateProjectName,
-  asyncHandler(async (req: Request, res: Response) => {
-    const { projectName, text, currentFile, recentFiles, sessionId } = req.body;
-
-    if (!text) {
-      return res.status(400).json({ error: 'text is required' });
-    }
-
-    const analysis = await proactiveSuggestions.analyzeContext({
-      projectName,
-      text,
-      currentFile,
-      recentFiles,
-      sessionId,
-    });
-
-    res.json(analysis);
-  })
-);
-
-// ============================================
 // Session Routes
 // ============================================
 
@@ -799,192 +689,6 @@ router.get(
 // Feedback & Quality Routes REMOVED — 0 calls in production audit (no data source)
 
 // Query Learning Routes REMOVED — 0 calls in production audit (cold start, no data)
-
-// ============================================
-// Code Suggestions Routes
-// ============================================
-
-/**
- * Find related code
- * POST /api/code/related
- */
-router.post(
-  '/code/related',
-  validateProjectName,
-  asyncHandler(async (req: Request, res: Response) => {
-    const { projectName, code, description, currentFile, limit, minScore } = req.body;
-
-    if (!code && !description) {
-      return res.status(400).json({ error: 'code or description is required' });
-    }
-
-    const result = await codeSuggestions.findRelatedCode({
-      projectName,
-      code,
-      description,
-      currentFile,
-      limit,
-      minScore,
-    });
-
-    res.json(result);
-  })
-);
-
-/**
- * Suggest implementation patterns
- * POST /api/code/suggest-implementation
- */
-router.post(
-  '/code/suggest-implementation',
-  validateProjectName,
-  asyncHandler(async (req: Request, res: Response) => {
-    const { projectName, targetCode, targetDescription, currentFile, limit } = req.body;
-
-    if (!targetCode) {
-      return res.status(400).json({ error: 'targetCode is required' });
-    }
-
-    const suggestions = await codeSuggestions.suggestImplementation({
-      projectName,
-      targetCode,
-      targetDescription,
-      currentFile,
-      limit,
-    });
-
-    res.json({ suggestions });
-  })
-);
-
-/**
- * Suggest test patterns
- * POST /api/code/suggest-tests
- */
-router.post(
-  '/code/suggest-tests',
-  validateProjectName,
-  asyncHandler(async (req: Request, res: Response) => {
-    const { projectName, code, filePath, testType, limit } = req.body;
-
-    if (!code) {
-      return res.status(400).json({ error: 'code is required' });
-    }
-
-    const suggestions = await codeSuggestions.suggestTests({
-      projectName,
-      code,
-      filePath,
-      testType,
-      limit,
-    });
-
-    res.json({ suggestions });
-  })
-);
-
-/**
- * Get comprehensive code context
- * POST /api/code/context
- */
-router.post(
-  '/code/context',
-  validateProjectName,
-  asyncHandler(async (req: Request, res: Response) => {
-    const { projectName, code, includeRelated, includeTests, includeImports } = req.body;
-
-    if (!code) {
-      return res.status(400).json({ error: 'code is required' });
-    }
-
-    const context = await codeSuggestions.getCodeContext({
-      projectName,
-      code,
-      includeRelated,
-      includeTests,
-      includeImports,
-    });
-
-    res.json(context);
-  })
-);
-
-// ============================================
-// Advanced Code Suggestion Routes
-// ============================================
-
-/**
- * Get code completion context
- * POST /api/code/completion-context
- */
-router.post(
-  '/code/completion-context',
-  validateProjectName,
-  validate(completionContextSchema),
-  asyncHandler(async (req: Request, res: Response) => {
-    const { projectName, currentFile, currentCode, language, limit } = req.body;
-
-    const context = await codeSuggestions.getCompletionContext({
-      projectName,
-      currentFile,
-      currentCode,
-      language,
-      limit,
-    });
-
-    res.json(context);
-  })
-);
-
-/**
- * Get import suggestions
- * POST /api/code/import-suggestions
- */
-router.post(
-  '/code/import-suggestions',
-  validateProjectName,
-  validate(importSuggestionsSchema),
-  asyncHandler(async (req: Request, res: Response) => {
-    const { projectName, currentFile, currentCode, language, limit } = req.body;
-
-    const suggestions = await codeSuggestions.getImportSuggestions({
-      projectName,
-      currentFile,
-      currentCode,
-      language,
-      limit,
-    });
-
-    res.json(suggestions);
-  })
-);
-
-/**
- * Get type/interface context
- * POST /api/code/type-context
- */
-router.post(
-  '/code/type-context',
-  validateProjectName,
-  validate(typeContextSchema),
-  asyncHandler(async (req: Request, res: Response) => {
-    const { projectName, typeName, code, currentFile, limit } = req.body;
-
-    if (!typeName && !code) {
-      return res.status(400).json({ error: 'typeName or code is required' });
-    }
-
-    const context = await codeSuggestions.getTypeContext({
-      projectName,
-      typeName,
-      code,
-      currentFile,
-      limit,
-    });
-
-    res.json(context);
-  })
-);
 
 // ============================================
 // Cache Analytics Routes
