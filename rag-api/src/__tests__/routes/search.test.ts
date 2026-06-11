@@ -118,27 +118,6 @@ describe('Search Routes', () => {
     });
   });
 
-  describe('POST /api/find-feature', () => {
-    it('finds feature implementation', async () => {
-      mocks.search.mockResolvedValue([
-        {
-          id: '1',
-          score: 0.85,
-          payload: { file: 'auth.ts', content: 'auth logic', language: 'ts' },
-        },
-      ]);
-      mocks.complete.mockResolvedValue({ text: 'Authentication is in auth.ts' });
-
-      const res = await request(app)
-        .post('/api/find-feature')
-        .send({ collection: 'test_codebase', description: 'authentication' });
-
-      expect(res.status).toBe(200);
-      expect(res.body.explanation).toBeDefined();
-      expect(res.body.mainFiles).toBeDefined();
-    });
-  });
-
   describe('POST /api/find-symbol', () => {
     it('finds symbols', async () => {
       mocks.findSymbol.mockResolvedValue([{ name: 'AuthService', file: 'auth.ts', kind: 'class' }]);

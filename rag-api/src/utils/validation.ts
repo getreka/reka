@@ -58,18 +58,6 @@ export const askSchema = z.object({
   includeThinking: z.boolean().optional(),
 });
 
-export const explainSchema = z.object({
-  code: z.string().min(1).max(50000),
-  collection: collectionNameSchema.optional(),
-  filePath: z.string().optional(),
-  includeThinking: z.boolean().optional(),
-});
-
-export const findFeatureSchema = z.object({
-  collection: collectionNameSchema,
-  description: z.string().min(1).max(2000),
-});
-
 // ============================================
 // Index Schemas
 // ============================================
@@ -262,30 +250,6 @@ export const searchHybridSchema = z.object({
     .optional(),
 });
 
-export const reviewSchema = z.object({
-  projectName: projectNameSchema.optional(),
-  code: z.string().max(100000).optional(),
-  diff: z.string().max(100000).optional(),
-  filePath: z.string().optional(),
-  reviewType: z.string().default('general'),
-  includeThinking: z.boolean().optional(),
-});
-
-export const securityReviewSchema = z.object({
-  code: z.string().min(1).max(100000),
-  filePath: z.string().optional(),
-  language: z.string().optional(),
-});
-
-export const generateTestsSchema = z.object({
-  projectName: projectNameSchema.optional(),
-  code: z.string().min(1).max(100000),
-  filePath: z.string().optional(),
-  framework: z.string().default('jest'),
-  testType: z.string().default('unit'),
-  coverage: z.string().default('comprehensive'),
-});
-
 export const analyzeConversationSchema = z.object({
   projectName: projectNameSchema.optional(),
   conversation: z.string().min(1).max(100000),
@@ -473,18 +437,6 @@ export const behaviorPatternsSchema = z.object({
 });
 
 // ============================================
-// PM Schemas
-// ============================================
-
-export const estimateFeatureSchema = z.object({
-  projectName: projectNameSchema.optional(),
-  feature: z.string().min(1).max(5000),
-  includeSubtasks: z.boolean().default(true),
-});
-
-export type EstimateFeatureInput = z.infer<typeof estimateFeatureSchema>;
-
-// ============================================
 // Tribunal Schemas
 // ============================================
 
@@ -574,8 +526,6 @@ export type SmartDispatchInput = z.infer<typeof smartDispatchSchema>;
 export type SearchInput = z.infer<typeof searchSchema>;
 export type SearchSimilarInput = z.infer<typeof searchSimilarSchema>;
 export type AskInput = z.infer<typeof askSchema>;
-export type ExplainInput = z.infer<typeof explainSchema>;
-export type FindFeatureInput = z.infer<typeof findFeatureSchema>;
 export type IndexInput = z.infer<typeof indexSchema>;
 export type IndexUploadInput = z.infer<typeof indexUploadSchema>;
 export type IndexConfluenceInput = z.infer<typeof indexConfluenceSchema>;

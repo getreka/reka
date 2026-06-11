@@ -16,8 +16,6 @@ import {
   searchGroupedSchema,
   searchHybridSchema,
   askSchema,
-  explainSchema,
-  findFeatureSchema,
   smartDispatchSchema,
 } from '../utils/validation';
 import { buildSearchFilter } from '../utils/filters';
@@ -503,121 +501,6 @@ router.post(
       answer: result.text,
       ...(includeThinking && result.thinking ? { thinking: result.thinking } : {}),
     });
-  })
-);
-
-/**
- * Explain code
- * POST /api/explain
- */
-router.post(
-  '/explain',
-  validate(explainSchema),
-  asyncHandler(async (req: Request, res: Response) => {
-    const { collection, code, filePath, includeThinking } = req.body;
-
-    let context = '';
-    if (collection) {
-      const codeEmbedding = await embeddingService.embed(code);
-      const related = await vectorStore.search(collection, codeEmbedding, 3);
-      if (related.length > 0) {
-        context =
-          '\n\nRelated code in the project:\n' +
-          related
-            .map((r) => `File: ${r.payload.file}\n\`\`\`\n${r.payload.content}\n\`\`\``)
-            .join('\n\n');
-      }
-    }
-
-    const result = await llm.complete(
-      `Explain the following code${filePath ? ` from ${filePath}` : ''}:\n\n\`\`\`\n${code}\n\`\`\`${context}`,
-      {
-        systemPrompt: `You are a code explanation expert. Provide a clear, structured explanation including:
-1. A brief summary
-2. The purpose of the code
-3. Key components and their roles
-4. Dependencies used
-5. Any potential issues or improvements (if obvious)
-
-Format your response as JSON with keys: summary, purpose, keyComponents (array), dependencies (array), potentialIssues (array, optional)`,
-        maxTokens: 1500,
-        temperature: 0.3,
-        format: 'json',
-      }
-    );
-
-    try {
-      const parsed = JSON.parse(result.text);
-      res.json({
-        ...parsed,
-        ...(includeThinking && result.thinking ? { thinking: result.thinking } : {}),
-      });
-    } catch {
-      res.json({
-        summary: result.text,
-        purpose: '',
-        keyComponents: [],
-        dependencies: [],
-        ...(includeThinking && result.thinking ? { thinking: result.thinking } : {}),
-      });
-    }
-  })
-);
-
-/**
- * Find feature implementation
- * POST /api/find-feature
- */
-router.post(
-  '/find-feature',
-  validate(findFeatureSchema),
-  asyncHandler(async (req: Request, res: Response) => {
-    const { collection, description } = req.body;
-
-    const queryEmbedding = await embeddingService.embedQuery(description, 'code_search');
-    const results = await vectorStore.search(collection, queryEmbedding, 10);
-
-    if (results.length === 0) {
-      return res.json({
-        explanation: 'No relevant code found for this feature.',
-        mainFiles: [],
-        relatedFiles: [],
-      });
-    }
-
-    // Group by file
-    const fileMap = new Map<string, { score: number; chunks: Record<string, unknown>[] }>();
-    for (const r of results) {
-      const file = r.payload.file as string;
-      if (!fileMap.has(file)) {
-        fileMap.set(file, { score: r.score, chunks: [] });
-      }
-      fileMap.get(file)!.chunks.push(r.payload);
-    }
-
-    const sortedFiles = Array.from(fileMap.entries()).sort((a, b) => b[1].score - a[1].score);
-
-    const mainFiles = sortedFiles.slice(0, 3).map(([file, data]) => ({ file, score: data.score }));
-    const relatedFiles = sortedFiles
-      .slice(3, 6)
-      .map(([file, data]) => ({ file, score: data.score }));
-
-    const context = sortedFiles
-      .slice(0, 5)
-      .map(([file, data]) => `File: ${file}\n${data.chunks.map((c) => c.content).join('\n---\n')}`)
-      .join('\n\n');
-
-    const result = await llm.complete(
-      `Where is "${description}" implemented in this codebase? Based on the context, explain how it works.\n\nContext:\n${context}`,
-      {
-        systemPrompt:
-          'You are a code analyst. Explain where and how the requested feature is implemented. Be specific about file locations and key functions.',
-        maxTokens: 1000,
-        temperature: 0.3,
-      }
-    );
-
-    res.json({ explanation: result.text, mainFiles, relatedFiles });
   })
 );
 
