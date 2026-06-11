@@ -136,7 +136,7 @@ async function extractFacts(
 
   const client = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
   const msg = await client.messages.create({
-    model: 'claude-sonnet-4-20250514',
+    model: 'claude-sonnet-4-6',
     max_tokens: 2000,
     messages: [
       {
@@ -281,7 +281,7 @@ async function generateAnswer(question: string, context: string): Promise<string
   if (ANTHROPIC_API_KEY) {
     const client = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
     const msg = await client.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-4-6',
       max_tokens: 300,
       messages: [
         {
@@ -336,7 +336,7 @@ Respond with ONLY "1" if equivalent, or "0" if not.`;
   if (ANTHROPIC_API_KEY) {
     const client = new Anthropic({ apiKey: ANTHROPIC_API_KEY });
     const msg = await client.messages.create({
-      model: 'claude-sonnet-4-20250514',
+      model: 'claude-sonnet-4-6',
       max_tokens: 5,
       messages: [{ role: 'user', content: prompt }],
     });
