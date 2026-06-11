@@ -27,9 +27,6 @@ interface RecalledMemory {
 export const DEFAULT_ENRICHABLE_TOOLS = new Set([
   "search_codebase",
   "hybrid_search",
-  "ask_codebase",
-  "explain_code",
-  "find_feature",
   "review_code",
   "generate_tests",
   "suggest_implementation",

@@ -60,12 +60,9 @@ const SALIENCE_MAP: Record<string, number> = {
   // Search with results
   search_codebase: 0.5,
   hybrid_search: 0.5,
-  find_feature: 0.5,
   find_symbol: 0.5,
   search_graph: 0.5,
   search_docs: 0.5,
-  ask_codebase: 0.5,
-  explain_code: 0.5,
   context_briefing: 0.5,
   smart_dispatch: 0.5,
 

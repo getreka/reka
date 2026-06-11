@@ -30,7 +30,6 @@ configureConnectionPool({
 
 // Tool modules
 import { createSearchTools } from "./tools/search.js";
-import { createAskTools } from "./tools/ask.js";
 import { createIndexingTools } from "./tools/indexing.js";
 import { createMemoryTools } from "./tools/memory.js";
 import { createArchitectureTools } from "./tools/architecture.js";
@@ -39,7 +38,6 @@ import { createConfluenceTools } from "./tools/confluence.js";
 import { createPmTools } from "./tools/pm.js";
 import { createReviewTools } from "./tools/review.js";
 import { createAnalyticsTools } from "./tools/analytics.js";
-import { createClusteringTools } from "./tools/clustering.js";
 import { createSessionTools } from "./tools/session.js";
 import { createSuggestionTools } from "./tools/suggestions.js";
 import { createCacheTools } from "./tools/cache.js";
@@ -114,7 +112,6 @@ const enricher = new ContextEnricher({
 // Collect all tool specs from modules
 const allSpecs: ToolSpec[] = [
   ...createSearchTools(PROJECT_NAME),
-  ...createAskTools(PROJECT_NAME),
   ...createIndexingTools(PROJECT_NAME),
   ...createMemoryTools(PROJECT_NAME),
   ...createArchitectureTools(PROJECT_NAME),
@@ -123,7 +120,6 @@ const allSpecs: ToolSpec[] = [
   ...createPmTools(PROJECT_NAME),
   ...createReviewTools(PROJECT_NAME),
   ...createAnalyticsTools(PROJECT_NAME),
-  ...createClusteringTools(PROJECT_NAME),
   ...createSessionTools(PROJECT_NAME, ctx),
   ...createSuggestionTools(PROJECT_NAME),
   ...createCacheTools(PROJECT_NAME),
@@ -136,16 +132,12 @@ const allSpecs: ToolSpec[] = [
 // Core tools exposed directly to Claude (~35 tools).
 // Hidden tools remain accessible via run_agent (agent runtime calls API directly).
 const CORE_TOOLS = new Set([
-  // Search (6)
+  // Search (5)
   "search_codebase",
   "hybrid_search",
   "search_graph",
   "find_symbol",
   "search_docs",
-  "find_feature",
-  // Ask (2)
-  "ask_codebase",
-  "explain_code",
   // Index (3)
   "index_codebase",
   "get_index_status",

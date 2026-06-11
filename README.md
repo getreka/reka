@@ -251,7 +251,7 @@ Reka exposes ~35 tools to your AI assistant. The most used:
 | `hybrid_search`                 | Vector + keyword search combined            |
 | `find_symbol`                   | Fast lookup: functions, classes, types      |
 | `search_graph`                  | Traverse imports, find dependencies         |
-| `ask_codebase`                  | Natural language Q&A over your code         |
+| `search_docs`                   | Search indexed documentation                |
 | `context_briefing`              | Multi-strategy lookup before making changes |
 | `remember`                      | Store a decision, insight, or pattern       |
 | `recall`                        | Retrieve relevant memories                  |

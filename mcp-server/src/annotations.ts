@@ -62,13 +62,6 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   find_symbol: RO,
   search_graph: RO,
 
-  // ── ask (5) ─────────────────────────────────────────────
-  ask_codebase: RO,
-  explain_code: RO,
-  find_feature: RO,
-  analyze_conversation: RO,
-  auto_remember: MUT, // creates memory from conversation
-
   // ── indexing (4) ────────────────────────────────────────
   index_codebase: MUT,
   get_index_status: RO,
@@ -137,12 +130,6 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   list_backups: RO,
   enable_quantization: DESTRUCT, // irreversible vector re-encoding
   get_platform_stats: RO,
-
-  // ── clustering (4) ─────────────────────────────────────
-  cluster_code: RO, // computes clusters, no persistence
-  find_duplicates: RO,
-  recommend_similar: RO,
-  extract_learnings: RO,
 
   // ── session (7) ────────────────────────────────────────
   summarize_context: RO,

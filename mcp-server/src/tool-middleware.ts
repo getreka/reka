@@ -23,8 +23,6 @@ export const TOOL_TIMEOUTS: Record<string, number> = {
   // Indexing / heavy analysis — up to 2 min
   index_codebase: 120_000,
   reindex_zero_downtime: 120_000,
-  cluster_code: 60_000,
-  find_duplicates: 60_000,
   run_quality_gates: 60_000,
   analyze_project_structure: 60_000,
   estimate_feature: 60_000,
