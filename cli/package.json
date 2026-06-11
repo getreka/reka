@@ -1,6 +1,6 @@
 {
   "name": "@getreka/cli",
-  "version": "0.2.0",
+  "version": "0.3.0",
   "description": "Reka CLI — manage self-hosted RAG infrastructure for AI coding agents",
   "bin": {
     "reka": "dist/index.js"
@@ -22,7 +22,9 @@
   "scripts": {
     "build": "tsc",
     "dev": "ts-node src/index.ts",
-    "start": "node dist/index.js"
+    "start": "node dist/index.js",
+    "test": "vitest run",
+    "test:watch": "vitest"
   },
   "dependencies": {
     "axios": "^1.7.0",
@@ -36,7 +38,8 @@
     "@types/js-yaml": "^4.0.9",
     "@types/node": "^20.14.0",
     "ts-node": "^10.9.2",
-    "typescript": "^5.5.0"
+    "typescript": "^5.5.0",
+    "vitest": "^4.0.18"
   },
   "engines": {
     "node": ">=18"
