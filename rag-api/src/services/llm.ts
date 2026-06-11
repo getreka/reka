@@ -66,6 +66,9 @@ const FAILOVER_CHAINS: Record<ProviderName, ProviderName[]> = {
 class LLMService {
   private provider: string;
   private anthropicClient: Anthropic | null = null;
+  // Zero-cache detector: callers already warned about, so each distinct caller
+  // logs at most once per process (don't spam the agent loop on every iteration).
+  private zeroCacheWarnedCallers = new Set<string>();
 
   constructor() {
     this.provider = config.LLM_PROVIDER;
@@ -199,8 +202,29 @@ class LLMService {
       error?: string;
       projectName?: string;
       batch?: boolean;
+      cacheControl?: boolean; // true when the request carried cache_control breakpoints
     } = {}
   ): void {
+    // Zero-cache detector (ground truth): the request asked for prompt caching but the
+    // response reported neither a cache write nor a cache read. The usual cause is a
+    // prefix below the model's minimum cacheable length (Sonnet 4.6 ≥ 2048, Opus 4.8
+    // ≥ 4096 tokens) — e.g. the ~1.6K-token agent-loop prefix. Expected to fire there;
+    // record the finding, don't chase it. Warns once per distinct caller per process.
+    if (
+      opts.cacheControl &&
+      opts.success !== false &&
+      usage &&
+      !usage.cacheCreationTokens &&
+      !usage.cacheReadTokens &&
+      !this.zeroCacheWarnedCallers.has(caller)
+    ) {
+      this.zeroCacheWarnedCallers.add(caller);
+      logger.warn(
+        'Zero-cache: request sent cache_control but no cache tokens were reported — ' +
+          'prompt prefix is likely below the model minimum cacheable length',
+        { provider, model, caller, promptTokens: usage.promptTokens }
+      );
+    }
     // Prometheus: llm_requests_total / llm_duration_seconds / llm_tokens_total with
     // token-class labels (input|output|cache_read|cache_write). Cache classes are only
     // incremented when non-zero so non-Anthropic providers don't emit dead series.
@@ -795,7 +819,11 @@ class LLMService {
       usage,
       Date.now() - startTime,
       options.caller || 'chat',
-      { thinking: enableThinking }
+      {
+        thinking: enableThinking,
+        // cache_control breakpoints are set on the system block and/or the last tool
+        cacheControl: Boolean(systemPrompt) || Boolean(params.tools?.length),
+      }
     );
 
     return {

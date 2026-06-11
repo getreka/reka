@@ -55,6 +55,8 @@ function mockAnthropicClient() {
 import config from '../../config';
 import { llm } from '../../services/llm';
 import { circuitBreakers } from '../../utils/circuit-breaker';
+// logger is globally mocked in setup.ts
+import { logger } from '../../utils/logger';
 
 const mockedConfig = vi.mocked(config, true) as Record<string, unknown>;
 
@@ -871,6 +873,78 @@ describe('LLMService', () => {
         status: 'error',
       });
       expect(metricsMocks.tokensInc).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('zero-cache detector', () => {
+    beforeEach(() => {
+      (llm as any).anthropicClient = mockAnthropicClient();
+    });
+
+    const zeroCacheWarns = () =>
+      vi.mocked(logger.warn).mock.calls.filter((c) => String(c[0]).includes('Zero-cache'));
+
+    // chat() with a systemPrompt always sends a cache_control breakpoint.
+    const chatOnce = (
+      caller: string,
+      usage: Record<string, number>,
+      opts: Record<string, unknown> = {}
+    ) => {
+      mocks.anthropicCreate.mockResolvedValue({
+        content: [{ type: 'text', text: 'ok' }],
+        usage,
+      });
+      return llm.chat([{ role: 'user', content: 'go' }], {
+        provider: 'anthropic',
+        systemPrompt: 'agent system prompt',
+        caller,
+        ...opts,
+      });
+    };
+
+    it('warns when cache_control was sent but no cache tokens came back', async () => {
+      // The ~1.6K-token agent-loop prefix is below the Sonnet/Opus cacheable
+      // minimum — this firing is the diagnostic working as designed.
+      await chatOnce('zc-a', { input_tokens: 1600, output_tokens: 10 });
+
+      expect(zeroCacheWarns()).toHaveLength(1);
+      expect(zeroCacheWarns()[0][1]).toMatchObject({ caller: 'zc-a', promptTokens: 1600 });
+    });
+
+    it('warns only once per distinct caller per process', async () => {
+      await chatOnce('zc-b', { input_tokens: 1600, output_tokens: 10 });
+      await chatOnce('zc-b', { input_tokens: 1600, output_tokens: 10 });
+
+      expect(zeroCacheWarns()).toHaveLength(1);
+
+      await chatOnce('zc-b2', { input_tokens: 1600, output_tokens: 10 });
+
+      expect(zeroCacheWarns()).toHaveLength(2);
+    });
+
+    it('does not warn when cache tokens are reported', async () => {
+      await chatOnce('zc-c', {
+        input_tokens: 100,
+        output_tokens: 10,
+        cache_read_input_tokens: 1500,
+      });
+
+      expect(zeroCacheWarns()).toHaveLength(0);
+    });
+
+    it('does not warn when the request carried no cache_control', async () => {
+      // No systemPrompt and no tools — chat() sets no cache_control breakpoints.
+      mocks.anthropicCreate.mockResolvedValue({
+        content: [{ type: 'text', text: 'ok' }],
+        usage: { input_tokens: 100, output_tokens: 10 },
+      });
+
+      await llm.chat([{ role: 'user', content: 'go' }], {
+        provider: 'anthropic',
+        caller: 'zc-d',
+      });
+
+      expect(zeroCacheWarns()).toHaveLength(0);
     });
   });
 
