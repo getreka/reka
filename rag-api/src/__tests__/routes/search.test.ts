@@ -12,7 +12,6 @@ const mocks = vi.hoisted(() => ({
   findSymbol: vi.fn(),
   getFileExports: vi.fn(),
   complete: vi.fn(),
-  build: vi.fn(),
   dispatch: vi.fn(),
 }));
 
@@ -32,7 +31,6 @@ vi.mock('../../services/graph-store', () => ({ graphStore: { expand: mocks.expan
 vi.mock('../../services/symbol-index', () => ({
   symbolIndex: { findSymbol: mocks.findSymbol, getFileExports: mocks.getFileExports },
 }));
-vi.mock('../../services/context-pack', () => ({ contextPackBuilder: { build: mocks.build } }));
 vi.mock('../../services/smart-dispatch', () => ({ smartDispatch: { dispatch: mocks.dispatch } }));
 
 import searchRoutes from '../../routes/search';
@@ -156,24 +154,6 @@ describe('Search Routes', () => {
     it('returns 400 when projectName or symbol missing', async () => {
       const res = await request(app).post('/api/find-symbol').send({ projectName: 'test' });
       expect(res.status).toBe(400);
-    });
-  });
-
-  describe('POST /api/context-pack', () => {
-    it('builds context pack', async () => {
-      mocks.build.mockResolvedValue({
-        facets: [],
-        totalTokens: 500,
-        guardrails: { relatedADRs: [], testCommands: [], invariants: [] },
-        assembled: 'context',
-      });
-
-      const res = await request(app)
-        .post('/api/context-pack')
-        .send({ projectName: 'test', query: 'implement auth' });
-
-      expect(res.status).toBe(200);
-      expect(res.body.totalTokens).toBe(500);
     });
   });
 

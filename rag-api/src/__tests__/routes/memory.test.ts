@@ -362,7 +362,6 @@ describe('Memory Routes', () => {
       ).send({
         operations: {
           quarantine_cleanup: true,
-          feedback_maintenance: false,
           compaction: false,
           compaction_dry_run: true,
         },
@@ -371,6 +370,29 @@ describe('Memory Routes', () => {
       expect(res.status).toBe(200);
       expect(res.body).toEqual(fakeResult);
       expect(mocks.runMaintenance).toHaveBeenCalledOnce();
+    });
+
+    it('accepts legacy payloads with feedback_maintenance flag and strips it', async () => {
+      // mcp < 0.5.0 still sends feedback_maintenance — the route must not reject it.
+      const fakeResult = { quarantineDeleted: 0 };
+      mocks.runMaintenance.mockResolvedValue(fakeResult);
+
+      const res = await withProject(
+        request(app).post('/api/memory/maintenance'),
+        'testproject'
+      ).send({
+        operations: {
+          quarantine_cleanup: true,
+          feedback_maintenance: true,
+          compaction: false,
+        },
+      });
+
+      expect(res.status).toBe(200);
+      expect(mocks.runMaintenance).toHaveBeenCalledOnce();
+      const passedOps = mocks.runMaintenance.mock.calls[0][1];
+      expect(passedOps).not.toHaveProperty('feedback_maintenance');
+      expect(passedOps.quarantine_cleanup).toBe(true);
     });
   });
 

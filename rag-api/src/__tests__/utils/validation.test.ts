@@ -217,9 +217,17 @@ describe('maintenanceSchema', () => {
   it('applies defaults when operations object is provided empty', () => {
     const result = maintenanceSchema.parse({ operations: {} });
     expect(result.operations!.quarantine_cleanup).toBe(true);
-    expect(result.operations!.feedback_maintenance).toBe(true);
     expect(result.operations!.compaction).toBe(false);
     expect(result.operations!.compaction_dry_run).toBe(true);
+  });
+
+  it('tolerates legacy feedback_maintenance flag (stripped, not rejected)', () => {
+    // Legacy mcp clients (< 0.5.0) still send feedback_maintenance — must not 400.
+    const result = maintenanceSchema.parse({
+      operations: { quarantine_cleanup: true, feedback_maintenance: true },
+    });
+    expect(result.operations!.quarantine_cleanup).toBe(true);
+    expect(result.operations).not.toHaveProperty('feedback_maintenance');
   });
 
   it('respects explicit overrides', () => {

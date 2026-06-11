@@ -17,7 +17,6 @@ import {
 } from './memory';
 import { memoryLtm, type SemanticSubtype } from './memory-ltm';
 import { qualityGates } from './quality-gates';
-import { feedbackService } from './feedback';
 import { cacheService } from './cache';
 import { memoryVersions } from './memory-versions';
 import { logger } from '../utils/logger';
@@ -466,118 +465,6 @@ class MemoryGovernanceService {
     }
   }
   /**
-   * Auto-promote memories with 3+ positive feedback from quarantine to durable.
-   */
-  async autoPromoteByFeedback(
-    projectName: string
-  ): Promise<{ promoted: string[]; errors: string[] }> {
-    const promoted: string[] = [];
-    const errors: string[] = [];
-
-    try {
-      const feedbackCounts = await feedbackService.getMemoryFeedbackCounts(projectName);
-
-      for (const [memoryId, counts] of feedbackCounts) {
-        if (counts.accurate >= 3) {
-          try {
-            await this.promote(
-              projectName,
-              memoryId,
-              'human_validated',
-              `Auto-promoted: ${counts.accurate} accurate feedback`
-            );
-            promoted.push(memoryId);
-          } catch (error: any) {
-            // Memory might not be in quarantine (already promoted or durable)
-            if (!error.message?.includes('not found in quarantine')) {
-              errors.push(`${memoryId}: ${error.message}`);
-            }
-          }
-        }
-      }
-
-      if (promoted.length > 0) {
-        logger.info(`Auto-promoted ${promoted.length} memories`, { project: projectName });
-      }
-    } catch (error: any) {
-      logger.error('Auto-promote failed', { error: error.message, project: projectName });
-    }
-
-    return { promoted, errors };
-  }
-
-  /**
-   * Auto-prune memories with 2+ incorrect feedback.
-   * Deletes from both quarantine and durable.
-   */
-  async autoPruneByFeedback(projectName: string): Promise<{ pruned: string[]; errors: string[] }> {
-    const pruned: string[] = [];
-    const errors: string[] = [];
-
-    try {
-      const feedbackCounts = await feedbackService.getMemoryFeedbackCounts(projectName);
-
-      for (const [memoryId, counts] of feedbackCounts) {
-        if (counts.incorrect >= 2) {
-          try {
-            // Try quarantine first
-            const quarantineCollection = this.getQuarantineCollection(projectName);
-            await vectorStore.delete(quarantineCollection, [memoryId]);
-            pruned.push(memoryId);
-            memoryGovernanceTotal.inc({
-              operation: 'prune',
-              tier: 'quarantine',
-              project: projectName,
-            });
-          } catch {
-            try {
-              // Then try durable
-              const durableCollection = this.getDurableCollection(projectName);
-              await vectorStore.delete(durableCollection, [memoryId]);
-              pruned.push(memoryId);
-              memoryGovernanceTotal.inc({
-                operation: 'prune',
-                tier: 'durable',
-                project: projectName,
-              });
-            } catch (error: any) {
-              errors.push(`${memoryId}: ${error.message}`);
-            }
-          }
-        }
-      }
-
-      if (pruned.length > 0) {
-        logger.info(`Auto-pruned ${pruned.length} memories`, { project: projectName });
-      }
-    } catch (error: any) {
-      logger.error('Auto-prune failed', { error: error.message, project: projectName });
-    }
-
-    return { pruned, errors };
-  }
-
-  /**
-   * Run both auto-promote and auto-prune in one pass.
-   */
-  async runFeedbackMaintenance(projectName: string): Promise<{
-    promoted: string[];
-    pruned: string[];
-    errors: string[];
-  }> {
-    const [promoteResult, pruneResult] = await Promise.all([
-      this.autoPromoteByFeedback(projectName),
-      this.autoPruneByFeedback(projectName),
-    ]);
-
-    return {
-      promoted: promoteResult.promoted,
-      pruned: pruneResult.pruned,
-      errors: [...promoteResult.errors, ...pruneResult.errors],
-    };
-  }
-
-  /**
    * Cleanup expired quarantine memories (older than TTL).
    */
   async cleanupExpiredQuarantine(
@@ -761,52 +648,33 @@ class MemoryGovernanceService {
 
   /**
    * Orchestrator: run selected maintenance operations.
-   * Quarantine cleanup + feedback maintenance run in parallel,
-   * then compaction runs sequentially (avoids race on durable).
+   * Quarantine cleanup runs first, then compaction runs
+   * sequentially (avoids race on durable).
    */
   async runMaintenance(
     projectName: string,
     operations?: {
       quarantine_cleanup?: boolean;
-      feedback_maintenance?: boolean;
       compaction?: boolean;
       compaction_dry_run?: boolean;
     }
   ): Promise<{
     quarantine_cleanup?: { rejected: string[]; errors: string[] };
-    feedback_maintenance?: { promoted: string[]; pruned: string[]; errors: string[] };
     compaction?: {
       clusters: Array<{ originalIds: string[]; mergedId?: string; mergedContent: string }>;
       totalClusters: number;
       dryRun: boolean;
     };
   }> {
-    // Default: quarantine_cleanup + feedback_maintenance
-    const ops = operations || { quarantine_cleanup: true, feedback_maintenance: true };
+    // Default: quarantine_cleanup only
+    const ops = operations || { quarantine_cleanup: true };
     const result: Record<string, unknown> = {};
 
-    // Phase 1: quarantine_cleanup + feedback_maintenance in parallel
-    const parallelTasks: Array<Promise<void>> = [];
-
     if (ops.quarantine_cleanup) {
-      parallelTasks.push(
-        this.cleanupExpiredQuarantine(projectName).then((r) => {
-          result.quarantine_cleanup = r;
-        })
-      );
+      result.quarantine_cleanup = await this.cleanupExpiredQuarantine(projectName);
     }
 
-    if (ops.feedback_maintenance) {
-      parallelTasks.push(
-        this.runFeedbackMaintenance(projectName).then((r) => {
-          result.feedback_maintenance = r;
-        })
-      );
-    }
-
-    await Promise.all(parallelTasks);
-
-    // Phase 2: compaction (sequential — writes to durable)
+    // Compaction (sequential — writes to durable)
     if (ops.compaction) {
       result.compaction = await this.runCompaction(projectName, {
         dryRun: ops.compaction_dry_run !== false,

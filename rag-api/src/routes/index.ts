@@ -18,7 +18,6 @@ import { confluenceService } from '../services/confluence';
 import { usagePatterns } from '../services/usage-patterns';
 import { proactiveSuggestions } from '../services/proactive-suggestions';
 import { sessionContext } from '../services/session-context';
-// feedbackService and queryLearning removed — 0 calls in production audit
 import { codeSuggestions } from '../services/code-suggestions';
 import { cacheService } from '../services/cache';
 import { embeddingService } from '../services/embedding';

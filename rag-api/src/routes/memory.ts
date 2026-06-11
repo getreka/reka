@@ -564,11 +564,11 @@ router.post(
 );
 
 // ============================================
-// Feedback-Driven Memory Maintenance
+// Memory Maintenance
 // ============================================
 
 /**
- * Run memory maintenance (quarantine cleanup, feedback, compaction)
+ * Run memory maintenance (quarantine cleanup, compaction)
  * POST /api/memory/maintenance
  */
 router.post(
