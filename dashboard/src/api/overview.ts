@@ -22,21 +22,9 @@ export async function fetchKnowledgeGaps(limit = 20): Promise<KnowledgeGap[]> {
   return data.gaps ?? [];
 }
 
-export async function fetchQualityMetrics(
-  project: string,
-): Promise<Record<string, any>> {
-  const { data } = await client.get(`/api/quality/${project}`);
-  return data;
-}
-
 export async function fetchSessions(limit = 5): Promise<Session[]> {
   const { data } = await client.get("/api/sessions", { params: { limit } });
   return data.sessions ?? [];
-}
-
-/** @deprecated Endpoint removed in v2.0 — returns empty stub */
-export async function fetchPredictionStats(): Promise<Record<string, any>> {
-  return { predictions: 0, accuracy: 0, enabled: false };
 }
 
 export async function fetchPlatformStats(): Promise<PlatformStats> {
@@ -51,12 +39,5 @@ export async function fetchDeveloperProfile(): Promise<DeveloperProfile> {
 
 export async function fetchCacheAnalytics(): Promise<CacheStats> {
   const { data } = await client.get("/api/cache/analytics");
-  return data;
-}
-
-export async function fetchFeedbackStats(
-  project: string,
-): Promise<Record<string, any>> {
-  const { data } = await client.get(`/api/feedback/stats/${project}`);
   return data;
 }

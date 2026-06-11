@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted } from "vue";
+import { onMounted, ref } from "vue";
 import Button from "primevue/button";
 import Message from "primevue/message";
 import ProgressSpinner from "primevue/progressspinner";
@@ -8,6 +8,7 @@ import TabList from "primevue/tablist";
 import Tab from "primevue/tab";
 import SessionsTable from "@/components/sessions/SessionsTable.vue";
 import SessionDetailPanel from "@/components/sessions/SessionDetailPanel.vue";
+import TribunalHistory from "@/components/sessions/TribunalHistory.vue";
 import { useSessionsStore } from "@/stores/sessions";
 import { useProjectWatch } from "@/composables/useProjectWatch";
 import { useToast } from "@/composables/useToast";
@@ -15,11 +16,15 @@ import { useToast } from "@/composables/useToast";
 const store = useSessionsStore();
 const toast = useToast();
 
+const activeTab = ref<string>(store.statusFilter);
+
 useProjectWatch(() => store.loadSessions());
 onMounted(() => store.loadSessions());
 
-function handleFilterChange(val: string | number) {
-  store.statusFilter = String(val) as "all" | "active" | "ended";
+function handleTabChange(val: string | number) {
+  activeTab.value = String(val);
+  if (activeTab.value === "tribunal") return;
+  store.statusFilter = activeTab.value as "all" | "active" | "ended";
   store.loadSessions();
 }
 
@@ -47,14 +52,18 @@ async function handleStartSession() {
     <div
       style="display: flex; justify-content: space-between; align-items: center"
     >
-      <Tabs :value="store.statusFilter" @update:value="handleFilterChange">
+      <Tabs :value="activeTab" @update:value="handleTabChange">
         <TabList>
           <Tab value="all">All</Tab>
           <Tab value="active">Active</Tab>
           <Tab value="ended">Ended</Tab>
+          <Tab value="tribunal">Tribunal</Tab>
         </TabList>
       </Tabs>
-      <div style="display: flex; gap: 0.5rem; align-items: center">
+      <div
+        v-if="activeTab !== 'tribunal'"
+        style="display: flex; gap: 0.5rem; align-items: center"
+      >
         <Button
           icon="pi pi-play"
           label="Start Session"
@@ -73,35 +82,39 @@ async function handleStartSession() {
       </div>
     </div>
 
-    <Message v-if="store.error" severity="error" :closable="false">{{
-      store.error
-    }}</Message>
+    <TribunalHistory v-if="activeTab === 'tribunal'" />
 
-    <div
-      v-if="store.loading"
-      style="display: flex; justify-content: center; padding: 3rem"
-    >
-      <ProgressSpinner />
-    </div>
-    <div v-else style="display: flex; gap: 1rem">
-      <div style="flex: 1; min-width: 0">
-        <SessionsTable
-          :sessions="store.sessions"
-          :selected-id="
-            store.selectedSession?.sessionId ?? store.selectedSession?.id
-          "
-          @select="store.selectSession"
-        />
+    <template v-else>
+      <Message v-if="store.error" severity="error" :closable="false">{{
+        store.error
+      }}</Message>
+
+      <div
+        v-if="store.loading"
+        style="display: flex; justify-content: center; padding: 3rem"
+      >
+        <ProgressSpinner />
       </div>
-      <div v-if="store.selectedSession" style="width: 26rem; flex-shrink: 0">
-        <SessionDetailPanel
-          :session="store.selectedSession"
-          :working-memory="store.workingMemory"
-          :sensory-stats="store.sensoryStats"
-          @close="store.clearSelection()"
-          @end-session="handleEndSession"
-        />
+      <div v-else style="display: flex; gap: 1rem">
+        <div style="flex: 1; min-width: 0">
+          <SessionsTable
+            :sessions="store.sessions"
+            :selected-id="
+              store.selectedSession?.sessionId ?? store.selectedSession?.id
+            "
+            @select="store.selectSession"
+          />
+        </div>
+        <div v-if="store.selectedSession" style="width: 26rem; flex-shrink: 0">
+          <SessionDetailPanel
+            :session="store.selectedSession"
+            :working-memory="store.workingMemory"
+            :sensory-stats="store.sensoryStats"
+            @close="store.clearSelection()"
+            @end-session="handleEndSession"
+          />
+        </div>
       </div>
-    </div>
+    </template>
   </div>
 </template>
