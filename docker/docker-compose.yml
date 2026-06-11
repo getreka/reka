@@ -92,6 +92,8 @@ services:
       - EMBEDDING_PROVIDER=ollama
       - OLLAMA_EMBEDDING_MODEL=qwen3-embedding:4b
       - VECTOR_SIZE=2560
+      # No bge-m3 container in this stack — reranking would be a silent no-op (re-introduce as an opt-in profile if needed)
+      - RERANKER_ENABLED=false
       - LLM_PROVIDER=ollama
       - OLLAMA_MODEL=qwen3.5:9b
       - API_PORT=3100

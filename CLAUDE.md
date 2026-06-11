@@ -54,12 +54,14 @@ This is a **shared RAG (Retrieval-Augmented Generation) infrastructure** that ca
                            │
         ┌──────────────────┼──────────────────┐
         ▼                  ▼                  ▼
-   ┌─────────┐      ┌───────────┐      ┌───────────┐
-   │ Qdrant  │      │  Ollama   │      │  BGE-M3   │
-   │ :6333   │      │  :11434   │      │  :8080    │
-   │ vectors │      │  LLM      │      │ embeddings│
-   └─────────┘      └───────────┘      └───────────┘
+   ┌─────────┐      ┌──────────────┐    ┌─────────┐
+   │ Qdrant  │      │    Ollama    │    │  Redis  │
+   │ :6333   │      │    :11434    │    │  :6380  │
+   │ vectors │      │ LLM + embeds │    │  cache  │
+   └─────────┘      └──────────────┘    └─────────┘
 ```
+
+Embeddings come from Ollama (`qwen3-embedding:4b`). BGE-M3 (:8080) is **optional** — it is only used as a reranker (`RERANKER_ENABLED=true` plus a running `bge-m3` container) and is not part of the default Docker stack.
 
 ### Project Isolation
 
@@ -68,7 +70,8 @@ Each project gets namespaced collections in Qdrant:
 - `{project}_codebase` - indexed source code
 - `{project}_docs` - documentation
 - `{project}_confluence` - Confluence pages
-- `{project}_memory` - agent memory (decisions, insights, ADRs)
+- `{project}_agent_memory` - durable agent memory (decisions, insights, ADRs)
+- `{project}_memory_pending` - quarantine for auto-captured memories awaiting promotion/rejection
 
 ### Memory Architecture (human-inspired)
 
@@ -86,7 +89,7 @@ Tool Call → Sensory Buffer (Redis Stream, 24h TTL)
 | Service                  | Purpose                                           |
 | ------------------------ | ------------------------------------------------- |
 | `vector-store.ts`        | Qdrant client, collection management              |
-| `embedding.ts`           | Embedding generation (BGE-M3/Ollama/OpenAI)       |
+| `embedding.ts`           | Embedding generation (Ollama/OpenAI/BGE-M3)       |
 | `llm.ts`                 | LLM completions (Ollama/OpenAI/Anthropic)         |
 | `indexer.ts`             | Code chunking and indexing                        |
 | `memory.ts`              | Agent memory (ADRs, patterns, tech debt)          |
@@ -119,12 +122,21 @@ Generate a key: `node -e "const {generateKey}=require('./dist/middleware/auth');
 
 Key settings:
 
-- `EMBEDDING_PROVIDER`: `bge-m3-server` | `ollama` | `openai`
+- `EMBEDDING_PROVIDER`: `ollama` (used everywhere) | `bge-m3-server` | `openai`
+- `OLLAMA_EMBEDDING_MODEL`: `qwen3-embedding:4b` (both contexts below)
 - `LLM_PROVIDER`: `ollama` | `openai` | `anthropic`
-- `OLLAMA_MODEL`: `qwen3.5:9b` (utility), `ANTHROPIC_MODEL`: `claude-sonnet-4-6` (complex)
-- `VECTOR_SIZE`: 1024 (BGE-M3), 1536 (OpenAI), 768 (Ollama nomic)
+- `ANTHROPIC_MODEL`: `claude-sonnet-4-6` (complex tasks)
 - `CONSOLIDATION_ENABLED`: `true` — async consolidation via BullMQ worker
 - `ALLOW_ANONYMOUS`: `true` — skip auth (dev only)
+
+There are **two distinct configs** — do not mix their values:
+
+| Setting        | Local dev (`rag-api/.env`)                 | Docker prod (`docker/docker-compose.yml`, `reka-api`) |
+| -------------- | ------------------------------------------ | ----------------------------------------------------- |
+| `OLLAMA_MODEL` | `qwen3.5:27b`                              | `qwen3.5:9b`                                          |
+| `VECTOR_SIZE`  | `1024` (qwen3-embedding:4b, MRL-truncated) | `2560` (qwen3-embedding:4b, full dims)                |
+
+Other `VECTOR_SIZE` values: 1536 (OpenAI), 1024 (BGE-M3, if you opt into it).
 
 ### MCP Server Config (in consumer project's .mcp.json)
 
@@ -147,13 +159,13 @@ Key settings:
 
 ## Ports
 
-| Service | Port                     |
-| ------- | ------------------------ |
-| RAG API | 3100                     |
-| Qdrant  | 6333 (REST), 6334 (gRPC) |
-| Ollama  | 11434                    |
-| BGE-M3  | 8080                     |
-| Redis   | 6380                     |
+| Service | Port                                              |
+| ------- | ------------------------------------------------- |
+| RAG API | 3100                                              |
+| Qdrant  | 6333 (REST), 6334 (gRPC)                          |
+| Ollama  | 11434                                             |
+| Redis   | 6380                                              |
+| BGE-M3  | 8080 (optional reranker — not running by default) |
 
 ## RAG Integration
 
