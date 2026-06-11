@@ -81,16 +81,6 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   record_tech_debt: UPSERT,
   get_tech_debt: RO,
 
-  // ── database (8) ───────────────────────────────────────
-  record_table: UPSERT,
-  get_table_info: RO,
-  record_db_rule: UPSERT,
-  get_db_rules: RO,
-  record_enum: UPSERT,
-  get_enums: RO,
-  check_db_schema: RO,
-  suggest_db_schema: RO,
-
   // ── confluence (4) ─────────────────────────────────────
   search_confluence: RO,
   index_confluence: MUT,

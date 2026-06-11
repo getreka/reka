@@ -33,7 +33,6 @@ import { createSearchTools } from "./tools/search.js";
 import { createIndexingTools } from "./tools/indexing.js";
 import { createMemoryTools } from "./tools/memory.js";
 import { createArchitectureTools } from "./tools/architecture.js";
-import { createDatabaseTools } from "./tools/database.js";
 import { createConfluenceTools } from "./tools/confluence.js";
 import { createSessionTools } from "./tools/session.js";
 import { createSuggestionTools } from "./tools/suggestions.js";
@@ -109,7 +108,6 @@ const allSpecs: ToolSpec[] = [
   ...createIndexingTools(PROJECT_NAME),
   ...createMemoryTools(PROJECT_NAME),
   ...createArchitectureTools(PROJECT_NAME),
-  ...createDatabaseTools(PROJECT_NAME),
   ...createConfluenceTools(PROJECT_NAME),
   ...createSessionTools(PROJECT_NAME, ctx),
   ...createSuggestionTools(PROJECT_NAME),
