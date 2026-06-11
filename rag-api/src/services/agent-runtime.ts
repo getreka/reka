@@ -296,6 +296,7 @@ class AgentRuntime {
         maxTokens: 4096,
         think: true,
         provider: 'anthropic',
+        caller: 'agent-loop',
       });
 
       agentTask.usage.totalTokens +=
@@ -425,6 +426,7 @@ class AgentRuntime {
           maxTokens: 4096,
           think: true,
           provider: 'anthropic',
+          caller: 'agent-loop',
         });
         agentTask.usage.totalTokens +=
           (finalResponse.promptTokens || 0) + (finalResponse.completionTokens || 0);
@@ -480,6 +482,7 @@ class AgentRuntime {
         temperature: profile.temperature,
         maxTokens: 4096,
         provider: 'ollama',
+        caller: 'agent-loop',
       });
 
       agentTask.usage.totalTokens +=
@@ -576,6 +579,7 @@ class AgentRuntime {
             temperature: profile.temperature,
             maxTokens: 4096,
             provider: 'ollama',
+            caller: 'agent-loop',
           });
           agentTask.usage.totalTokens +=
             (finalResponse.promptTokens || 0) + (finalResponse.completionTokens || 0);
@@ -931,6 +935,7 @@ class AgentRuntime {
           maxTokens: 1024,
           temperature: 0.3,
           think: false,
+          caller: 'agent-explain',
         }
       );
       return explanation.text;

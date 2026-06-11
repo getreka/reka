@@ -65,6 +65,38 @@ describe('modelCostUsd', () => {
     expect(cost).toBeCloseTo(2.5 + 10 + 1.25 + 0.5, 6);
   });
 
+  it('applies the 50% Batches API discount to all token classes (M1 acceptance)', () => {
+    // claude-opus-4-8: $5/1M input, $25/1M output → (5 + 25) × 0.5 = 15.0
+    const cost = modelCostUsd(
+      'claude-opus-4-8',
+      { promptTokens: 1_000_000, completionTokens: 1_000_000 },
+      { batch: true }
+    );
+    expect(cost).toBe(15.0);
+  });
+
+  it('applies the batch discount to cache token classes too', () => {
+    // Sonnet input $3/1M: 1M cache-write = 3×1.25 = 3.75; 1M cache-read = 3×0.1 = 0.30
+    // → (3.75 + 0.30) × 0.5 = 2.025
+    const cost = modelCostUsd(
+      'claude-sonnet-4-6',
+      {
+        promptTokens: 0,
+        completionTokens: 0,
+        cacheCreationTokens: 1_000_000,
+        cacheReadTokens: 1_000_000,
+      },
+      { batch: true }
+    );
+    expect(cost).toBeCloseTo((3 * 1.25 + 3 * 0.1) * 0.5, 9);
+  });
+
+  it('charges full price when batch is false or omitted', () => {
+    const tokens = { promptTokens: 1_000_000, completionTokens: 1_000_000 };
+    expect(modelCostUsd('claude-opus-4-8', tokens, { batch: false })).toBe(30.0);
+    expect(modelCostUsd('claude-opus-4-8', tokens)).toBe(30.0);
+  });
+
   it('treats omitted cache token counts as zero', () => {
     const withCache = modelCostUsd('claude-sonnet-4-6', {
       promptTokens: 100_000,
@@ -157,6 +189,20 @@ describe('llmUsageLogger.summarize', () => {
     expect(storeMocks.scrollCollection).toHaveBeenCalledTimes(2);
     expect(storeMocks.scrollCollection).toHaveBeenLastCalledWith('myproj_llm_usage', 1000, 'page2');
     expect(summary.totals.requests).toBe(2);
+  });
+
+  it('prices batch-flagged entries at 50%', async () => {
+    storeMocks.scrollCollection.mockResolvedValue({
+      points: [
+        { id: 1, payload: entry() },
+        { id: 2, payload: entry({ batch: true }) },
+      ],
+    });
+
+    const summary = await llmUsageLogger.summarize('myproj');
+
+    // Per call: 1000×$5/1M + 500×$25/1M = 0.0175; batch twin = 0.00875
+    expect(summary.totals.costUsd).toBeCloseTo(0.0175 + 0.00875, 6);
   });
 
   it('returns zeroed summary for a project with no usage', async () => {

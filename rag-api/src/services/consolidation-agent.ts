@@ -476,6 +476,7 @@ class ConsolidationAgentService {
     const callPromise = llm
       .completeWithBestProvider(prompt, {
         complexity: 'utility',
+        caller: 'consolidation',
         systemPrompt,
         // Note: format:'json' causes empty responses on qwen3.5:9b — rely on prompt instruction instead
         maxTokens: 2000,

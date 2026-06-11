@@ -27,6 +27,7 @@ export interface CompletionOptions {
   jsonSchema?: Record<string, unknown>; // Claude: output_config.format json_schema (overrides format)
   stream?: boolean; // Enable streaming (default false)
   signal?: AbortSignal; // Cancels the in-flight provider call (axios + Anthropic SDK honor it)
+  caller?: string; // Usage attribution (e.g. 'consolidation', 'memory-merge', 'tribunal-judge', 'agent-loop')
 }
 
 export interface CompletionResult {
@@ -182,7 +183,13 @@ class LLMService {
       | undefined,
     durationMs: number,
     caller: string,
-    opts: { thinking?: boolean; success?: boolean; error?: string; projectName?: string } = {}
+    opts: {
+      thinking?: boolean;
+      success?: boolean;
+      error?: string;
+      projectName?: string;
+      batch?: boolean;
+    } = {}
   ): void {
     // Prometheus: llm_requests_total / llm_duration_seconds / llm_tokens_total with
     // token-class labels (input|output|cache_read|cache_write). Cache classes are only
@@ -214,6 +221,7 @@ class LLMService {
       thinking: opts.thinking,
       success: opts.success,
       error: opts.error,
+      batch: opts.batch,
     });
   }
 
@@ -287,7 +295,7 @@ class LLMService {
         config.OLLAMA_MODEL,
         result.usage,
         Date.now() - startTime,
-        'complete',
+        options.caller || 'complete',
         { thinking: enableThink }
       );
       return result;
@@ -317,7 +325,7 @@ class LLMService {
           config.OLLAMA_MODEL,
           result.usage,
           Date.now() - startTime,
-          'complete',
+          options.caller || 'complete',
           { thinking: false }
         );
         return result;
@@ -327,7 +335,7 @@ class LLMService {
         config.OLLAMA_MODEL,
         undefined,
         Date.now() - startTime,
-        'complete',
+        options.caller || 'complete',
         { success: false, error: error.message }
       );
       logger.error('Ollama completion failed', { error: error.message });
@@ -402,7 +410,7 @@ class LLMService {
         config.OPENAI_MODEL,
         undefined,
         Date.now() - startTime,
-        'complete',
+        options.caller || 'complete',
         { success: false, error: error.message }
       );
       logger.error('OpenAI completion failed', { error: error.message });
@@ -512,7 +520,7 @@ class LLMService {
         config.ANTHROPIC_MODEL,
         result.usage,
         Date.now() - startTime,
-        'complete',
+        options.caller || 'complete',
         { thinking: enableThinking }
       );
       return result;
@@ -538,7 +546,7 @@ class LLMService {
           config.ANTHROPIC_MODEL,
           result.usage,
           Date.now() - startTime,
-          'complete',
+          options.caller || 'complete',
           { thinking: false }
         );
         return result;
@@ -549,7 +557,7 @@ class LLMService {
         config.ANTHROPIC_MODEL,
         undefined,
         Date.now() - startTime,
-        'complete',
+        options.caller || 'complete',
         { success: false, error: error.message, thinking: enableThinking }
       );
       logger.error('Anthropic completion failed', {
@@ -768,9 +776,14 @@ class LLMService {
       cacheCreationTokens: response.usage.cache_creation_input_tokens ?? undefined,
       cacheReadTokens: response.usage.cache_read_input_tokens ?? undefined,
     };
-    this.recordUsage('anthropic', config.ANTHROPIC_MODEL, usage, Date.now() - startTime, 'chat', {
-      thinking: enableThinking,
-    });
+    this.recordUsage(
+      'anthropic',
+      config.ANTHROPIC_MODEL,
+      usage,
+      Date.now() - startTime,
+      options.caller || 'chat',
+      { thinking: enableThinking }
+    );
 
     return {
       text,
@@ -849,7 +862,7 @@ class LLMService {
         config.AGENT_OLLAMA_MODEL,
         { promptTokens: result.promptTokens, completionTokens: result.completionTokens },
         Date.now() - startTime,
-        'chat',
+        options.caller || 'chat',
         { thinking: enableThink }
       );
       return result;
@@ -872,7 +885,7 @@ class LLMService {
           config.AGENT_OLLAMA_MODEL,
           { promptTokens: result.promptTokens, completionTokens: result.completionTokens },
           Date.now() - startTime,
-          'chat',
+          options.caller || 'chat',
           { thinking: false }
         );
         return result;
@@ -882,7 +895,7 @@ class LLMService {
         config.AGENT_OLLAMA_MODEL,
         undefined,
         Date.now() - startTime,
-        'chat',
+        options.caller || 'chat',
         { success: false, error: error.message }
       );
       logger.error('Ollama chat failed', { error: error.message });

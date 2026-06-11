@@ -24,6 +24,12 @@ vi.mock('../../utils/metrics', () => ({
   llmDuration: { observe: metricsMocks.durationObserve },
 }));
 
+const usageMocks = vi.hoisted(() => ({ record: vi.fn() }));
+
+vi.mock('../../services/llm-usage-logger', () => ({
+  llmUsageLogger: { record: usageMocks.record },
+}));
+
 // Mock the SDK module so the import in llm.ts resolves to a dummy
 vi.mock('@anthropic-ai/sdk', () => ({
   default: class MockAnthropic {
@@ -655,6 +661,64 @@ describe('LLMService', () => {
       expect(params.tools[params.tools.length - 1].cache_control).toEqual({ type: 'ephemeral' });
       // sampling params not forwarded
       expect(params.temperature).toBeUndefined();
+    });
+  });
+
+  describe('caller attribution (recordUsage)', () => {
+    it('threads options.caller into the usage log on complete()', async () => {
+      mocks.post.mockResolvedValue({
+        data: { message: { content: 'ok' }, prompt_eval_count: 1, eval_count: 2 },
+      });
+
+      await llm.complete('prompt', { caller: 'memory-merge' });
+
+      expect(usageMocks.record).toHaveBeenCalledWith(
+        expect.objectContaining({ caller: 'memory-merge' })
+      );
+    });
+
+    it('defaults to caller=complete when unset', async () => {
+      mocks.post.mockResolvedValue({
+        data: { message: { content: 'ok' }, prompt_eval_count: 1, eval_count: 2 },
+      });
+
+      await llm.complete('prompt');
+
+      expect(usageMocks.record).toHaveBeenCalledWith(
+        expect.objectContaining({ caller: 'complete' })
+      );
+    });
+
+    it('threads caller through completeWithBestProvider routing', async () => {
+      mocks.post.mockResolvedValue({
+        data: { message: { content: 'ok' }, prompt_eval_count: 1, eval_count: 2 },
+      });
+
+      await llm.completeWithBestProvider('prompt', {
+        complexity: 'utility',
+        caller: 'consolidation',
+      });
+
+      expect(usageMocks.record).toHaveBeenCalledWith(
+        expect.objectContaining({ caller: 'consolidation' })
+      );
+    });
+
+    it('threads caller into chat() usage records', async () => {
+      (llm as any).anthropicClient = mockAnthropicClient();
+      mocks.anthropicCreate.mockResolvedValue({
+        content: [{ type: 'text', text: 'ok' }],
+        usage: { input_tokens: 5, output_tokens: 5 },
+      });
+
+      await llm.chat([{ role: 'user', content: 'go' }], {
+        provider: 'anthropic',
+        caller: 'agent-loop',
+      });
+
+      expect(usageMocks.record).toHaveBeenCalledWith(
+        expect.objectContaining({ caller: 'agent-loop' })
+      );
     });
   });
 

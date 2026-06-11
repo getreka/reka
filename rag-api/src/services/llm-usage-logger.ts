@@ -19,12 +19,13 @@ export interface LLMUsageEntry {
   cacheCreationTokens: number; // Anthropic prompt-cache write tokens (~1.25x cost)
   cacheReadTokens: number; // Anthropic prompt-cache read tokens (~0.1x cost)
   durationMs: number;
-  caller: string; // e.g. 'smart-dispatch', 'agent-runtime', 'review'
+  caller: string; // e.g. 'consolidation', 'memory-merge', 'tribunal-judge', 'agent-loop'
   projectName?: string;
   timestamp: string;
   thinking: boolean;
   success: boolean;
   error?: string;
+  batch?: boolean; // true when served via the Batches API (50% discount on all token classes)
 }
 
 const FLUSH_INTERVAL_MS = 30_000;
@@ -47,10 +48,14 @@ const PRICING: Record<string, [number, number]> = {
 const CACHE_WRITE_MULTIPLIER = 1.25;
 const CACHE_READ_MULTIPLIER = 0.1;
 
+// Anthropic Batches API: 50% discount applied to ALL token classes.
+const BATCH_MULTIPLIER = 0.5;
+
 /**
  * Compute USD cost for a single model call from token counts. Unknown Anthropic models
  * fall back to Sonnet pricing. Cache tokens are priced relative to the input rate
  * (write ~1.25x, read ~0.1x) so prompt-caching savings/costs are reflected exactly.
+ * `{batch: true}` applies the Batches API 50% discount to every token class.
  *
  * Note: `promptTokens` should be the *uncached* input tokens — Anthropic bills cache
  * creation/read tokens separately, so they are NOT also counted as prompt tokens.
@@ -62,16 +67,19 @@ export function modelCostUsd(
     completionTokens: number;
     cacheCreationTokens?: number;
     cacheReadTokens?: number;
-  }
+  },
+  opts: { batch?: boolean } = {}
 ): number {
   const [inputPer1M, outputPer1M] = PRICING[model] ?? PRICING['claude-sonnet-4-6'];
   const { promptTokens, completionTokens, cacheCreationTokens = 0, cacheReadTokens = 0 } = tokens;
+  const batchMultiplier = opts.batch ? BATCH_MULTIPLIER : 1;
 
   return (
-    (promptTokens / 1_000_000) * inputPer1M +
-    (completionTokens / 1_000_000) * outputPer1M +
-    (cacheCreationTokens / 1_000_000) * inputPer1M * CACHE_WRITE_MULTIPLIER +
-    (cacheReadTokens / 1_000_000) * inputPer1M * CACHE_READ_MULTIPLIER
+    ((promptTokens / 1_000_000) * inputPer1M +
+      (completionTokens / 1_000_000) * outputPer1M +
+      (cacheCreationTokens / 1_000_000) * inputPer1M * CACHE_WRITE_MULTIPLIER +
+      (cacheReadTokens / 1_000_000) * inputPer1M * CACHE_READ_MULTIPLIER) *
+    batchMultiplier
   );
 }
 
@@ -146,6 +154,7 @@ class LLMUsageLogger {
     thinking?: boolean;
     success?: boolean;
     error?: string;
+    batch?: boolean;
   }): void {
     this.log({
       provider: opts.provider,
@@ -162,6 +171,7 @@ class LLMUsageLogger {
       thinking: opts.thinking || false,
       success: opts.success !== false,
       error: opts.error,
+      batch: opts.batch,
     });
   }
 
@@ -241,7 +251,10 @@ class LLMUsageLogger {
         if (fromTs !== undefined && !(ts >= fromTs)) continue;
         if (toTs !== undefined && !(ts <= toTs)) continue;
 
-        const costUsd = entry.provider === 'anthropic' ? modelCostUsd(entry.model, entry) : 0;
+        const costUsd =
+          entry.provider === 'anthropic'
+            ? modelCostUsd(entry.model, entry, { batch: entry.batch })
+            : 0;
         const bucket = (byModel[entry.model] ??= emptyBucket());
         for (const b of [totals, bucket]) {
           b.requests += 1;
