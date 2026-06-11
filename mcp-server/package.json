@@ -1,6 +1,6 @@
 {
   "name": "@getreka/mcp",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Reka MCP Server — connect AI assistants to your codebase memory",
   "type": "module",
   "main": "dist/index.js",
