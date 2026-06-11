@@ -42,7 +42,6 @@ export const DEFAULT_ENRICHABLE_TOOLS = new Set([
 export const DEFAULT_SKIP_TOOLS = new Set([
   "get_cache_stats",
   "warm_cache",
-  "get_prediction_stats",
   "get_tool_analytics",
   "list_aliases",
   "backup_collection",
@@ -54,9 +53,6 @@ export const DEFAULT_SKIP_TOOLS = new Set([
   "list_memories",
   "get_behavior_patterns",
   "merge_memories",
-  "feedback_search",
-  "feedback_memory",
-  "get_quality_metrics",
   "get_knowledge_gaps",
   "get_agent_types",
   "get_platform_stats",

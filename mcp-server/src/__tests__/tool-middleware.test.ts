@@ -102,7 +102,7 @@ describe("Tool Middleware", () => {
   describe("constants", () => {
     it("TRACKING_EXCLUDE contains meta tools", () => {
       expect(TRACKING_EXCLUDE.has("get_tool_analytics")).toBe(true);
-      expect(TRACKING_EXCLUDE.has("get_quality_metrics")).toBe(true);
+      expect(TRACKING_EXCLUDE.has("get_cache_stats")).toBe(true);
     });
 
     it("SESSION_TOOLS contains session management", () => {

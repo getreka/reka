@@ -255,45 +255,5 @@ export function createAnalyticsTools(projectName: string): ToolSpec[] {
         return result;
       },
     },
-    {
-      name: "get_prediction_stats",
-      description: `Get predictive loader stats for ${projectName}. Shows prediction accuracy, hit rates, and strategy breakdown.`,
-      schema: z.object({
-        sessionId: z
-          .string()
-          .optional()
-          .describe(
-            "Session ID to get stats for. If omitted, returns aggregate stats.",
-          ),
-      }),
-      annotations: TOOL_ANNOTATIONS["get_prediction_stats"],
-      handler: async (
-        args: Record<string, unknown>,
-        ctx: ToolContext,
-      ): Promise<string> => {
-        const { sessionId } = args as { sessionId?: string };
-        const params = sessionId ? `?sessionId=${sessionId}` : "";
-        const response = await ctx.api.get(`/api/predictions/stats${params}`);
-        const data = response.data;
-
-        let result = `## Prediction Stats${sessionId ? ` (Session ${sessionId})` : ""}\n\n`;
-        result += `- **Total Predictions:** ${data.totalPredictions ?? 0}\n`;
-        result += `- **Hits:** ${data.totalHits ?? 0}\n`;
-        result += `- **Misses:** ${data.totalMisses ?? 0}\n`;
-        result += `- **Hit Rate:** ${data.hitRate !== undefined ? pct(data.hitRate) : "N/A"}\n\n`;
-
-        if (data.byStrategy && Object.keys(data.byStrategy).length > 0) {
-          result += `### By Strategy\n`;
-          for (const [strategy, stats] of Object.entries(data.byStrategy) as [
-            string,
-            any,
-          ][]) {
-            result += `- **${strategy}**: ${stats.predictions} predictions, ${stats.hits} hits (${pct(stats.hitRate)})\n`;
-          }
-        }
-
-        return result;
-      },
-    },
   ];
 }

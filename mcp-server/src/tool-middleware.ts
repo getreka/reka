@@ -73,9 +73,7 @@ export const TRACKING_EXCLUDE = new Set([
   "get_knowledge_gaps",
   "analyze_usage_patterns",
   "get_behavior_patterns",
-  "get_quality_metrics",
   "get_cache_stats",
-  "get_prediction_stats",
   "get_rag_guidelines",
 ]);
 

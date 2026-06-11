@@ -129,7 +129,7 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   generate_tests: RO, // generates test suggestions
   analyze_tests: RO,
 
-  // ── analytics (8) ──────────────────────────────────────
+  // ── analytics (7) ──────────────────────────────────────
   get_tool_analytics: RO,
   get_knowledge_gaps: RO,
   get_analytics: RO,
@@ -137,7 +137,6 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   list_backups: RO,
   enable_quantization: DESTRUCT, // irreversible vector re-encoding
   get_platform_stats: RO,
-  get_prediction_stats: RO,
 
   // ── clustering (4) ─────────────────────────────────────
   cluster_code: RO, // computes clusters, no persistence
@@ -153,12 +152,6 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   start_session: MUT,
   get_session_context: RO,
   end_session: MUT,
-
-  // ── feedback (4) ───────────────────────────────────────
-  feedback_search: MUT, // stores search feedback
-  feedback_memory: MUT, // stores memory feedback
-  suggest_better_query: RO,
-  get_quality_metrics: RO,
 
   // ── suggestions (7) ────────────────────────────────────
   context_briefing: RO,

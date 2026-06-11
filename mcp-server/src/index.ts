@@ -41,7 +41,6 @@ import { createReviewTools } from "./tools/review.js";
 import { createAnalyticsTools } from "./tools/analytics.js";
 import { createClusteringTools } from "./tools/clustering.js";
 import { createSessionTools } from "./tools/session.js";
-import { createFeedbackTools } from "./tools/feedback.js";
 import { createSuggestionTools } from "./tools/suggestions.js";
 import { createCacheTools } from "./tools/cache.js";
 import { createGuidelinesTools } from "./tools/guidelines.js";
@@ -126,7 +125,6 @@ const allSpecs: ToolSpec[] = [
   ...createAnalyticsTools(PROJECT_NAME),
   ...createClusteringTools(PROJECT_NAME),
   ...createSessionTools(PROJECT_NAME, ctx),
-  ...createFeedbackTools(PROJECT_NAME),
   ...createSuggestionTools(PROJECT_NAME),
   ...createCacheTools(PROJECT_NAME),
   ...createGuidelinesTools(PROJECT_NAME),
