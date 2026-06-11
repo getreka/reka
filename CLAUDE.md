@@ -108,11 +108,11 @@ Tool Call → Sensory Buffer (Redis Stream, 24h TTL)
 
 ### MCP Server Tools
 
-The MCP server registers **33 tools, 0 hidden** (`MCP_PROFILE=full`, the default; `lite` registers a 6-tool subset). The canonical surface:
+The MCP server registers **32 tools, 0 hidden** (`MCP_PROFILE=full`, the default; `lite` registers a 6-tool subset). The canonical surface:
 
 - **Search:** `hybrid_search` (the one retrieval tool — hybrid by default, `mode: "navigate"` for a file/symbol map), `find_symbol`, `search_graph`, `search_docs`, `get_project_stats`
 - **Indexing:** `index_codebase`, `get_index_status`
-- **Memory:** `remember`, `recall`, `list_memories`, `forget`, `batch_remember`, `review_memories`, `promote_memory`, `memory_maintenance`
+- **Memory:** `remember`, `recall`, `list_memories`, `forget`, `batch_remember`, `review_memories`, `promote_memory` (governance maintenance runs on the rag-api scheduler — `scheduled-maintenance.ts` — not via a tool)
 - **Architecture:** `record_adr`, `get_adrs`, `record_pattern`, `get_patterns`, `record_tech_debt`, `get_tech_debt`
 - **Context/setup:** `context_briefing`, `setup_project`; **Session:** `start_session`, `end_session`
 - **Confluence (4):** `search_confluence`, `index_confluence`, `get_confluence_status`, `list_confluence_spaces`

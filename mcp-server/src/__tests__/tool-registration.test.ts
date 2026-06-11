@@ -25,7 +25,7 @@ import { createQualityTools } from "../tools/quality.js";
  * − memory_maintenance (PR-4.2) − 4 Confluence tools (PR-4.3).
  * Current value reflects the cuts landed so far on this branch.
  */
-const EXPECTED_TOOL_COUNT = 33;
+const EXPECTED_TOOL_COUNT = 32;
 
 describe("tool registration surface", () => {
   const allSpecs = [

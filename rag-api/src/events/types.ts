@@ -25,7 +25,8 @@ export type ConsolidationEventType =
 export type MaintenanceEventType =
   | 'maintenance:cycle.started'
   | 'maintenance:cycle.completed'
-  | 'maintenance:dedup.completed';
+  | 'maintenance:dedup.completed'
+  | 'maintenance:governance.completed';
 export type SensoryEventType = 'sensory:appended';
 
 export type DomainEventType =
@@ -116,8 +117,10 @@ export interface EventPayloadMap {
     projectsProcessed: number;
     totalMerged: number;
     totalDeleted: number;
+    totalExpired: number;
   };
   'maintenance:dedup.completed': BaseEventPayload & { merged: number; deleted: number };
+  'maintenance:governance.completed': BaseEventPayload & { expired: number };
   'sensory:appended': BaseEventPayload & { sessionId: string; eventType: string; value: unknown };
 }
 

@@ -369,9 +369,6 @@ export const mergeMemoriesSchema = z.object({
   limit: z.number().int().min(1).max(200).default(50),
 });
 
-// Note: legacy op flags (e.g. `feedback_maintenance`, removed with the feedback
-// service) are tolerated and silently stripped — zod objects drop unknown keys.
-// Keep this tolerance until mcp 0.5.0 stops sending the option.
 export const maintenanceSchema = z.object({
   projectName: projectNameSchema.optional(),
   operations: z
