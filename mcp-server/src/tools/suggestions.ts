@@ -92,6 +92,74 @@ function formatSmartDispatchResult(task: string, data: any): string {
   return result;
 }
 
+// ── setup_project: CLI-parity .mcp.json handling ─────────────────────
+// setup_project is a thin delegate of `npx @getreka/cli init` (the
+// canonical setup path). The helpers below replicate the semantics of
+// cli/src/mcp-config.ts — single "rag" server entry, legacy entries
+// ("reka" from the old CLI, "<project>-rag" from older setup_project)
+// merged into it, idempotent on re-run. Kept in sync by contract, not
+// by shared code (separate npm packages).
+
+const TARGET_SERVER_NAME = "rag";
+
+/** Packages that identify an entry as a Reka MCP server. */
+const REKA_MCP_PACKAGES = /@getreka\/mcp|@crowley\/rag-mcp/;
+
+interface McpServerEntry {
+  command?: string;
+  args?: string[];
+  env?: Record<string, string>;
+  [key: string]: unknown;
+}
+
+function isRekaMcpEntry(entry: McpServerEntry | undefined): boolean {
+  if (!entry) return false;
+  const haystack = [entry.command || "", ...(entry.args || [])].join(" ");
+  return REKA_MCP_PACKAGES.test(haystack);
+}
+
+/**
+ * Names that may hold a legacy Reka entry, in merge order
+ * (oldest first — later entries win env conflicts, new entry wins last).
+ */
+function candidateNames(projectName: string): string[] {
+  return ["reka", `${projectName}-rag`, TARGET_SERVER_NAME];
+}
+
+/**
+ * Pure merge (mirrors cli/src/mcp-config.ts mergeRagServer): folds
+ * legacy Reka entries into a single "rag" entry. command/args come from
+ * `newEntry`; env is merged with legacy values preserved unless
+ * `newEntry.env` overwrites them; non-Reka servers are untouched.
+ */
+function mergeRagServer(
+  config: { mcpServers?: Record<string, McpServerEntry> },
+  projectName: string,
+  newEntry: McpServerEntry,
+): {
+  config: { mcpServers: Record<string, McpServerEntry> };
+  removed: string[];
+} {
+  const servers: Record<string, McpServerEntry> = { ...config.mcpServers };
+
+  const candidates = candidateNames(projectName).filter((name) =>
+    isRekaMcpEntry(servers[name]),
+  );
+  const mergedEnv: Record<string, string> = {};
+  for (const name of candidates) {
+    Object.assign(mergedEnv, servers[name].env || {});
+    delete servers[name];
+  }
+  Object.assign(mergedEnv, newEntry.env || {});
+
+  servers[TARGET_SERVER_NAME] = { ...newEntry, env: mergedEnv };
+
+  return {
+    config: { ...config, mcpServers: servers },
+    removed: candidates.filter((n) => n !== TARGET_SERVER_NAME),
+  };
+}
+
 /**
  * Create the suggestions tools module with project-specific descriptions.
  */
@@ -261,7 +329,7 @@ export function createSuggestionTools(projectName: string): ToolSpec[] {
     {
       name: "setup_project",
       description:
-        "Configure Claude Code for RAG integration. Creates/updates .mcp.json, adds RAG instructions to CLAUDE.md, and configures permissions. Call after index_codebase on a new project.",
+        'Configure Claude Code for RAG integration — a thin delegate of `npx @getreka/cli init`, which is the canonical setup path (it also mints API keys and checks the Docker stack). Creates/updates .mcp.json (single "rag" server entry; merges legacy "reka"/"<project>-rag" entries), adds RAG instructions to CLAUDE.md, and configures permissions. Call after index_codebase on a new project.',
       schema: z.object({
         projectPath: z.string().describe("Absolute path to project root"),
         projectName: z
@@ -304,20 +372,18 @@ export function createSuggestionTools(projectName: string): ToolSpec[] {
         // Priority mirrors index.ts: REKA_API_KEY (new) > RAG_API_KEY (legacy)
         const apiKey =
           ragApiKey || process.env.REKA_API_KEY || process.env.RAG_API_KEY;
-        const serverName = `${targetProject}-rag`;
         const changes: string[] = [];
 
-        // 1. Create/update .mcp.json
+        // 1. Create/update .mcp.json — single "rag" entry, legacy entries
+        // ("reka", "<project>-rag") merged in (CLI init parity).
         const mcpJsonPath = path.join(projectPath, ".mcp.json");
-        let mcpConfig: any = {};
+        let mcpConfig: { mcpServers?: Record<string, McpServerEntry> } = {};
         try {
           const existing = fs.readFileSync(mcpJsonPath, "utf-8");
           mcpConfig = JSON.parse(existing);
         } catch {
           // File doesn't exist or invalid JSON
         }
-
-        if (!mcpConfig.mcpServers) mcpConfig.mcpServers = {};
 
         const serverEnv: Record<string, string> = {
           REKA_API_URL: apiUrl,
@@ -326,17 +392,25 @@ export function createSuggestionTools(projectName: string): ToolSpec[] {
         };
         if (apiKey) serverEnv.REKA_API_KEY = apiKey;
 
-        mcpConfig.mcpServers[serverName] = {
-          command: "npx",
-          args: ["-y", "@getreka/mcp@latest"],
-          env: serverEnv,
-        };
+        const { config: mergedConfig, removed } = mergeRagServer(
+          mcpConfig,
+          targetProject,
+          {
+            command: "npx",
+            args: ["-y", "@getreka/mcp@latest"],
+            env: serverEnv,
+          },
+        );
 
         fs.writeFileSync(
           mcpJsonPath,
-          JSON.stringify(mcpConfig, null, 2) + "\n",
+          JSON.stringify(mergedConfig, null, 2) + "\n",
         );
-        changes.push(`.mcp.json — added \`${serverName}\` server`);
+        changes.push(
+          removed.length
+            ? `.mcp.json — \`${TARGET_SERVER_NAME}\` server written (merged legacy: ${removed.join(", ")})`
+            : `.mcp.json — \`${TARGET_SERVER_NAME}\` server written`,
+        );
 
         // 2. Update CLAUDE.md with RAG section
         if (updateClaudeMd) {
@@ -385,7 +459,7 @@ After completing significant changes:
         if (!settings.permissions) settings.permissions = {};
         if (!settings.permissions.allow) settings.permissions.allow = [];
 
-        const mcpPermission = `mcp__${serverName}__*`;
+        const mcpPermission = `mcp__${TARGET_SERVER_NAME}__*`;
         if (!settings.permissions.allow.includes(mcpPermission)) {
           settings.permissions.allow.push(mcpPermission);
           if (!fs.existsSync(claudeDir))
@@ -426,6 +500,7 @@ After completing significant changes:
         result += `1. Restart Claude Code to load the new MCP server\n`;
         result += `2. Run \`index_codebase\` if not indexed yet\n`;
         result += `3. Use \`context_briefing\` before code changes\n`;
+        result += `\n_For full setup (API key minting, Docker stack checks), prefer \`npx @getreka/cli init\` — this tool only writes the project files._\n`;
 
         return result;
       },
