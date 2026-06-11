@@ -1540,6 +1540,7 @@ class MemoryService {
           maxTokens: 500,
           temperature: 0.3,
           think: false,
+          caller: 'memory-merge',
         }
       );
       return result.text.trim();

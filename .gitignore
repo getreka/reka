@@ -27,6 +27,9 @@ Thumbs.db
 # Docker volumes (local data)
 docker/data/
 
+# Anthropic credentials for the reka-api container (use anthropic.env.example)
+docker/anthropic.env
+
 # Cache
 .cache/
 *.cache

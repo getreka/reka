@@ -6,10 +6,28 @@ const mocks = vi.hoisted(() => ({
   anthropicStream: vi.fn(),
 }));
 
+const metricsMocks = vi.hoisted(() => ({
+  requestsInc: vi.fn(),
+  tokensInc: vi.fn(),
+  durationObserve: vi.fn(),
+}));
+
 vi.mock('axios', () => ({
   default: {
     post: mocks.post,
   },
+}));
+
+vi.mock('../../utils/metrics', () => ({
+  llmRequestsTotal: { inc: metricsMocks.requestsInc },
+  llmTokensUsed: { inc: metricsMocks.tokensInc },
+  llmDuration: { observe: metricsMocks.durationObserve },
+}));
+
+const usageMocks = vi.hoisted(() => ({ record: vi.fn() }));
+
+vi.mock('../../services/llm-usage-logger', () => ({
+  llmUsageLogger: { record: usageMocks.record },
 }));
 
 // Mock the SDK module so the import in llm.ts resolves to a dummy
@@ -36,12 +54,18 @@ function mockAnthropicClient() {
 // config is globally mocked in setup.ts (LLM_PROVIDER: 'ollama')
 import config from '../../config';
 import { llm } from '../../services/llm';
+import { circuitBreakers } from '../../utils/circuit-breaker';
+// logger is globally mocked in setup.ts
+import { logger } from '../../utils/logger';
 
 const mockedConfig = vi.mocked(config, true) as Record<string, unknown>;
 
 describe('LLMService', () => {
   beforeEach(() => {
     vi.resetAllMocks();
+    // Mocked provider failures accumulate in the shared breakers — reset between tests
+    // so an opened circuit from one test cannot fail the next.
+    circuitBreakers.resetAll();
     // Reset to defaults from setup.ts
     mockedConfig.LLM_PROVIDER = 'ollama';
     mockedConfig.OLLAMA_THINK = false;
@@ -643,6 +667,284 @@ describe('LLMService', () => {
       expect(params.tools[params.tools.length - 1].cache_control).toEqual({ type: 'ephemeral' });
       // sampling params not forwarded
       expect(params.temperature).toBeUndefined();
+    });
+  });
+
+  describe('per-call effort precedence (option > complexity default > config)', () => {
+    beforeEach(() => {
+      (llm as any).provider = 'anthropic';
+      (llm as any).anthropicClient = mockAnthropicClient();
+      mocks.anthropicCreate.mockResolvedValue({
+        content: [{ type: 'text', text: 'ok' }],
+        usage: { input_tokens: 5, output_tokens: 5 },
+      });
+    });
+
+    afterEach(() => {
+      (llm as any).provider = 'ollama';
+    });
+
+    it('per-call effort option overrides config.CLAUDE_EFFORT', async () => {
+      await llm.complete('prompt', { effort: 'max' });
+
+      const params = mocks.anthropicCreate.mock.calls[0][0];
+      expect(params.output_config?.effort).toBe('max');
+    });
+
+    it('falls back to config.CLAUDE_EFFORT when no effort option is set', async () => {
+      mockedConfig.CLAUDE_EFFORT = 'low';
+
+      await llm.complete('prompt');
+
+      const params = mocks.anthropicCreate.mock.calls[0][0];
+      expect(params.output_config?.effort).toBe('low');
+    });
+
+    it('complexity:complex defaults effort to high over config', async () => {
+      mockedConfig.CLAUDE_EFFORT = 'low';
+
+      await llm.completeWithBestProvider('prompt', { complexity: 'complex' });
+
+      const params = mocks.anthropicCreate.mock.calls[0][0];
+      expect(params.output_config?.effort).toBe('high');
+    });
+
+    it('explicit effort option beats the complexity default', async () => {
+      await llm.completeWithBestProvider('prompt', { complexity: 'complex', effort: 'xhigh' });
+
+      const params = mocks.anthropicCreate.mock.calls[0][0];
+      expect(params.output_config?.effort).toBe('xhigh');
+    });
+
+    it('threads effort into chat() requests', async () => {
+      await llm.chat([{ role: 'user', content: 'go' }], {
+        provider: 'anthropic',
+        effort: 'xhigh',
+      });
+
+      const params = mocks.anthropicCreate.mock.calls[0][0];
+      expect(params.output_config?.effort).toBe('xhigh');
+    });
+
+    it('preserves the per-call effort on the thinking-fallback retry', async () => {
+      mockedConfig.ANTHROPIC_THINK = true;
+      const err = Object.assign(new Error('Bad Request'), { status: 400 });
+      mocks.anthropicCreate.mockReset();
+      mocks.anthropicCreate.mockRejectedValueOnce(err).mockResolvedValueOnce({
+        content: [{ type: 'text', text: 'retry ok' }],
+        usage: { input_tokens: 5, output_tokens: 5 },
+      });
+
+      await llm.complete('prompt', { effort: 'medium' });
+
+      const retryParams = mocks.anthropicCreate.mock.calls[1][0];
+      expect(retryParams.output_config?.effort).toBe('medium');
+    });
+  });
+
+  describe('caller attribution (recordUsage)', () => {
+    it('threads options.caller into the usage log on complete()', async () => {
+      mocks.post.mockResolvedValue({
+        data: { message: { content: 'ok' }, prompt_eval_count: 1, eval_count: 2 },
+      });
+
+      await llm.complete('prompt', { caller: 'memory-merge' });
+
+      expect(usageMocks.record).toHaveBeenCalledWith(
+        expect.objectContaining({ caller: 'memory-merge' })
+      );
+    });
+
+    it('defaults to caller=complete when unset', async () => {
+      mocks.post.mockResolvedValue({
+        data: { message: { content: 'ok' }, prompt_eval_count: 1, eval_count: 2 },
+      });
+
+      await llm.complete('prompt');
+
+      expect(usageMocks.record).toHaveBeenCalledWith(
+        expect.objectContaining({ caller: 'complete' })
+      );
+    });
+
+    it('threads caller through completeWithBestProvider routing', async () => {
+      mocks.post.mockResolvedValue({
+        data: { message: { content: 'ok' }, prompt_eval_count: 1, eval_count: 2 },
+      });
+
+      await llm.completeWithBestProvider('prompt', {
+        complexity: 'utility',
+        caller: 'consolidation',
+      });
+
+      expect(usageMocks.record).toHaveBeenCalledWith(
+        expect.objectContaining({ caller: 'consolidation' })
+      );
+    });
+
+    it('threads caller into chat() usage records', async () => {
+      (llm as any).anthropicClient = mockAnthropicClient();
+      mocks.anthropicCreate.mockResolvedValue({
+        content: [{ type: 'text', text: 'ok' }],
+        usage: { input_tokens: 5, output_tokens: 5 },
+      });
+
+      await llm.chat([{ role: 'user', content: 'go' }], {
+        provider: 'anthropic',
+        caller: 'agent-loop',
+      });
+
+      expect(usageMocks.record).toHaveBeenCalledWith(
+        expect.objectContaining({ caller: 'agent-loop' })
+      );
+    });
+  });
+
+  describe('Prometheus metrics wiring (recordUsage)', () => {
+    it('increments llm_requests_total and input/output token classes on ollama success', async () => {
+      mocks.post.mockResolvedValue({
+        data: {
+          message: { content: 'ok' },
+          prompt_eval_count: 7,
+          eval_count: 13,
+        },
+      });
+
+      await llm.complete('prompt');
+
+      expect(metricsMocks.requestsInc).toHaveBeenCalledWith({
+        provider: 'ollama',
+        model: 'qwen2.5:32b',
+        status: 'success',
+      });
+      expect(metricsMocks.durationObserve).toHaveBeenCalledWith(
+        { provider: 'ollama', model: 'qwen2.5:32b' },
+        expect.any(Number)
+      );
+      expect(metricsMocks.tokensInc).toHaveBeenCalledWith(
+        { provider: 'ollama', model: 'qwen2.5:32b', type: 'input' },
+        7
+      );
+      expect(metricsMocks.tokensInc).toHaveBeenCalledWith(
+        { provider: 'ollama', model: 'qwen2.5:32b', type: 'output' },
+        13
+      );
+      // No cache token classes for non-Anthropic providers
+      const types = metricsMocks.tokensInc.mock.calls.map((c) => c[0].type);
+      expect(types).not.toContain('cache_read');
+      expect(types).not.toContain('cache_write');
+    });
+
+    it('increments cache_read/cache_write token classes from Anthropic cache usage', async () => {
+      (llm as any).provider = 'anthropic';
+      (llm as any).anthropicClient = mockAnthropicClient();
+      mocks.anthropicCreate.mockResolvedValue({
+        content: [{ type: 'text', text: 'cached' }],
+        usage: {
+          input_tokens: 5,
+          output_tokens: 6,
+          cache_creation_input_tokens: 100,
+          cache_read_input_tokens: 200,
+        },
+      });
+
+      await llm.complete('prompt');
+
+      expect(metricsMocks.tokensInc).toHaveBeenCalledWith(
+        { provider: 'anthropic', model: 'claude-sonnet-4-6', type: 'cache_write' },
+        100
+      );
+      expect(metricsMocks.tokensInc).toHaveBeenCalledWith(
+        { provider: 'anthropic', model: 'claude-sonnet-4-6', type: 'cache_read' },
+        200
+      );
+
+      (llm as any).provider = 'ollama';
+    });
+
+    it('increments llm_requests_total with status=error and no token classes on failure', async () => {
+      mocks.post.mockRejectedValue(new Error('boom'));
+
+      await expect(llm.complete('prompt')).rejects.toThrow('boom');
+
+      expect(metricsMocks.requestsInc).toHaveBeenCalledWith({
+        provider: 'ollama',
+        model: 'qwen2.5:32b',
+        status: 'error',
+      });
+      expect(metricsMocks.tokensInc).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('zero-cache detector', () => {
+    beforeEach(() => {
+      (llm as any).anthropicClient = mockAnthropicClient();
+    });
+
+    const zeroCacheWarns = () =>
+      vi.mocked(logger.warn).mock.calls.filter((c) => String(c[0]).includes('Zero-cache'));
+
+    // chat() with a systemPrompt always sends a cache_control breakpoint.
+    const chatOnce = (
+      caller: string,
+      usage: Record<string, number>,
+      opts: Record<string, unknown> = {}
+    ) => {
+      mocks.anthropicCreate.mockResolvedValue({
+        content: [{ type: 'text', text: 'ok' }],
+        usage,
+      });
+      return llm.chat([{ role: 'user', content: 'go' }], {
+        provider: 'anthropic',
+        systemPrompt: 'agent system prompt',
+        caller,
+        ...opts,
+      });
+    };
+
+    it('warns when cache_control was sent but no cache tokens came back', async () => {
+      // The ~1.6K-token agent-loop prefix is below the Sonnet/Opus cacheable
+      // minimum — this firing is the diagnostic working as designed.
+      await chatOnce('zc-a', { input_tokens: 1600, output_tokens: 10 });
+
+      expect(zeroCacheWarns()).toHaveLength(1);
+      expect(zeroCacheWarns()[0][1]).toMatchObject({ caller: 'zc-a', promptTokens: 1600 });
+    });
+
+    it('warns only once per distinct caller per process', async () => {
+      await chatOnce('zc-b', { input_tokens: 1600, output_tokens: 10 });
+      await chatOnce('zc-b', { input_tokens: 1600, output_tokens: 10 });
+
+      expect(zeroCacheWarns()).toHaveLength(1);
+
+      await chatOnce('zc-b2', { input_tokens: 1600, output_tokens: 10 });
+
+      expect(zeroCacheWarns()).toHaveLength(2);
+    });
+
+    it('does not warn when cache tokens are reported', async () => {
+      await chatOnce('zc-c', {
+        input_tokens: 100,
+        output_tokens: 10,
+        cache_read_input_tokens: 1500,
+      });
+
+      expect(zeroCacheWarns()).toHaveLength(0);
+    });
+
+    it('does not warn when the request carried no cache_control', async () => {
+      // No systemPrompt and no tools — chat() sets no cache_control breakpoints.
+      mocks.anthropicCreate.mockResolvedValue({
+        content: [{ type: 'text', text: 'ok' }],
+        usage: { input_tokens: 100, output_tokens: 10 },
+      });
+
+      await llm.chat([{ role: 'user', content: 'go' }], {
+        provider: 'anthropic',
+        caller: 'zc-d',
+      });
+
+      expect(zeroCacheWarns()).toHaveLength(0);
     });
   });
 

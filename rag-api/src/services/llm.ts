@@ -16,6 +16,9 @@ import { logger } from '../utils/logger';
 import { withRetry } from '../utils/retry';
 import { ollamaCircuit, anthropicCircuit, openaiCircuit } from '../utils/circuit-breaker';
 import { llmUsageLogger } from './llm-usage-logger';
+import { llmRequestsTotal, llmTokensUsed, llmDuration } from '../utils/metrics';
+
+export type EffortLevel = 'low' | 'medium' | 'high' | 'xhigh' | 'max';
 
 export interface CompletionOptions {
   maxTokens?: number;
@@ -26,6 +29,8 @@ export interface CompletionOptions {
   jsonSchema?: Record<string, unknown>; // Claude: output_config.format json_schema (overrides format)
   stream?: boolean; // Enable streaming (default false)
   signal?: AbortSignal; // Cancels the in-flight provider call (axios + Anthropic SDK honor it)
+  caller?: string; // Usage attribution (e.g. 'consolidation', 'memory-merge', 'tribunal-judge', 'agent-loop')
+  effort?: EffortLevel; // Anthropic output_config.effort — precedence: option > complexity default > config.CLAUDE_EFFORT
 }
 
 export interface CompletionResult {
@@ -44,6 +49,12 @@ export interface CompletionResult {
 
 export type ComplexityLevel = 'utility' | 'standard' | 'complex';
 
+// Default output_config.effort per complexity level. Per-call precedence is
+// option.effort > this complexity default > config.CLAUDE_EFFORT (no new env knobs).
+const COMPLEXITY_EFFORT_DEFAULTS: Partial<Record<ComplexityLevel, EffortLevel>> = {
+  complex: 'high',
+};
+
 // Failover chains: ordered list of providers to try
 type ProviderName = 'ollama' | 'anthropic' | 'openai';
 const FAILOVER_CHAINS: Record<ProviderName, ProviderName[]> = {
@@ -55,6 +66,9 @@ const FAILOVER_CHAINS: Record<ProviderName, ProviderName[]> = {
 class LLMService {
   private provider: string;
   private anthropicClient: Anthropic | null = null;
+  // Zero-cache detector: callers already warned about, so each distinct caller
+  // logs at most once per process (don't spam the agent loop on every iteration).
+  private zeroCacheWarnedCallers = new Set<string>();
 
   constructor() {
     this.provider = config.LLM_PROVIDER;
@@ -103,6 +117,7 @@ class LLMService {
           return this.completeWithAnthropic(prompt, {
             ...completionOptions,
             think: completionOptions.think ?? true,
+            effort: completionOptions.effort ?? COMPLEXITY_EFFORT_DEFAULTS[complexity],
           });
         }
         // Fallback to configured provider if no Claude key
@@ -166,7 +181,7 @@ class LLMService {
   }
 
   /**
-   * Record LLM usage for cost tracking.
+   * Record LLM usage for cost tracking and Prometheus metrics.
    */
   private recordUsage(
     provider: string,
@@ -181,8 +196,52 @@ class LLMService {
       | undefined,
     durationMs: number,
     caller: string,
-    opts: { thinking?: boolean; success?: boolean; error?: string; projectName?: string } = {}
+    opts: {
+      thinking?: boolean;
+      success?: boolean;
+      error?: string;
+      projectName?: string;
+      batch?: boolean;
+      cacheControl?: boolean; // true when the request carried cache_control breakpoints
+    } = {}
   ): void {
+    // Zero-cache detector (ground truth): the request asked for prompt caching but the
+    // response reported neither a cache write nor a cache read. The usual cause is a
+    // prefix below the model's minimum cacheable length (Sonnet 4.6 ≥ 2048, Opus 4.8
+    // ≥ 4096 tokens) — e.g. the ~1.6K-token agent-loop prefix. Expected to fire there;
+    // record the finding, don't chase it. Warns once per distinct caller per process.
+    if (
+      opts.cacheControl &&
+      opts.success !== false &&
+      usage &&
+      !usage.cacheCreationTokens &&
+      !usage.cacheReadTokens &&
+      !this.zeroCacheWarnedCallers.has(caller)
+    ) {
+      this.zeroCacheWarnedCallers.add(caller);
+      logger.warn(
+        'Zero-cache: request sent cache_control but no cache tokens were reported — ' +
+          'prompt prefix is likely below the model minimum cacheable length',
+        { provider, model, caller, promptTokens: usage.promptTokens }
+      );
+    }
+    // Prometheus: llm_requests_total / llm_duration_seconds / llm_tokens_total with
+    // token-class labels (input|output|cache_read|cache_write). Cache classes are only
+    // incremented when non-zero so non-Anthropic providers don't emit dead series.
+    const status = opts.success === false ? 'error' : 'success';
+    llmRequestsTotal.inc({ provider, model, status });
+    llmDuration.observe({ provider, model }, durationMs / 1000);
+    if (usage) {
+      llmTokensUsed.inc({ provider, model, type: 'input' }, usage.promptTokens || 0);
+      llmTokensUsed.inc({ provider, model, type: 'output' }, usage.completionTokens || 0);
+      if (usage.cacheCreationTokens) {
+        llmTokensUsed.inc({ provider, model, type: 'cache_write' }, usage.cacheCreationTokens);
+      }
+      if (usage.cacheReadTokens) {
+        llmTokensUsed.inc({ provider, model, type: 'cache_read' }, usage.cacheReadTokens);
+      }
+    }
+
     llmUsageLogger.record({
       provider,
       model,
@@ -196,6 +255,7 @@ class LLMService {
       thinking: opts.thinking,
       success: opts.success,
       error: opts.error,
+      batch: opts.batch,
     });
   }
 
@@ -269,7 +329,7 @@ class LLMService {
         config.OLLAMA_MODEL,
         result.usage,
         Date.now() - startTime,
-        'complete',
+        options.caller || 'complete',
         { thinking: enableThink }
       );
       return result;
@@ -299,7 +359,7 @@ class LLMService {
           config.OLLAMA_MODEL,
           result.usage,
           Date.now() - startTime,
-          'complete',
+          options.caller || 'complete',
           { thinking: false }
         );
         return result;
@@ -309,7 +369,7 @@ class LLMService {
         config.OLLAMA_MODEL,
         undefined,
         Date.now() - startTime,
-        'complete',
+        options.caller || 'complete',
         { success: false, error: error.message }
       );
       logger.error('Ollama completion failed', { error: error.message });
@@ -384,7 +444,7 @@ class LLMService {
         config.OPENAI_MODEL,
         undefined,
         Date.now() - startTime,
-        'complete',
+        options.caller || 'complete',
         { success: false, error: error.message }
       );
       logger.error('OpenAI completion failed', { error: error.message });
@@ -400,14 +460,15 @@ class LLMService {
    * Apply Anthropic-specific request config in one place:
    *  - adaptive thinking (`thinking: {type: 'adaptive'}`) when enabled; OMITTED when disabled
    *    (never send `{type: 'disabled'}` — it 400s on Fable 5)
-   *  - output_config.effort from config.CLAUDE_EFFORT (cast for SDK type — 'xhigh' / fable-5)
+   *  - output_config.effort: per-call effort when supplied, else config.CLAUDE_EFFORT
    *  - output_config.format json_schema for structured outputs
    * Sampling params are never set here — they 400 on current models.
    */
   private applyAnthropicOutputConfig(
     params: Anthropic.MessageCreateParams,
     enableThinking: boolean,
-    jsonSchema?: Record<string, unknown>
+    jsonSchema?: Record<string, unknown>,
+    effort?: EffortLevel
   ): void {
     if (enableThinking) {
       params.thinking = { type: 'adaptive' };
@@ -415,7 +476,7 @@ class LLMService {
 
     const outputConfig: Anthropic.OutputConfig = {
       // 'xhigh' is valid on Fable 5 / Opus 4.7+ but absent from the 0.78 SDK enum — cast.
-      effort: config.CLAUDE_EFFORT as Anthropic.OutputConfig['effort'],
+      effort: (effort ?? config.CLAUDE_EFFORT) as Anthropic.OutputConfig['effort'],
     };
     if (jsonSchema) {
       outputConfig.format = { type: 'json_schema', schema: jsonSchema };
@@ -457,7 +518,8 @@ class LLMService {
           enableThinking,
           maxTokens,
           options.jsonSchema,
-          options.signal
+          options.signal,
+          options.effort
         );
       }
 
@@ -473,7 +535,7 @@ class LLMService {
         params.system = systemPrompt;
       }
 
-      this.applyAnthropicOutputConfig(params, enableThinking, options.jsonSchema);
+      this.applyAnthropicOutputConfig(params, enableThinking, options.jsonSchema, options.effort);
 
       const response = await anthropicCircuit.execute(() =>
         withRetry(
@@ -494,7 +556,7 @@ class LLMService {
         config.ANTHROPIC_MODEL,
         result.usage,
         Date.now() - startTime,
-        'complete',
+        options.caller || 'complete',
         { thinking: enableThinking }
       );
       return result;
@@ -512,7 +574,7 @@ class LLMService {
         if (systemPrompt) {
           params.system = systemPrompt;
         }
-        this.applyAnthropicOutputConfig(params, false, options.jsonSchema);
+        this.applyAnthropicOutputConfig(params, false, options.jsonSchema, options.effort);
         const response = await client.messages.create(params, { signal: options.signal });
         const result = this.parseAnthropicResponse(response);
         this.recordUsage(
@@ -520,7 +582,7 @@ class LLMService {
           config.ANTHROPIC_MODEL,
           result.usage,
           Date.now() - startTime,
-          'complete',
+          options.caller || 'complete',
           { thinking: false }
         );
         return result;
@@ -531,7 +593,7 @@ class LLMService {
         config.ANTHROPIC_MODEL,
         undefined,
         Date.now() - startTime,
-        'complete',
+        options.caller || 'complete',
         { success: false, error: error.message, thinking: enableThinking }
       );
       logger.error('Anthropic completion failed', {
@@ -553,7 +615,8 @@ class LLMService {
     enableThinking: boolean,
     maxTokens: number,
     jsonSchema?: Record<string, unknown>,
-    signal?: AbortSignal
+    signal?: AbortSignal,
+    effort?: EffortLevel
   ): Promise<CompletionResult> {
     const params: Anthropic.MessageCreateParams = {
       model: config.ANTHROPIC_MODEL,
@@ -566,7 +629,7 @@ class LLMService {
       params.system = systemPrompt;
     }
 
-    this.applyAnthropicOutputConfig(params, enableThinking, jsonSchema);
+    this.applyAnthropicOutputConfig(params, enableThinking, jsonSchema, effort);
 
     const stream = client.messages.stream(params, { signal });
     const response = await stream.finalMessage();
@@ -707,7 +770,7 @@ class LLMService {
       params.system = [{ type: 'text', text: systemPrompt, cache_control: { type: 'ephemeral' } }];
     }
 
-    this.applyAnthropicOutputConfig(params, enableThinking, options.jsonSchema);
+    this.applyAnthropicOutputConfig(params, enableThinking, options.jsonSchema, options.effort);
 
     if (options.tools && options.tools.length > 0) {
       // Mark the last tool definition with cache_control so the (stable) tool list is cached
@@ -750,9 +813,18 @@ class LLMService {
       cacheCreationTokens: response.usage.cache_creation_input_tokens ?? undefined,
       cacheReadTokens: response.usage.cache_read_input_tokens ?? undefined,
     };
-    this.recordUsage('anthropic', config.ANTHROPIC_MODEL, usage, Date.now() - startTime, 'chat', {
-      thinking: enableThinking,
-    });
+    this.recordUsage(
+      'anthropic',
+      config.ANTHROPIC_MODEL,
+      usage,
+      Date.now() - startTime,
+      options.caller || 'chat',
+      {
+        thinking: enableThinking,
+        // cache_control breakpoints are set on the system block and/or the last tool
+        cacheControl: Boolean(systemPrompt) || Boolean(params.tools?.length),
+      }
+    );
 
     return {
       text,
@@ -831,7 +903,7 @@ class LLMService {
         config.AGENT_OLLAMA_MODEL,
         { promptTokens: result.promptTokens, completionTokens: result.completionTokens },
         Date.now() - startTime,
-        'chat',
+        options.caller || 'chat',
         { thinking: enableThink }
       );
       return result;
@@ -854,7 +926,7 @@ class LLMService {
           config.AGENT_OLLAMA_MODEL,
           { promptTokens: result.promptTokens, completionTokens: result.completionTokens },
           Date.now() - startTime,
-          'chat',
+          options.caller || 'chat',
           { thinking: false }
         );
         return result;
@@ -864,7 +936,7 @@ class LLMService {
         config.AGENT_OLLAMA_MODEL,
         undefined,
         Date.now() - startTime,
-        'chat',
+        options.caller || 'chat',
         { success: false, error: error.message }
       );
       logger.error('Ollama chat failed', { error: error.message });
