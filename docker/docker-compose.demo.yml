@@ -1,8 +1,8 @@
 # Demo deployment - lightweight stack for hosted demo at getreka.dev
 # Usage: docker compose -f docker-compose.yml -f docker-compose.demo.yml up -d
 #
-# Excludes: ollama (uses Claude API), monitoring stack
-# Includes: qdrant, bge-m3, redis, rag-api, dashboard (demo nginx)
+# Excludes: monitoring stack (LLM completions use the Claude API)
+# Includes: qdrant, ollama (embeddings), redis, rag-api, dashboard (demo nginx)
 
 services:
   rag-api:
@@ -42,12 +42,11 @@ services:
         max-size: "20m"
         max-file: "3"
 
-  bge-m3:
-    restart: always
-
   redis:
     restart: always
 
-  # Disable ollama for demo (uses Claude API)
+  # NOTE: ollama stays enabled — the base stack uses it for embeddings
+  # (EMBEDDING_PROVIDER=ollama) and rag-api has a hard depends_on it.
+  # Only LLM completions are routed to the Claude API via LLM_PROVIDER=anthropic.
   ollama:
-    profiles: ["disabled"]
+    restart: always

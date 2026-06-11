@@ -58,10 +58,13 @@ vault/
 
 # Internal development
 .claude/
-landing/
-design_rag
+landing/*
+!landing/design/
+!landing/design/**
 brand/
-docs/
+docs/*
+!docs/archive/
+!docs/archive/**
 scripts/
 ROADMAP-REKA.md
 MIGRATION.md

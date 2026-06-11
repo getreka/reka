@@ -45,12 +45,12 @@ The fastest way to use Reka. Two commands inside Claude Code:
 
 The plugin gives you the full Reka experience without any manual MCP configuration:
 
-| What you get | Details |
-|---|---|
+| What you get    | Details                                                                                                                                                                  |
+| --------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
 | **10 commands** | `/reka:code`, `/reka:investigate`, `/reka:review`, `/reka:arch`, `/reka:debate`, `/reka:start`, `/reka:end`, `/reka:onboard`, `/reka:memory-review`, `/reka:restart-api` |
-| **5 agents** | feature-builder, code-reviewer, test-writer, rag-researcher, rag-ops -- all with persistent memory |
-| **4 hooks** | Auto session lifecycle, context checks before edits, Prettier + tsc on save, memory consolidation on stop |
-| **MCP server** | `@getreka/mcp` auto-configured with your API key (stored in OS keychain) |
+| **5 agents**    | feature-builder, code-reviewer, test-writer, rag-researcher, rag-ops -- all with persistent memory                                                                       |
+| **4 hooks**     | Auto session lifecycle, context checks before edits, Prettier + tsc on save, memory consolidation on stop                                                                |
+| **MCP server**  | `@getreka/mcp` auto-configured with your API key (stored in OS keychain)                                                                                                 |
 
 ### Team auto-install
 
@@ -88,7 +88,7 @@ Add to your project's `.claude/settings.json` and every team member gets the plu
 ```bash
 # 1. Start the infrastructure
 git clone https://github.com/getreka/reka.git
-cd reka && docker-compose up -d
+cd reka/docker && docker compose up -d
 
 # 2. Initialize your project (generates API key + .mcp.json)
 npx @getreka/cli init --project my-app
@@ -144,16 +144,16 @@ The generated `.mcp.json`:
         ▼
  Reka API (:3100)        ← Express server
         │
-   ┌────┼────┬────┐
-   ▼    ▼    ▼    ▼
- Qdrant Ollama BGE-M3 Redis
- vectors  LLM  embed  cache
+    ┌───────┼───────┐
+    ▼       ▼       ▼
+ Qdrant   Ollama   Redis
+ vectors LLM+embed cache
 ```
 
 Each project gets isolated collections in Qdrant:
 
 - `myapp_codebase` -- indexed source code
-- `myapp_memory` -- decisions, patterns, insights
+- `myapp_agent_memory` -- decisions, patterns, insights
 - `myapp_graph` -- import/dependency relationships
 - `myapp_symbols` -- function/class/type index
 
@@ -181,7 +181,6 @@ No cross-contamination between projects. One backend serves them all.
 
 - **Multi-language** -- TypeScript, Python, Go, Rust, Java, C#, and more
 - **Incremental** -- hash-based change detection, only re-indexes what changed
-- **Confluence** -- index your team's docs alongside code
 - **Knowledge graph** -- auto-extracts import/export relationships
 
 ### Platform
@@ -193,23 +192,17 @@ No cross-contamination between projects. One backend serves them all.
 
 ### LLM & Embedding
 
-- **Fully local** -- Ollama + BGE-M3, zero API keys needed
+- **Fully local** -- Ollama for both LLM and embeddings (default), zero API keys needed
 - **Or hybrid** -- local for fast tasks, Claude/GPT-4 for complex analysis
-- **Your choice** -- Ollama, OpenAI, or Anthropic for LLM; BGE-M3, OpenAI, or Ollama for embeddings
+- **Your choice** -- Ollama, OpenAI, or Anthropic for LLM; Ollama (default), OpenAI, or BGE-M3 for embeddings
 
 ---
 
-## Deployment Options
+## Deployment
 
-|                    | Self-Hosted              | Hybrid                        | Cloud                |
-| ------------------ | ------------------------ | ----------------------------- | -------------------- |
-| **Price**          | Free                     | $12/dev/mo                    | $35/dev/mo           |
-| **Infrastructure** | Your machine             | Local + Reka Cloud            | Fully managed        |
-| **Data residency** | 100% local               | Code local, vectors in cloud  | Cloud                |
-| **Setup**          | `docker-compose up`      | Coming soon                   | Coming soon          |
-| **Best for**       | Privacy-first, solo devs | Teams wanting zero-ops search | Enterprise, no infra |
+**Self-Hosted -- free.** The full platform with zero limitations, running entirely on your machine: `cd docker && docker compose up -d`.
 
-Self-hosted is the full platform with zero limitations. Hybrid and Cloud are coming soon -- [join the waitlist](https://getreka.dev).
+A self-hosted Team license is planned, but only if there is real demand -- [tell us if you want it](https://github.com/getreka/reka/issues).
 
 ---
 
@@ -229,17 +222,19 @@ For the **Claude Code plugin only**: Claude Code 1.0.33+, Node.js 22+. Docker re
 
 ## Configuration
 
-Key environment variables for `rag-api/.env`:
+Key environment variables for `rag-api/.env` (values shown are what the Docker stack in `docker/docker-compose.yml` uses):
 
-| Variable             | Default                  | Description                         |
-| -------------------- | ------------------------ | ----------------------------------- |
-| `EMBEDDING_PROVIDER` | `bge-m3-server`          | `bge-m3-server`, `ollama`, `openai` |
-| `LLM_PROVIDER`       | `ollama`                 | `ollama`, `openai`, `anthropic`     |
-| `OLLAMA_MODEL`       | `qwen3.5:35b`            | Model for LLM completions           |
-| `QDRANT_URL`         | `http://localhost:6333`  | Vector database                     |
-| `REDIS_URL`          | `redis://localhost:6380` | Cache (optional, recommended)       |
-| `OPENAI_API_KEY`     | --                       | Required if using OpenAI            |
-| `ANTHROPIC_API_KEY`  | --                       | Required if using Anthropic         |
+| Variable                 | Docker stack value       | Description                         |
+| ------------------------ | ------------------------ | ----------------------------------- |
+| `EMBEDDING_PROVIDER`     | `ollama`                 | `ollama`, `openai`, `bge-m3-server` |
+| `OLLAMA_EMBEDDING_MODEL` | `qwen3-embedding:4b`     | Embedding model                     |
+| `VECTOR_SIZE`            | `2560`                   | Embedding dimensions                |
+| `LLM_PROVIDER`           | `ollama`                 | `ollama`, `openai`, `anthropic`     |
+| `OLLAMA_MODEL`           | `qwen3.5:9b`             | Model for LLM completions           |
+| `QDRANT_URL`             | `http://localhost:6333`  | Vector database                     |
+| `REDIS_URL`              | `redis://localhost:6380` | Cache (optional, recommended)       |
+| `OPENAI_API_KEY`         | --                       | Required if using OpenAI            |
+| `ANTHROPIC_API_KEY`      | --                       | Required if using Anthropic         |
 
 Default config runs fully local -- no API keys needed.
 
@@ -279,17 +274,17 @@ Memory explorer, search playground, project analytics, indexing status, system h
 
 ## Comparison
 
-|                   | **Reka**       | Cursor Memory | Cody (Sourcegraph) | Continue.dev | Greptile   |
-| ----------------- | -------------- | ------------- | ------------------ | ------------ | ---------- |
-| Self-hosted       | Fully          | Cloud only    | Partial            | Yes          | Cloud only |
-| Claude Code plugin| Yes            | No            | No                 | No           | No         |
-| Memory governance | Full lifecycle | No            | No                 | No           | No         |
-| Multi-project     | Isolated       | Per-workspace | Yes                | Limited      | Yes        |
-| Code graph        | Yes            | No            | Yes                | No           | Yes        |
-| MCP native        | Yes            | No            | No                 | Yes          | No         |
-| LLM choice        | Any            | Locked        | Locked             | Any          | Locked     |
-| Data privacy      | 100% local     | Cloud         | Partial            | Local        | Cloud      |
-| Cost              | Free           | $/seat        | $/seat             | Free         | $/repo     |
+|                    | **Reka**       | Cursor Memory | Cody (Sourcegraph) | Continue.dev | Greptile   |
+| ------------------ | -------------- | ------------- | ------------------ | ------------ | ---------- |
+| Self-hosted        | Fully          | Cloud only    | Partial            | Yes          | Cloud only |
+| Claude Code plugin | Yes            | No            | No                 | No           | No         |
+| Memory governance  | Full lifecycle | No            | No                 | No           | No         |
+| Multi-project      | Isolated       | Per-workspace | Yes                | Limited      | Yes        |
+| Code graph         | Yes            | No            | Yes                | No           | Yes        |
+| MCP native         | Yes            | No            | No                 | Yes          | No         |
+| LLM choice         | Any            | Locked        | Locked             | Any          | Locked     |
+| Data privacy       | 100% local     | Cloud         | Partial            | Local        | Cloud      |
+| Cost               | Free           | $/seat        | $/seat             | Free         | $/repo     |
 
 ---
 
@@ -301,8 +296,10 @@ reka/
 ├── mcp-server/       # MCP server (@getreka/mcp)
 ├── cli/              # CLI tool (@getreka/cli)
 ├── dashboard/        # Web dashboard (Vue 3)
-├── docker/           # Dockerfiles, Grafana, Prometheus configs
-└── docker-compose.yml
+├── docker/           # Canonical compose stack + Grafana, Prometheus configs
+├── docs/archive/     # Historical status snapshots
+├── landing/design/   # Landing page design source (.pen)
+└── docker-compose.yml  # Thin shim that includes docker/docker-compose.yml
 ```
 
 **Plugin:** [getreka/reka-plugin](https://github.com/getreka/reka-plugin) -- Claude Code plugin (separate repo)
