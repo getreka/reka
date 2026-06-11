@@ -20,11 +20,8 @@ const DEFAULT_TIMEOUT_MS = 30_000;
 
 /** Per-tool timeout overrides (ms) */
 export const TOOL_TIMEOUTS: Record<string, number> = {
-  // Indexing / heavy analysis — up to 2 min
+  // Indexing — up to 2 min
   index_codebase: 120_000,
-  reindex_zero_downtime: 120_000,
-  analyze_project_structure: 60_000,
-  estimate_feature: 60_000,
   // Quick search — 15 s
   hybrid_search: 15_000,
   search_graph: 15_000,
@@ -65,8 +62,6 @@ async function withTimeout<T>(
 export const TRACKING_EXCLUDE = new Set([
   "get_tool_analytics",
   "get_knowledge_gaps",
-  "get_cache_stats",
-  "get_rag_guidelines",
 ]);
 
 /** Session management tools — skip auto-session to avoid recursion */

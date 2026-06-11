@@ -1,6 +1,6 @@
 /**
  * Analytics tools module - tool analytics, knowledge gaps, collection analytics,
- * backups, and quantization.
+ * and platform stats.
  */
 
 import type { ToolSpec, ToolContext } from "../types.js";
@@ -121,110 +121,6 @@ export function createAnalyticsTools(projectName: string): ToolSpec[] {
         }
 
         result += `\n- **Last Indexed:** ${data.lastIndexed ? new Date(data.lastIndexed).toLocaleString() : "Never"}\n`;
-
-        return result;
-      },
-    },
-    {
-      name: "backup_collection",
-      description: `Create a backup snapshot of a ${projectName} collection.`,
-      schema: z.object({
-        collectionName: z.string().describe("Collection name to backup"),
-      }),
-      annotations: TOOL_ANNOTATIONS["backup_collection"],
-      handler: async (
-        args: Record<string, unknown>,
-        ctx: ToolContext,
-      ): Promise<string> => {
-        const { collectionName } = args as { collectionName: string };
-        const fullName = collectionName.startsWith(ctx.collectionPrefix)
-          ? collectionName
-          : `${ctx.collectionPrefix}${collectionName}`;
-        const response = await ctx.api.post(
-          `/api/collections/${fullName}/snapshots`,
-        );
-        const data = response.data;
-
-        let result = `## Backup Created\n\n`;
-        result += `- **Collection:** ${fullName}\n`;
-        result += `- **Snapshot:** ${data.name || data.snapshotName || "N/A"}\n`;
-        result += `- **Created:** ${data.createdAt ? new Date(data.createdAt).toLocaleString() : new Date().toLocaleString()}\n`;
-
-        return result;
-      },
-    },
-    {
-      name: "list_backups",
-      description: `List backup snapshots for a ${projectName} collection.`,
-      schema: z.object({
-        collectionName: z
-          .string()
-          .describe("Collection name to list backups for"),
-      }),
-      annotations: TOOL_ANNOTATIONS["list_backups"],
-      handler: async (
-        args: Record<string, unknown>,
-        ctx: ToolContext,
-      ): Promise<string> => {
-        const { collectionName } = args as { collectionName: string };
-        const fullName = collectionName.startsWith(ctx.collectionPrefix)
-          ? collectionName
-          : `${ctx.collectionPrefix}${collectionName}`;
-        const response = await ctx.api.get(
-          `/api/collections/${fullName}/snapshots`,
-        );
-        const snapshots = response.data.snapshots || response.data;
-
-        if (!snapshots || snapshots.length === 0) {
-          return `No backups found for ${fullName}.`;
-        }
-
-        let result = `## Backups: ${fullName}\n\n`;
-        for (const s of snapshots) {
-          const sizeMB = s.size ? (s.size / (1024 * 1024)).toFixed(2) : "?";
-          result += `- **${s.name}** - ${sizeMB} MB`;
-          if (s.createdAt)
-            result += ` (${new Date(s.createdAt).toLocaleString()})`;
-          result += "\n";
-        }
-
-        return result;
-      },
-    },
-    {
-      name: "enable_quantization",
-      description: `Enable scalar quantization on a ${projectName} collection to reduce memory usage.`,
-      schema: z.object({
-        collectionName: z
-          .string()
-          .describe("Collection name to enable quantization on"),
-        quantile: z.coerce
-          .number()
-          .optional()
-          .describe("Quantile for quantization (0-1, default: 0.99)"),
-      }),
-      annotations: TOOL_ANNOTATIONS["enable_quantization"],
-      handler: async (
-        args: Record<string, unknown>,
-        ctx: ToolContext,
-      ): Promise<string> => {
-        const { collectionName, quantile = 0.99 } = args as {
-          collectionName: string;
-          quantile?: number;
-        };
-        const fullName = collectionName.startsWith(ctx.collectionPrefix)
-          ? collectionName
-          : `${ctx.collectionPrefix}${collectionName}`;
-        const response = await ctx.api.post(
-          `/api/collections/${fullName}/quantization`,
-          { quantile },
-        );
-        const data = response.data;
-
-        let result = `## Quantization Enabled\n\n`;
-        result += `- **Collection:** ${fullName}\n`;
-        result += `- **Quantile:** ${quantile}\n`;
-        result += `- **Expected Reduction:** ${data.expectedReduction || "~4x memory reduction"}\n`;
 
         return result;
       },

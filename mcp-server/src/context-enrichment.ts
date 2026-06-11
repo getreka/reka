@@ -26,24 +26,14 @@ interface RecalledMemory {
  */
 export const DEFAULT_ENRICHABLE_TOOLS = new Set([
   "hybrid_search",
-  "review_code",
-  "generate_tests",
-  "check_architecture",
   "context_briefing",
   "run_agent",
 ]);
 
 export const DEFAULT_SKIP_TOOLS = new Set([
-  "get_cache_stats",
-  "warm_cache",
   "get_tool_analytics",
-  "list_aliases",
-  "backup_collection",
-  "enable_quantization",
-  "list_backups",
   "get_index_status",
   "get_project_stats",
-  "get_rag_guidelines",
   "list_memories",
   "get_knowledge_gaps",
   "get_agent_types",

@@ -35,13 +35,9 @@ import { createMemoryTools } from "./tools/memory.js";
 import { createArchitectureTools } from "./tools/architecture.js";
 import { createDatabaseTools } from "./tools/database.js";
 import { createConfluenceTools } from "./tools/confluence.js";
-import { createPmTools } from "./tools/pm.js";
-import { createReviewTools } from "./tools/review.js";
 import { createAnalyticsTools } from "./tools/analytics.js";
 import { createSessionTools } from "./tools/session.js";
 import { createSuggestionTools } from "./tools/suggestions.js";
-import { createCacheTools } from "./tools/cache.js";
-import { createGuidelinesTools } from "./tools/guidelines.js";
 import { createAgentTools } from "./tools/agents.js";
 import { createQualityTools } from "./tools/quality.js";
 
@@ -116,13 +112,9 @@ const allSpecs: ToolSpec[] = [
   ...createArchitectureTools(PROJECT_NAME),
   ...createDatabaseTools(PROJECT_NAME),
   ...createConfluenceTools(PROJECT_NAME),
-  ...createPmTools(PROJECT_NAME),
-  ...createReviewTools(PROJECT_NAME),
   ...createAnalyticsTools(PROJECT_NAME),
   ...createSessionTools(PROJECT_NAME, ctx),
   ...createSuggestionTools(PROJECT_NAME),
-  ...createCacheTools(PROJECT_NAME),
-  ...createGuidelinesTools(PROJECT_NAME),
   ...createAgentTools(PROJECT_NAME),
   ...createQualityTools(PROJECT_NAME),
 ];

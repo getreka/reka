@@ -59,11 +59,9 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   find_symbol: RO,
   search_graph: RO,
 
-  // ── indexing (4) ────────────────────────────────────────
+  // ── indexing (2) ────────────────────────────────────────
   index_codebase: MUT,
   get_index_status: RO,
-  reindex_zero_downtime: MUT,
-  list_aliases: RO,
 
   // ── memory (8) ─────────────────────────────────────────
   remember: MUT,
@@ -75,16 +73,13 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   promote_memory: UPSERT, // idempotent promotion
   memory_maintenance: DESTRUCT, // prunes old memories
 
-  // ── architecture (9) ───────────────────────────────────
+  // ── architecture (6) ───────────────────────────────────
   record_adr: UPSERT,
   get_adrs: RO,
   record_pattern: UPSERT,
   get_patterns: RO,
-  check_architecture: RO,
-  suggest_architecture: RO,
   record_tech_debt: UPSERT,
   get_tech_debt: RO,
-  analyze_project_structure: RO,
 
   // ── database (8) ───────────────────────────────────────
   record_table: UPSERT,
@@ -102,27 +97,10 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   get_confluence_status: RO,
   list_confluence_spaces: RO,
 
-  // ── pm (7) ─────────────────────────────────────────────
-  search_requirements: RO,
-  analyze_requirements: RO,
-  estimate_feature: RO,
-  get_feature_status: RO,
-  list_requirements: RO,
-  ask_pm: RO,
-  generate_spec: RO,
-
-  // ── review (3) ─────────────────────────────────────────
-  review_code: RO, // generates review, no side-effects
-  generate_tests: RO, // generates test suggestions
-  analyze_tests: RO,
-
-  // ── analytics (7) ──────────────────────────────────────
+  // ── analytics (4) ──────────────────────────────────────
   get_tool_analytics: RO,
   get_knowledge_gaps: RO,
   get_analytics: RO,
-  backup_collection: MUT, // creates a backup snapshot
-  list_backups: RO,
-  enable_quantization: DESTRUCT, // irreversible vector re-encoding
   get_platform_stats: RO,
 
   // ── session (2) ────────────────────────────────────────
@@ -132,13 +110,6 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   // ── suggestions (2) ────────────────────────────────────
   context_briefing: RO,
   setup_project: UPSERT, // writes config (idempotent)
-
-  // ── cache (2) ──────────────────────────────────────────
-  get_cache_stats: RO,
-  warm_cache: MUT,
-
-  // ── guidelines (1) ─────────────────────────────────────
-  get_rag_guidelines: RO,
 
   // ── agents (2) ─────────────────────────────────────────
   run_agent: MUT, // side-effects depend on agent type

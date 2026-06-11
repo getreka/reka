@@ -1,10 +1,9 @@
 /**
- * Indexing tools module - codebase indexing, status, zero-downtime reindex,
- * and alias management.
+ * Indexing tools module - codebase indexing and status.
  *
- * index_codebase and reindex_zero_downtime read files locally and upload
- * them to the RAG API in batches via POST /api/index/upload. This allows
- * remote MCP clients to index codebases that aren't on the server filesystem.
+ * index_codebase reads files locally and uploads them to the RAG API in
+ * batches via POST /api/index/upload. This allows remote MCP clients to
+ * index codebases that aren't on the server filesystem.
  */
 
 import * as fs from "fs";
@@ -243,86 +242,6 @@ export function createIndexingTools(projectName: string): ToolSpec[] {
         };
 
         return { text, structured };
-      },
-    },
-    {
-      name: "reindex_zero_downtime",
-      description: `Reindex ${projectName} codebase with zero downtime using alias swap.`,
-      schema: z.object({
-        path: z
-          .string()
-          .optional()
-          .describe("Path to index (default: entire project)"),
-        patterns: z
-          .array(z.string())
-          .optional()
-          .describe("File patterns to include (e.g., ['**/*.ts', '**/*.py'])"),
-        excludePatterns: z
-          .array(z.string())
-          .optional()
-          .describe("File patterns to exclude (e.g., ['node_modules/**'])"),
-      }),
-      annotations: TOOL_ANNOTATIONS["reindex_zero_downtime"],
-      handler: async (
-        args: Record<string, unknown>,
-        ctx: ToolContext,
-      ): Promise<string> => {
-        const {
-          path: indexPath,
-          patterns,
-          excludePatterns,
-        } = args as {
-          path?: string;
-          patterns?: string[];
-          excludePatterns?: string[];
-        };
-        const projectPath = indexPath || ctx.projectPath;
-
-        const stats = await uploadFiles(ctx, projectPath, {
-          patterns,
-          excludePatterns,
-          force: true,
-        });
-        _statusCache = null; // Invalidate status cache after reindex
-
-        let result = `## Reindex: ${projectName}\n\n`;
-        result += `- **Total files found:** ${stats.totalFiles}\n`;
-        result += `- **Files indexed:** ${stats.indexedFiles}\n`;
-        result += `- **Chunks created:** ${stats.totalChunks}\n`;
-        result += `- **Errors:** ${stats.errors}\n`;
-        result += `- **Duration:** ${stats.duration}ms\n`;
-
-        return result;
-      },
-    },
-    {
-      name: "list_aliases",
-      description: "List all collection aliases and their mappings.",
-      schema: z.object({}),
-      annotations: TOOL_ANNOTATIONS["list_aliases"],
-      handler: async (
-        _args: Record<string, unknown>,
-        ctx: ToolContext,
-      ): Promise<string> => {
-        const response = await ctx.api.get("/api/aliases");
-        const aliases = response.data.aliases || response.data;
-
-        if (!aliases || (Array.isArray(aliases) && aliases.length === 0)) {
-          return "No aliases configured.";
-        }
-
-        let result = `## Collection Aliases\n\n`;
-        if (Array.isArray(aliases)) {
-          for (const a of aliases) {
-            result += `- **${a.alias}** -> ${a.collection}\n`;
-          }
-        } else {
-          for (const [alias, collection] of Object.entries(aliases)) {
-            result += `- **${alias}** -> ${collection}\n`;
-          }
-        }
-
-        return result;
       },
     },
   ];
