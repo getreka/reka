@@ -185,4 +185,88 @@ describe("Memory Tools", () => {
       expect(result).toContain("2");
     });
   });
+
+  describe("triggerDescription + pin (M2-6)", () => {
+    it("remember forwards triggerDescription and pin in the POST body", async () => {
+      const mem = {
+        id: "mem-p1",
+        type: "decision",
+        content: "always use npm 10 for lockfiles",
+        createdAt: new Date().toISOString(),
+      };
+      (ctx.api.post as any).mockResolvedValue({ data: { memory: mem } });
+
+      const result = await findTool("remember").handler(
+        {
+          content: "always use npm 10 for lockfiles",
+          type: "decision",
+          triggerDescription: "when regenerating package-lock.json",
+          pin: "repo",
+        },
+        ctx,
+      );
+
+      expect(ctx.api.post).toHaveBeenCalledWith(
+        "/api/memory",
+        expect.objectContaining({
+          triggerDescription: "when regenerating package-lock.json",
+          pin: "repo",
+        }),
+      );
+      expect(result).toContain("Pinned:");
+      expect(result).toContain("repo");
+    });
+
+    it("remember/batch_remember schemas keep both fields through zod parsing", () => {
+      // The MCP SDK validates args against the schema (default zod strip):
+      // without these fields in the schema they would be silently dropped
+      // before the handler runs — dead-on-arrival params.
+      const remembered = findTool("remember").schema.parse({
+        content: "x",
+        triggerDescription: "when touching auth",
+        pin: "all",
+      });
+      expect(remembered.triggerDescription).toBe("when touching auth");
+      expect(remembered.pin).toBe("all");
+
+      const batch = findTool("batch_remember").schema.parse({
+        items: [
+          { content: "y", triggerDescription: "when deploying", pin: "repo" },
+        ],
+      }) as { items: Array<Record<string, unknown>> };
+      expect(batch.items[0].triggerDescription).toBe("when deploying");
+      expect(batch.items[0].pin).toBe("repo");
+    });
+
+    it("batch_remember forwards items with triggerDescription/pin untouched", async () => {
+      (ctx.api.post as any).mockResolvedValue({
+        data: { savedCount: 1, memories: [], errors: [] },
+      });
+
+      await findTool("batch_remember").handler(
+        {
+          items: [
+            {
+              content: "pinned fact",
+              pin: "all",
+              triggerDescription: "every session",
+            },
+          ],
+        },
+        ctx,
+      );
+
+      expect(ctx.api.post).toHaveBeenCalledWith(
+        "/api/memory/batch",
+        expect.objectContaining({
+          items: [
+            expect.objectContaining({
+              pin: "all",
+              triggerDescription: "every session",
+            }),
+          ],
+        }),
+      );
+    });
+  });
 });
