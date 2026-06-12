@@ -51,13 +51,13 @@
  *   const memoryTool = betaMemoryTool(adapter.toHandlers());
  *
  *   const client = new Anthropic();
- *   await client.beta.messages.toolRunner({
+ *   const runner = client.beta.messages.toolRunner({
  *     model: 'claude-opus-4-8',
  *     max_tokens: 1024,
- *     messages: [{ role: 'user', content: 'Remember that we use BGE-M3 (1024d).' }],
+ *     messages: [{ role: 'user', content: 'Remember that we use qwen3-embedding:4b.' }],
  *     tools: [memoryTool],
- *     betas: ['context-management-2025-06-27'],
  *   });
+ *   for await (const message of runner) console.log(message);
  *
  * Alternatively, subclass-style (BetaAbstractMemoryTool): forward each abstract
  * method to `adapter.handle(command)` — e.g. `view(cmd) { return adapter.handle(cmd); }`.
