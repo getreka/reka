@@ -28,12 +28,17 @@ export type MemoryType =
 // Like every auto_* source they are quarantined by governance: visible to the
 // tool's own path-based `view` (read-your-writes) but NOT to `recall` until
 // promoted — that IS the governance gate.
+// 'auto_transcript' = candidates mined from Claude Code session transcripts
+// (POST /api/capture/transcript → transcript-miner). Quarantined like every
+// auto_* source; per-source governance counters feed the 30-day validate-or-kill
+// gate in /api/analytics/memory-roi.
 export type MemorySource =
   | 'manual'
   | 'auto_conversation'
   | 'auto_pattern'
   | 'auto_feedback'
-  | 'auto_memory_tool';
+  | 'auto_memory_tool'
+  | 'auto_transcript';
 export type TodoStatus = 'pending' | 'in_progress' | 'done' | 'cancelled';
 /** Pin scope — controls which surfaces a memory is always loaded in. */
 export type PinScope = 'repo' | 'all' | 'unpinned';

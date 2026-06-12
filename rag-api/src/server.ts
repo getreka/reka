@@ -31,6 +31,7 @@ import qualityRoutes from './routes/quality';
 import eventsRoutes from './routes/events';
 import tribunalRoutes from './routes/tribunal';
 import sensoryRoutes from './routes/sensory';
+import captureRoutes from './routes/capture';
 import adminRoutes from './routes/admin';
 
 // Extend Express Request type
@@ -276,6 +277,7 @@ app.use('/api', qualityRoutes);
 app.use('/api', eventsRoutes);
 app.use('/api', tribunalRoutes);
 app.use('/api', sensoryRoutes);
+app.use('/api', captureRoutes);
 app.use('/api/admin', adminRoutes);
 
 // Legacy routes for backward compatibility with cypro-rag MCP

@@ -71,13 +71,15 @@ function batchReject() {
 
 // Source labels — keep in sync with MemorySource (rag-api/src/services/memory.ts).
 // 'auto_memory_tool' (M2) = writes from the MCP `memory` tool, quarantined by
-// governance until promoted.
+// governance until promoted. 'auto_transcript' (M5) = candidates mined from
+// session transcripts via POST /api/capture/transcript.
 const sourceLabels: Record<string, string> = {
   manual: "manual",
   auto_conversation: "conversation",
   auto_pattern: "pattern",
   auto_feedback: "feedback",
   auto_memory_tool: "memory tool",
+  auto_transcript: "transcript",
 };
 function sourceLabel(source?: string): string {
   return source ? (sourceLabels[source] ?? source) : "—";

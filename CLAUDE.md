@@ -54,7 +54,8 @@ This is a **shared RAG (Retrieval-Augmented Generation) infrastructure** that ca
 ┌─────────────────────────────────────────────────────────────┐
 │  RAG API (:3100)                                            │
 │  - Express server                                           │
-│  - Routes: /api/search, /api/ask, /api/index, /api/memory  │
+│  - Routes: /api/search, /api/ask, /api/index, /api/memory, │
+│    /api/capture                                             │
 └──────────────────────────┬──────────────────────────────────┘
                            │
         ┌──────────────────┼──────────────────┐
