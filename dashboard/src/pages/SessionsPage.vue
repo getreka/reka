@@ -110,6 +110,7 @@ async function handleStartSession() {
             :session="store.selectedSession"
             :working-memory="store.workingMemory"
             :sensory-stats="store.sensoryStats"
+            :retrievals="store.retrievals"
             @close="store.clearSelection()"
             @end-session="handleEndSession"
           />
