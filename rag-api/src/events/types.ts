@@ -65,6 +65,9 @@ export interface MemoryRecalledPayload extends BaseEventPayload {
   resultCount: number;
   memoryIds: string[];
   recalledMemories: RecalledMemoryItem[];
+  // M3 (additive): session linkage for the retrieval audit log. Optional so
+  // old producers keep type-checking; the reconsolidation worker ignores it.
+  sessionId?: string;
 }
 
 // Session payloads

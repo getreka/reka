@@ -6,6 +6,7 @@
  */
 
 import type { ToolContext } from "./types.js";
+import { getFallbackSessionId } from "./tool-middleware.js";
 
 export interface EnrichmentConfig {
   enrichableTools: Set<string>;
@@ -176,6 +177,10 @@ export class ContextEnricher {
       const graphRecallEnabled = process.env.GRAPH_RECALL_ENABLED === "true";
       const consolidationEnabled = process.env.CONSOLIDATION_ENABLED === "true";
 
+      // M3: session linkage for the retrieval audit log (surface 'enrichment'),
+      // with the per-process local-* fallback when no session was established.
+      const sessionId = ctx.activeSessionId || getFallbackSessionId();
+
       const recalls: Array<Promise<any>> = [
         ctx.api
           .post(
@@ -185,6 +190,7 @@ export class ContextEnricher {
               query,
               limit: this.config.maxAutoRecall,
               type: "all",
+              sessionId,
             },
             { signal: controller.signal },
           )
@@ -197,6 +203,7 @@ export class ContextEnricher {
               query,
               limit: 2,
               type: "decision",
+              sessionId,
             },
             { signal: controller.signal },
           )
@@ -214,6 +221,7 @@ export class ContextEnricher {
                 query,
                 limit: this.config.maxAutoRecall,
                 graphRecall: graphRecallEnabled,
+                sessionId,
               },
               { signal: controller.signal },
             )

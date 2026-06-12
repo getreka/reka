@@ -548,18 +548,29 @@ router.delete(
 // ============================================
 
 /**
+ * GET /api/analytics/llm-usage and /api/analytics/memory-roi are served by
+ * routes/analytics.ts (mounted after this router). next('router') exits this
+ * router entirely so neither the :collection handler NOR the :collection
+ * scope param fires — these path segments are virtual endpoints, not
+ * collections, and scopeCollectionParam would 403 them for authenticated
+ * keys (per-key tenant scoping is still enforced on query.projectName by the
+ * app-level enforceProjectScope).
+ */
+router.get('/analytics/llm-usage', (_req: Request, _res: Response, next: NextFunction) =>
+  next('router')
+);
+router.get('/analytics/memory-roi', (_req: Request, _res: Response, next: NextFunction) =>
+  next('router')
+);
+
+/**
  * Get detailed collection analytics
  * GET /api/analytics/:collection
  */
 router.get(
   '/analytics/:collection',
-  asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const { collection } = req.params;
-
-    // GET /api/analytics/llm-usage is served by routes/analytics.ts (mounted after
-    // this router) — fall through so the :collection param route doesn't shadow it.
-    if (collection === 'llm-usage') return next();
-
     const analytics = await vectorStore.getCollectionAnalytics(collection);
     res.json(analytics);
   })
@@ -600,6 +611,88 @@ router.post(
     });
 
     res.json({ success: true, session });
+  })
+);
+
+/**
+ * Session-start digest — server-built markdown briefing (M3).
+ * GET /api/session/digest?projectName=<p>&sessionId=<sid>
+ *
+ * Returns Content-Type text/markdown; the BODY is the digest markdown itself
+ * (no JSON wrapper), <=200 lines, empty sections omitted. On any internal
+ * error it still answers 200 with whatever sections were built — a session
+ * start must never be blocked by the digest.
+ *
+ * NOTE: registered BEFORE GET /session/:sessionId so 'digest' is not
+ * captured by the :sessionId param route.
+ */
+router.get(
+  '/session/digest',
+  validateProjectName,
+  asyncHandler(async (req: Request, res: Response) => {
+    const { projectName } = req.body;
+    const sessionId = req.query.sessionId as string | undefined;
+
+    let markdown = `# Session Digest — ${projectName}`;
+    try {
+      const { digestBuilder } = await import('../services/digest-builder');
+      const digest = await digestBuilder.build(projectName, sessionId);
+      markdown = digest.markdown;
+
+      // Retrieval audit log: record the full delivered memory set
+      // (fire-and-forget — a broken audit log must never block a session start).
+      if (sessionId) {
+        const { retrievalLog } = await import('../services/retrieval-log');
+        retrievalLog
+          .log({
+            projectName,
+            sessionId,
+            surface: 'digest',
+            memoryIds: digest.memoryIds,
+            snippets: digest.snippets,
+          })
+          .catch(() => {});
+      }
+    } catch (error: any) {
+      logger.warn('Digest build failed — returning minimal digest', {
+        projectName,
+        error: error?.message,
+      });
+    }
+
+    res.status(200).type('text/markdown').send(markdown);
+  })
+);
+
+/**
+ * Retrieval audit trail for a session (M3).
+ * GET /api/session/:sessionId/retrievals?projectName=<p>
+ *
+ * Returns { sessionId, count, retrievals: [...] } sorted oldest-first; each
+ * entry carries { surface: 'digest'|'recall'|'enrichment', memoryIds,
+ * snippets, query?, timestamp }.
+ */
+router.get(
+  '/session/:sessionId/retrievals',
+  validateProjectName,
+  asyncHandler(async (req: Request, res: Response) => {
+    const { projectName } = req.body;
+    const { sessionId } = req.params;
+
+    const { retrievalLog } = await import('../services/retrieval-log');
+    const entries = await retrievalLog.getSessionRetrievals(projectName, sessionId);
+
+    res.json({
+      sessionId,
+      count: entries.length,
+      retrievals: entries.map((e) => ({
+        surface: e.surface,
+        memoryIds: e.memoryIds,
+        snippets: e.snippets,
+        ...(e.query !== undefined ? { query: e.query } : {}),
+        timestamp: e.timestamp,
+      })),
+    });
   })
 );
 

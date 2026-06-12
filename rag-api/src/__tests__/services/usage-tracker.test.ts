@@ -365,4 +365,83 @@ describe('UsageTrackerService', () => {
       expect(gaps).toEqual([]);
     });
   });
+
+  describe('getToolCallCounts() — memory-roi feed (M3)', () => {
+    const point = (toolName: string, extra: Record<string, unknown> = {}) => ({
+      payload: { toolName, inputSummary: '', ...extra },
+    });
+
+    it('counts per tool and subdivides the memory tool per command', async () => {
+      mockQdrantClient.scroll.mockResolvedValue({
+        points: [
+          point('remember'),
+          point('remember'),
+          point('recall'),
+          point('record_adr'),
+          // memory tool: command via metadata (preferred)
+          point('memory', { metadata: { command: 'create' } }),
+          point('memory', { metadata: { command: 'view' } }),
+          // memory tool: command via inputSummary first token (fallback —
+          // the adapter's args start with the command)
+          point('memory', { inputSummary: 'str_replace /memories/notes.md' }),
+          point('memory', { inputSummary: 'insert something' }),
+          // memory tool: unparseable command
+          point('memory', { inputSummary: 'garbage here' }),
+          point('hybrid_search'),
+        ],
+        next_page_offset: null,
+      });
+
+      const counts = await usageTracker.getToolCallCounts('test', 30);
+
+      expect(counts).toEqual({
+        remember: 2,
+        recall: 1,
+        record_adr: 1,
+        'memory:create': 1,
+        'memory:view': 1,
+        'memory:str_replace': 1,
+        'memory:insert': 1,
+        'memory:unknown': 1,
+        hybrid_search: 1,
+      });
+    });
+
+    it('filters on NUMERIC timestampMs (the Qdrant range gotcha)', async () => {
+      mockQdrantClient.scroll.mockResolvedValue({ points: [], next_page_offset: null });
+
+      await usageTracker.getToolCallCounts('test', 7);
+
+      const scrollArgs = mockQdrantClient.scroll.mock.calls[0][1];
+      const rangeCondition = scrollArgs.filter.must[0];
+      expect(rangeCondition.key).toBe('timestampMs');
+      expect(typeof rangeCondition.range.gte).toBe('number');
+      expect(rangeCondition.range.gte).toBeGreaterThan(Date.now() - 8 * 86400000);
+    });
+
+    it('paginates through scroll pages', async () => {
+      mockQdrantClient.scroll
+        .mockResolvedValueOnce({
+          points: [point('remember')],
+          next_page_offset: 'page-2',
+        })
+        .mockResolvedValueOnce({
+          points: [point('remember'), point('recall')],
+          next_page_offset: null,
+        });
+
+      const counts = await usageTracker.getToolCallCounts('test');
+
+      expect(mockQdrantClient.scroll).toHaveBeenCalledTimes(2);
+      expect(counts).toEqual({ remember: 2, recall: 1 });
+    });
+
+    it('returns {} on 404 (collection not created yet)', async () => {
+      const err = new Error('Not found') as any;
+      err.status = 404;
+      mockQdrantClient.scroll.mockRejectedValue(err);
+
+      expect(await usageTracker.getToolCallCounts('test')).toEqual({});
+    });
+  });
 });

@@ -198,6 +198,79 @@ class UsageTrackerService {
   }
 
   /**
+   * Per-tool call counts over a trailing window — feeds the memory-roi metric
+   * (M3 task 3).
+   *
+   * Counts come from `{project}_tool_usage` filtered on `timestampMs` (the
+   * NUMERIC mirror of `timestamp` — Qdrant range filters need numbers, not
+   * ISO strings).
+   *
+   * The `memory` tool (memory_20250818 adapter) is subdivided per command as
+   * `memory:create`, `memory:view`, … so the recall/remember channels can be
+   * computed. The command is read from `metadata.command` when present, else
+   * from the first token of inputSummary (the adapter's args start with the
+   * command, so summarizeInput captures it first).
+   */
+  async getToolCallCounts(projectName: string, days: number = 30): Promise<Record<string, number>> {
+    const collectionName = this.getCollectionName(projectName);
+    const cutoffMs = Date.now() - days * 86400000;
+    const counts: Record<string, number> = {};
+
+    const MEMORY_COMMANDS = new Set([
+      'view',
+      'create',
+      'str_replace',
+      'insert',
+      'delete',
+      'rename',
+    ]);
+
+    try {
+      let offset: string | number | undefined = undefined;
+      let scanned = 0;
+
+      do {
+        const response = await vectorStore['client'].scroll(collectionName, {
+          limit: 1000,
+          offset,
+          with_payload: true,
+          with_vector: false,
+          filter: {
+            must: [{ key: 'timestampMs', range: { gte: cutoffMs } }],
+          },
+        });
+
+        for (const point of response.points) {
+          const usage = point.payload as unknown as ToolUsage;
+          let key = usage.toolName;
+
+          if (usage.toolName === 'memory') {
+            const fromMetadata = usage.metadata?.command;
+            const fromSummary = (usage.inputSummary || '').trim().split(/\s+/)[0];
+            const command =
+              typeof fromMetadata === 'string' && MEMORY_COMMANDS.has(fromMetadata)
+                ? fromMetadata
+                : MEMORY_COMMANDS.has(fromSummary)
+                  ? fromSummary
+                  : 'unknown';
+            key = `memory:${command}`;
+          }
+
+          counts[key] = (counts[key] || 0) + 1;
+        }
+
+        scanned += response.points.length;
+        offset = response.next_page_offset as string | number | undefined;
+      } while (offset && scanned < 50000);
+
+      return counts;
+    } catch (error: any) {
+      if (error.status === 404) return {};
+      throw error;
+    }
+  }
+
+  /**
    * Find similar queries (for pattern analysis)
    */
   async findSimilarQueries(

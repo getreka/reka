@@ -13,6 +13,9 @@ const mocks = vi.hoisted(() => ({
   listCollections: vi.fn(),
   getCollectionInfo: vi.fn(),
   summarize: vi.fn(),
+  getToolCallCounts: vi.fn(),
+  getDigestStats: vi.fn(),
+  scrollCollection: vi.fn(),
 }));
 
 vi.mock('../../services/conversation-analyzer', () => ({
@@ -29,6 +32,7 @@ vi.mock('../../services/usage-tracker', () => ({
     getKnowledgeGaps: mocks.getKnowledgeGaps,
     findSimilarQueries: mocks.findSimilarQueries,
     getBehaviorPatterns: mocks.getBehaviorPatterns,
+    getToolCallCounts: mocks.getToolCallCounts,
   },
 }));
 
@@ -36,7 +40,12 @@ vi.mock('../../services/vector-store', () => ({
   vectorStore: {
     listCollections: mocks.listCollections,
     getCollectionInfo: mocks.getCollectionInfo,
+    scrollCollection: mocks.scrollCollection,
   },
+}));
+
+vi.mock('../../services/retrieval-log', () => ({
+  retrievalLog: { getDigestStats: mocks.getDigestStats },
 }));
 
 vi.mock('../../utils/metrics', () => ({
@@ -282,6 +291,170 @@ describe('Analytics Routes', () => {
       expect(res.status).toBe(400);
       expect(res.body.error).toContain('from');
       expect(mocks.summarize).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('GET /api/analytics/memory-roi', () => {
+    const recentIso = (daysAgo: number) => new Date(Date.now() - daysAgo * 86400000).toISOString();
+
+    /** Seeded fixture: tool counts per the PINNED channel mapping. */
+    const seededCounts = {
+      // remember-side, channel manual
+      remember: 3,
+      batch_remember: 1,
+      record_adr: 2,
+      record_pattern: 1,
+      // remember-side, channel memory_tool (adapter writes)
+      'memory:create': 4,
+      'memory:insert': 1,
+      'memory:str_replace': 2,
+      // recall-side, channel manual
+      recall: 5,
+      get_adrs: 1,
+      get_patterns: 1,
+      // recall-side, channel memory_tool
+      'memory:view': 3,
+      // not counted on either side
+      'memory:delete': 9,
+      hybrid_search: 42,
+      start_session: 4,
+    };
+
+    function seedSessionsAndEpisodic() {
+      mocks.scrollCollection.mockImplementation(async (collection: string) => {
+        if (collection.endsWith('_sessions')) {
+          return {
+            points: [
+              {
+                id: 's1',
+                payload: {
+                  sessionId: 's1',
+                  status: 'ended',
+                  startedAt: recentIso(2),
+                  metadata: {},
+                },
+              },
+              {
+                id: 's2',
+                payload: {
+                  sessionId: 's2',
+                  status: 'ended',
+                  startedAt: recentIso(3),
+                  metadata: { endReason: 'stale_cleanup' },
+                },
+              },
+              {
+                id: 's3',
+                payload: { sessionId: 's3', status: 'active', startedAt: recentIso(1) },
+              },
+              {
+                id: 's-old',
+                payload: { sessionId: 's-old', status: 'ended', startedAt: recentIso(99) },
+              },
+            ],
+          };
+        }
+        if (collection.endsWith('_memory_episodic')) {
+          return {
+            points: [
+              { id: 'e1', payload: { sessionId: 's1' } },
+              { id: 'e2', payload: { sessionId: 's1' } }, // same session, counted once
+              { id: 'e3', payload: { sessionId: 's-old' } }, // outside window
+            ],
+          };
+        }
+        return { points: [] };
+      });
+    }
+
+    it('returns per-channel counts with memory-tool writes in the strict-ratio denominator', async () => {
+      mocks.getToolCallCounts.mockResolvedValue(seededCounts);
+      mocks.getDigestStats.mockResolvedValue({
+        deliveries: 4,
+        nonEmptyDeliveries: 3,
+        sessionsWithDigest: 3,
+      });
+      seedSessionsAndEpisodic();
+
+      const res = await withProject(request(app).get('/api/analytics/memory-roi?days=30'));
+
+      expect(res.status).toBe(200);
+      expect(mocks.getToolCallCounts).toHaveBeenCalledWith('test', 30);
+
+      // Per-channel remember counts (manual 7 + memory_tool 7 = 14)
+      expect(res.body.remembers.byChannel.manual).toEqual({
+        remember: 3,
+        batch_remember: 1,
+        record_adr: 2,
+        record_pattern: 1,
+        total: 7,
+      });
+      expect(res.body.remembers.byChannel.memory_tool).toEqual({
+        create: 4,
+        insert: 1,
+        str_replace: 2,
+        total: 7,
+      });
+      expect(res.body.remembers.total).toBe(14);
+
+      // Per-channel recall counts (manual 7 + memory_tool 3 = 10)
+      expect(res.body.recalls.byChannel.manual).toEqual({
+        recall: 5,
+        get_adrs: 1,
+        get_patterns: 1,
+        total: 7,
+      });
+      expect(res.body.recalls.byChannel.memory_tool).toEqual({ view: 3, total: 3 });
+      expect(res.body.recalls.total).toBe(10);
+
+      // Strict ratio includes adapter-channel writes in the denominator:
+      // 10 recalls / 14 remembers — NOT 10/7.
+      expect(res.body.ratios.strict).toBeCloseTo(10 / 14, 3);
+      // Assisted ratio adds non-empty digest deliveries: (10 + 3) / 14
+      expect(res.body.ratios.assisted).toBeCloseTo(13 / 14, 3);
+
+      // Digest coverage from the audit log over started sessions (3 in window)
+      expect(res.body.digest).toMatchObject({
+        deliveries: 4,
+        nonEmptyDeliveries: 3,
+        sessionsWithDigest: 3,
+      });
+      expect(res.body.digest.coverage).toBeCloseTo(1, 3);
+
+      // Hook reliability: 3 started in window; 2 ended; stale_cleanup not an
+      // explicit end → trigger rate 1/3. Consolidation evidence: s1 only, /2 ended.
+      expect(res.body.sessions).toMatchObject({
+        started: 3,
+        ended: 2,
+        endedExplicit: 1,
+        staleAutoEnded: 1,
+      });
+      expect(res.body.sessions.endSessionTriggerRate).toBeCloseTo(1 / 3, 3);
+      expect(res.body.sessions.consolidatedWithLtmEvidence).toBe(1);
+      expect(res.body.sessions.consolidationCompletionRate).toBeCloseTo(0.5, 3);
+    });
+
+    it('reports null ratios when there are no remembers (no division by zero)', async () => {
+      mocks.getToolCallCounts.mockResolvedValue({ hybrid_search: 5 });
+      mocks.getDigestStats.mockResolvedValue({
+        deliveries: 0,
+        nonEmptyDeliveries: 0,
+        sessionsWithDigest: 0,
+      });
+      mocks.scrollCollection.mockResolvedValue({ points: [] });
+
+      const res = await withProject(request(app).get('/api/analytics/memory-roi'));
+
+      expect(res.status).toBe(200);
+      expect(res.body.remembers.total).toBe(0);
+      expect(res.body.ratios.strict).toBeNull();
+      expect(res.body.ratios.assisted).toBeNull();
+      expect(res.body.sessions.endSessionTriggerRate).toBeNull();
+    });
+
+    it('returns 400 without projectName', async () => {
+      const res = await request(app).get('/api/analytics/memory-roi');
+      expect(res.status).toBe(400);
     });
   });
 });

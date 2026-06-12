@@ -160,6 +160,10 @@ export const recallMemorySchema = z.object({
   ragFusion: z.boolean().optional(), // RAG-Fusion: multi-query + RRF merge
   recencyBoost: z.number().min(0).max(1).optional(), // Recency boost weight (0-1)
   multiStrategy: z.boolean().optional(), // TEMPR: semantic + keyword + temporal RRF fusion
+  // M3: optional session linkage for the retrieval audit log. Additive —
+  // z.object() strips unknown keys, so old clients (with or without extra
+  // fields) keep validating; clients that don't send it are simply unlogged.
+  sessionId: z.string().min(1).max(100).optional(),
 });
 
 export const promoteMemorySchema = z.object({
