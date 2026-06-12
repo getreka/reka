@@ -627,6 +627,21 @@ router.get(
       const { digestBuilder } = await import('../services/digest-builder');
       const digest = await digestBuilder.build(projectName, sessionId);
       markdown = digest.markdown;
+
+      // Retrieval audit log: record the full delivered memory set
+      // (fire-and-forget — a broken audit log must never block a session start).
+      if (sessionId) {
+        const { retrievalLog } = await import('../services/retrieval-log');
+        retrievalLog
+          .log({
+            projectName,
+            sessionId,
+            surface: 'digest',
+            memoryIds: digest.memoryIds,
+            snippets: digest.snippets,
+          })
+          .catch(() => {});
+      }
     } catch (error: any) {
       logger.warn('Digest build failed — returning minimal digest', {
         projectName,
@@ -635,6 +650,38 @@ router.get(
     }
 
     res.status(200).type('text/markdown').send(markdown);
+  })
+);
+
+/**
+ * Retrieval audit trail for a session (M3).
+ * GET /api/session/:sessionId/retrievals?projectName=<p>
+ *
+ * Returns { sessionId, count, retrievals: [...] } sorted oldest-first; each
+ * entry carries { surface: 'digest'|'recall'|'enrichment', memoryIds,
+ * snippets, query?, timestamp }.
+ */
+router.get(
+  '/session/:sessionId/retrievals',
+  validateProjectName,
+  asyncHandler(async (req: Request, res: Response) => {
+    const { projectName } = req.body;
+    const { sessionId } = req.params;
+
+    const { retrievalLog } = await import('../services/retrieval-log');
+    const entries = await retrievalLog.getSessionRetrievals(projectName, sessionId);
+
+    res.json({
+      sessionId,
+      count: entries.length,
+      retrievals: entries.map((e) => ({
+        surface: e.surface,
+        memoryIds: e.memoryIds,
+        snippets: e.snippets,
+        ...(e.query !== undefined ? { query: e.query } : {}),
+        timestamp: e.timestamp,
+      })),
+    });
   })
 );
 

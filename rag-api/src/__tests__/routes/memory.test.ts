@@ -26,6 +26,7 @@ const mocks = vi.hoisted(() => ({
   analyze: vi.fn(),
   runGates: vi.fn(),
   ltmRecall: vi.fn(),
+  logRetrieval: vi.fn(),
 }));
 
 vi.mock('../../services/memory', () => ({
@@ -83,6 +84,10 @@ vi.mock('../../services/graph-store', () => ({
 
 vi.mock('../../services/usage-patterns', () => ({
   usagePatterns: { buildDeveloperProfile: vi.fn().mockResolvedValue({}) },
+}));
+
+vi.mock('../../services/retrieval-log', () => ({
+  retrievalLog: { log: mocks.logRetrieval },
 }));
 
 import memoryRoutes from '../../routes/memory';
@@ -242,6 +247,123 @@ describe('Memory Routes', () => {
       });
 
       expect(res.status).toBe(400);
+    });
+  });
+
+  describe('POST /api/memory/recall — retrieval audit log (M3)', () => {
+    it('logs delivered results when sessionId is present (surface recall)', async () => {
+      const fakeResults = [
+        { memory: { id: 'mem-1', content: 'a decision' }, score: 0.9 },
+        { memory: { id: 'mem-2', content: 'an insight' }, score: 0.8 },
+      ];
+      mocks.recall.mockResolvedValue(fakeResults);
+      mocks.logRetrieval.mockResolvedValue(undefined);
+
+      const res = await withProject(request(app).post('/api/memory/recall'), 'testproject').send({
+        query: 'some query',
+        sessionId: 'sess-7',
+      });
+
+      expect(res.status).toBe(200);
+      await vi.waitFor(() => expect(mocks.logRetrieval).toHaveBeenCalledOnce());
+      expect(mocks.logRetrieval).toHaveBeenCalledWith({
+        projectName: 'testproject',
+        sessionId: 'sess-7',
+        surface: 'recall',
+        memoryIds: ['mem-1', 'mem-2'],
+        snippets: ['a decision', 'an insight'],
+        query: 'some query',
+      });
+    });
+
+    it('does NOT log without sessionId (old clients unaffected — zod regression)', async () => {
+      mocks.recall.mockResolvedValue([]);
+
+      // Old-client payload: no sessionId, plus an unknown extra field that
+      // zod must strip/ignore rather than reject.
+      const res = await withProject(request(app).post('/api/memory/recall'), 'testproject').send({
+        query: 'some query',
+        someFutureField: 'ignored',
+      });
+
+      expect(res.status).toBe(200);
+      expect(mocks.logRetrieval).not.toHaveBeenCalled();
+    });
+
+    it('a throwing retrieval logger must not fail the recall (fire-and-forget)', async () => {
+      const fakeResults = [{ memory: { id: 'mem-1', content: 'a decision' }, score: 0.9 }];
+      mocks.recall.mockResolvedValue(fakeResults);
+      mocks.logRetrieval.mockRejectedValue(new Error('audit log exploded'));
+
+      const res = await withProject(request(app).post('/api/memory/recall'), 'testproject').send({
+        query: 'some query',
+        sessionId: 'sess-7',
+      });
+
+      expect(res.status).toBe(200);
+      expect(res.body.results).toEqual(fakeResults);
+    });
+
+    it('recall-durable logs with surface enrichment when sessionId present', async () => {
+      const fakeResults = [{ memory: { id: 'dur-1', content: 'durable fact' }, score: 0.7 }];
+      mocks.recallDurable.mockResolvedValue(fakeResults);
+      mocks.logRetrieval.mockResolvedValue(undefined);
+
+      const res = await withProject(
+        request(app).post('/api/memory/recall-durable'),
+        'testproject'
+      ).send({ query: 'q', sessionId: 'sess-8' });
+
+      expect(res.status).toBe(200);
+      await vi.waitFor(() => expect(mocks.logRetrieval).toHaveBeenCalledOnce());
+      expect(mocks.logRetrieval).toHaveBeenCalledWith(
+        expect.objectContaining({ surface: 'enrichment', sessionId: 'sess-8' })
+      );
+    });
+
+    it('recall-ltm logs with surface enrichment when sessionId present', async () => {
+      mocks.ltmRecall.mockResolvedValue([
+        {
+          memory: { id: 'ltm-1', content: 'ltm fact', tags: [] },
+          score: 0.6,
+          retention: 0.9,
+          collection: 'semantic',
+        },
+      ]);
+      mocks.logRetrieval.mockResolvedValue(undefined);
+
+      const res = await withProject(
+        request(app).post('/api/memory/recall-ltm'),
+        'testproject'
+      ).send({ query: 'q', sessionId: 'sess-9' });
+
+      expect(res.status).toBe(200);
+      await vi.waitFor(() => expect(mocks.logRetrieval).toHaveBeenCalledOnce());
+      expect(mocks.logRetrieval).toHaveBeenCalledWith(
+        expect.objectContaining({
+          surface: 'enrichment',
+          sessionId: 'sess-9',
+          memoryIds: ['ltm-1'],
+        })
+      );
+    });
+
+    it('recall-durable/-ltm do NOT log without sessionId', async () => {
+      mocks.recallDurable.mockResolvedValue([]);
+      mocks.ltmRecall.mockResolvedValue([]);
+
+      const res1 = await withProject(
+        request(app).post('/api/memory/recall-durable'),
+        'testproject'
+      ).send({ query: 'q' });
+      const res2 = await withProject(
+        request(app).post('/api/memory/recall-ltm'),
+        'testproject'
+      ).send({ query: 'q' });
+
+      expect(res1.status).toBe(200);
+      expect(res2.status).toBe(200);
+      expect(mocks.logRetrieval).not.toHaveBeenCalled();
     });
   });
 

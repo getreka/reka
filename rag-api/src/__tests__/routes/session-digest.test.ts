@@ -5,6 +5,8 @@ import { createTestApp } from '../helpers/app-factory';
 const mocks = vi.hoisted(() => ({
   buildDigest: vi.fn(),
   getSession: vi.fn(),
+  logRetrieval: vi.fn(),
+  getSessionRetrievals: vi.fn(),
 }));
 
 // routes/index.ts pulls in the whole service layer — stub everything it imports.
@@ -55,6 +57,12 @@ vi.mock('../../middleware/project-scope', () => ({
 }));
 vi.mock('../../services/digest-builder', () => ({
   digestBuilder: { build: mocks.buildDigest },
+}));
+vi.mock('../../services/retrieval-log', () => ({
+  retrievalLog: {
+    log: mocks.logRetrieval,
+    getSessionRetrievals: mocks.getSessionRetrievals,
+  },
 }));
 
 import indexRoutes from '../../routes/index';
@@ -121,6 +129,64 @@ describe('GET /api/session/digest', () => {
     expect(res.status).toBe(400);
   });
 
+  it('logs the full delivered memory set to the retrieval audit log when sessionId is present', async () => {
+    mocks.buildDigest.mockResolvedValue({
+      markdown: '# Session Digest — testproject\n\n## Pinned\n- [note] x',
+      lineCount: 4,
+      memoryIds: ['m1', 'm2'],
+      snippets: ['snippet 1', 'snippet 2'],
+      durationMs: 5,
+    });
+    mocks.logRetrieval.mockResolvedValue(undefined);
+
+    const res = await request(app).get(
+      '/api/session/digest?projectName=testproject&sessionId=sess-1'
+    );
+
+    expect(res.status).toBe(200);
+    await vi.waitFor(() => expect(mocks.logRetrieval).toHaveBeenCalledOnce());
+    expect(mocks.logRetrieval).toHaveBeenCalledWith({
+      projectName: 'testproject',
+      sessionId: 'sess-1',
+      surface: 'digest',
+      memoryIds: ['m1', 'm2'],
+      snippets: ['snippet 1', 'snippet 2'],
+    });
+  });
+
+  it('does NOT log a delivery without sessionId', async () => {
+    mocks.buildDigest.mockResolvedValue({
+      markdown: '# Session Digest — testproject',
+      lineCount: 1,
+      memoryIds: [],
+      snippets: [],
+      durationMs: 2,
+    });
+
+    const res = await request(app).get('/api/session/digest?projectName=testproject');
+
+    expect(res.status).toBe(200);
+    expect(mocks.logRetrieval).not.toHaveBeenCalled();
+  });
+
+  it('a throwing retrieval logger does not fail the digest (fire-and-forget)', async () => {
+    mocks.buildDigest.mockResolvedValue({
+      markdown: '# Session Digest — testproject\n- [note] x',
+      lineCount: 2,
+      memoryIds: ['m1'],
+      snippets: ['x'],
+      durationMs: 4,
+    });
+    mocks.logRetrieval.mockRejectedValue(new Error('audit log down'));
+
+    const res = await request(app).get(
+      '/api/session/digest?projectName=testproject&sessionId=sess-1'
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.text).toContain('# Session Digest — testproject');
+  });
+
   it('is not shadowed by GET /session/:sessionId', async () => {
     mocks.buildDigest.mockResolvedValue({
       markdown: '# Session Digest — testproject',
@@ -135,5 +201,75 @@ describe('GET /api/session/digest', () => {
     expect(res.status).toBe(200);
     // The param route would have called sessionContext.getSession('digest')
     expect(mocks.getSession).not.toHaveBeenCalled();
+  });
+});
+
+describe('GET /api/session/:sessionId/retrievals', () => {
+  beforeEach(() => {
+    vi.clearAllMocks();
+  });
+
+  it('returns { sessionId, count, retrievals } per contract, oldest-first', async () => {
+    mocks.getSessionRetrievals.mockResolvedValue([
+      {
+        projectName: 'testproject',
+        sessionId: 'sess-1',
+        surface: 'digest',
+        memoryIds: ['m1', 'm2'],
+        snippets: ['a', 'b'],
+        timestamp: '2026-06-12T08:00:00.000Z',
+      },
+      {
+        projectName: 'testproject',
+        sessionId: 'sess-1',
+        surface: 'recall',
+        memoryIds: ['m3'],
+        snippets: ['c'],
+        query: 'auth flow',
+        timestamp: '2026-06-12T09:00:00.000Z',
+      },
+    ]);
+
+    const res = await request(app).get(
+      '/api/session/sess-1/retrievals?projectName=testproject'
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body.sessionId).toBe('sess-1');
+    expect(res.body.count).toBe(2);
+    expect(res.body.retrievals).toEqual([
+      {
+        surface: 'digest',
+        memoryIds: ['m1', 'm2'],
+        snippets: ['a', 'b'],
+        timestamp: '2026-06-12T08:00:00.000Z',
+      },
+      {
+        surface: 'recall',
+        memoryIds: ['m3'],
+        snippets: ['c'],
+        query: 'auth flow',
+        timestamp: '2026-06-12T09:00:00.000Z',
+      },
+    ]);
+    // query omitted (not null) when absent
+    expect('query' in res.body.retrievals[0]).toBe(false);
+    expect(mocks.getSessionRetrievals).toHaveBeenCalledWith('testproject', 'sess-1');
+  });
+
+  it('returns an empty trail when nothing was logged', async () => {
+    mocks.getSessionRetrievals.mockResolvedValue([]);
+
+    const res = await request(app).get(
+      '/api/session/unknown/retrievals?projectName=testproject'
+    );
+
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ sessionId: 'unknown', count: 0, retrievals: [] });
+  });
+
+  it('requires projectName', async () => {
+    const res = await request(app).get('/api/session/sess-1/retrievals');
+    expect(res.status).toBe(400);
   });
 });

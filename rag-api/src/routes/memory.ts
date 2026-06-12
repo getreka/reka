@@ -101,7 +101,7 @@ router.post(
   validateProjectName,
   validate(recallMemorySchema),
   asyncHandler(async (req: Request, res: Response) => {
-    const { projectName, query, type, limit = 5, tag, graphRecall } = req.body;
+    const { projectName, query, type, limit = 5, tag, graphRecall, sessionId } = req.body;
     const config = (await import('../config')).default;
 
     // Always search durable (legacy) collection
@@ -176,6 +176,7 @@ router.post(
               const { publishEvent } = await import('../events/emitter');
               publishEvent('memory:recalled', {
                 projectName,
+                sessionId,
                 query,
                 resultCount: recalledLtm.length,
                 memoryIds: recalledLtm.map((r) => r.memory.id),
@@ -195,6 +196,23 @@ router.post(
       } catch {
         // LTM search failed — return durable-only results
       }
+    }
+
+    // Retrieval audit log (M3): record what was actually delivered, only when
+    // the caller is session-linked. Fire-and-forget — NEVER blocks a recall.
+    if (sessionId) {
+      import('../services/retrieval-log')
+        .then(({ retrievalLog }) =>
+          retrievalLog.log({
+            projectName,
+            sessionId,
+            surface: 'recall',
+            memoryIds: durableResults.map((r) => r.memory.id),
+            snippets: durableResults.map((r) => r.memory.content),
+            query,
+          })
+        )
+        .catch(() => {});
     }
 
     res.json({ results: durableResults });
@@ -387,7 +405,7 @@ router.post(
   validateProjectName,
   validate(recallMemorySchema),
   asyncHandler(async (req: Request, res: Response) => {
-    const { projectName, query, type, limit, tag } = req.body;
+    const { projectName, query, type, limit, tag, sessionId } = req.body;
 
     const results = await memoryGovernance.recallDurable({
       projectName,
@@ -396,6 +414,23 @@ router.post(
       limit,
       tag,
     });
+
+    // Retrieval audit log (M3): enrichment surface, only when session-linked.
+    // Fire-and-forget — NEVER blocks a recall.
+    if (sessionId) {
+      import('../services/retrieval-log')
+        .then(({ retrievalLog }) =>
+          retrievalLog.log({
+            projectName,
+            sessionId,
+            surface: 'enrichment',
+            memoryIds: results.map((r) => r.memory.id),
+            snippets: results.map((r) => r.memory.content),
+            query,
+          })
+        )
+        .catch(() => {});
+    }
 
     res.json({ results });
   })
@@ -651,7 +686,7 @@ router.post(
   validateProjectName,
   validate(recallMemorySchema),
   asyncHandler(async (req: Request, res: Response) => {
-    const { projectName, query, limit = 5 } = req.body;
+    const { projectName, query, limit = 5, sessionId } = req.body;
     const subtype = req.body.subtype as string | undefined;
 
     const results = await memoryLtm.recall({
@@ -669,6 +704,7 @@ router.post(
       const { publishEvent } = await import('../events/emitter');
       publishEvent('memory:recalled', {
         projectName,
+        sessionId,
         query,
         resultCount: results.length,
         memoryIds: results.map((r) => r.memory.id),
@@ -680,6 +716,23 @@ router.post(
           collection: r.collection,
         })),
       }).catch(() => {});
+    }
+
+    // Retrieval audit log (M3): enrichment surface, only when session-linked.
+    // Fire-and-forget — NEVER blocks a recall.
+    if (sessionId) {
+      import('../services/retrieval-log')
+        .then(({ retrievalLog }) =>
+          retrievalLog.log({
+            projectName,
+            sessionId,
+            surface: 'enrichment',
+            memoryIds: results.map((r) => r.memory.id),
+            snippets: results.map((r) => r.memory.content),
+            query,
+          })
+        )
+        .catch(() => {});
     }
 
     res.json({
