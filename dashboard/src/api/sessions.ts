@@ -4,6 +4,7 @@ import type {
   SessionDetail,
   SensoryEvent,
   SensoryStats,
+  SessionRetrieval,
   WorkingMemoryState,
 } from "@/types/session";
 
@@ -55,6 +56,26 @@ export async function fetchSensoryStats(
     return data;
   } catch {
     return null;
+  }
+}
+
+/**
+ * GET /api/session/:sessionId/retrievals?projectName=<p>
+ * Returns { sessionId, count, retrievals: [...] } sorted oldest-first.
+ * 404/network errors → silent empty state (older sessions predate the log).
+ */
+export async function fetchSessionRetrievals(
+  sessionId: string,
+  projectName?: string,
+): Promise<SessionRetrieval[]> {
+  try {
+    const { data } = await client.get(
+      `/api/session/${encodeURIComponent(sessionId)}/retrievals`,
+      { params: projectName ? { projectName } : undefined },
+    );
+    return data.retrievals ?? [];
+  } catch {
+    return [];
   }
 }
 

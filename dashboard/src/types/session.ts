@@ -54,3 +54,13 @@ export interface WorkingMemoryState {
   slots: WorkingMemorySlot[];
   capacity: number;
 }
+
+export type RetrievalSurface = "digest" | "recall" | "enrichment";
+
+export interface SessionRetrieval {
+  surface: RetrievalSurface;
+  memoryIds: string[];
+  snippets: string[];
+  query?: string;
+  timestamp: string;
+}
