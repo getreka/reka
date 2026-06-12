@@ -103,11 +103,16 @@ export const todoStatusSchema = z.enum(['pending', 'in_progress', 'done', 'cance
 
 export const pinScopeSchema = z.enum(['repo', 'all', 'unpinned']);
 
+// Tag element cap is 256 (not 50): the memory tool encodes file paths as tags
+// ("mem:path=/memories/…", prefix alone is 9 chars) and real paths routinely
+// exceed 41 chars. Qdrant keyword payloads have no per-value limit at this size.
+export const memoryTagSchema = z.string().max(256);
+
 export const createMemorySchema = z.object({
   projectName: projectNameSchema.optional(),
   content: z.string().min(1).max(50000),
   type: memoryTypeSchema.default('note'),
-  tags: z.array(z.string().max(50)).max(20).optional(),
+  tags: z.array(memoryTagSchema).max(20).optional(),
   relatedTo: z.string().max(200).optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
   // Trigger descriptions: separate "what to recall" (content) from
@@ -130,7 +135,7 @@ export const factCategorySchema = z.enum([
 export const batchItemSchema = z.object({
   content: z.string().min(1).max(50000),
   type: memoryTypeSchema.optional().default('note'),
-  tags: z.array(z.string().max(50)).max(20).optional(),
+  tags: z.array(memoryTagSchema).max(20).optional(),
   relatedTo: z.string().max(200).optional(),
   metadata: z.record(z.string(), z.unknown()).optional(),
   factCategory: factCategorySchema.optional(),
@@ -150,7 +155,7 @@ export const recallMemorySchema = z.object({
   query: z.string().min(1).max(5000),
   type: z.union([memoryTypeSchema, z.literal('all')]).default('all'),
   limit: limitSchema.optional(),
-  tag: z.string().max(50).optional(),
+  tag: memoryTagSchema.optional(),
   graphRecall: z.boolean().optional(), // Phase 4: spreading activation
   ragFusion: z.boolean().optional(), // RAG-Fusion: multi-query + RRF merge
   recencyBoost: z.number().min(0).max(1).optional(), // Recency boost weight (0-1)
@@ -170,7 +175,7 @@ export const promoteMemorySchema = z.object({
 export const listMemorySchema = z.object({
   projectName: projectNameSchema.optional(),
   type: z.union([memoryTypeSchema, z.literal('all')]).optional(),
-  tag: z.string().max(50).optional(),
+  tag: memoryTagSchema.optional(),
   limit: z.number().int().min(1).max(100).default(10),
 });
 

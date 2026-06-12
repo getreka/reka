@@ -133,6 +133,23 @@ describe('createMemorySchema', () => {
     const tags = Array.from({ length: 21 }, (_, i) => `tag${i}`);
     expect(() => createMemorySchema.parse({ content: 'x', tags })).toThrow();
   });
+
+  // M2-1: tag element cap is 256 so memory-tool path tags ("mem:path=/memories/…")
+  // longer than 41 chars no longer 400 on create.
+  it('accepts a 100+ char mem:path tag (memory-tool path encoding)', () => {
+    const longPath = `/memories/${'deeply/nested/'.repeat(8)}decisions-and-context.md`; // > 100 chars
+    const tag = `mem:path=${longPath}`;
+    expect(tag.length).toBeGreaterThan(100);
+    const result = createMemorySchema.parse({ content: 'x', tags: [tag] });
+    expect(result.tags).toEqual([tag]);
+  });
+
+  it('accepts a 256-char tag and rejects a 257-char tag', () => {
+    expect(createMemorySchema.parse({ content: 'x', tags: ['a'.repeat(256)] }).tags).toHaveLength(
+      1
+    );
+    expect(() => createMemorySchema.parse({ content: 'x', tags: ['a'.repeat(257)] })).toThrow();
+  });
 });
 
 describe('recallMemorySchema', () => {
@@ -150,6 +167,12 @@ describe('recallMemorySchema', () => {
     const result = recallMemorySchema.parse({ query: 'q', type: 'all' });
     expect(result.type).toBe('all');
   });
+
+  it('accepts a long mem:path tag filter (256-char cap, M2-1)', () => {
+    const tag = `mem:path=/memories/${'x'.repeat(120)}.md`;
+    const result = recallMemorySchema.parse({ query: 'q', tag });
+    expect(result.tag).toBe(tag);
+  });
 });
 
 describe('listMemorySchema', () => {
@@ -161,6 +184,12 @@ describe('listMemorySchema', () => {
   it('accepts tag filter', () => {
     const result = listMemorySchema.parse({ tag: 'api' });
     expect(result.tag).toBe('api');
+  });
+
+  it('accepts a long mem:path tag filter (256-char cap, M2-1)', () => {
+    const tag = `mem:path=/memories/${'x'.repeat(120)}.md`;
+    const result = listMemorySchema.parse({ tag });
+    expect(result.tag).toBe(tag);
   });
 });
 

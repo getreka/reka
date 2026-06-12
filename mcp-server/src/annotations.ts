@@ -63,7 +63,7 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   index_codebase: MUT,
   get_index_status: RO,
 
-  // ── memory (7) ─────────────────────────────────────────
+  // ── memory (8) ─────────────────────────────────────────
   remember: MUT,
   recall: RO,
   list_memories: RO,
@@ -71,6 +71,8 @@ export const TOOL_ANNOTATIONS: Record<string, ToolAnnotations> = {
   batch_remember: MUT,
   review_memories: RO,
   promote_memory: UPSERT, // idempotent promotion
+  // memory_20250818 surface: delete/str_replace/rename remove data
+  memory: DESTRUCT,
 
   // ── architecture (6) ───────────────────────────────────
   record_adr: UPSERT,

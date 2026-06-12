@@ -25,12 +25,24 @@ const typeEmojis: Record<string, string> = {
   procedure: "\u{1F4D6}",
 };
 
+// ── Trigger descriptions (M2-5) ──────────────────────────────────────────────
+// Prescriptive "Call this when…" + anti-trigger wording at module level, so
+// every profile and the agent-runtime mirror (rag-api agent-profiles.ts
+// TOOL_DEFINITIONS) share the same triggering language. Keep copies in sync.
+
+export const REMEMBER_DESCRIPTION =
+  `Call this once per work item, and only when you learned something non-obvious — a decision, a gotcha, or a new procedure — and include the WHY, not just the what. Persists to durable project memory so future sessions recall it. ` +
+  `Do NOT save memories for mechanical changes (typos, renames, version bumps) or restate what the code already says — they pollute recall.`;
+
+export const RECALL_DESCRIPTION =
+  `Call this when past decisions, insights, ADRs, or notes about this project could change your approach — semantic search over agent memory. ` +
+  `Do NOT use for searching code (use hybrid_search or Grep) or documentation (use search_docs).`;
+
 export function createMemoryTools(projectName: string): ToolSpec[] {
   return [
     {
       name: "remember",
-      description:
-        "Store important information in agent memory. Use this to save decisions, insights, context, todos, or important conversations for future reference.",
+      description: REMEMBER_DESCRIPTION,
       schema: z.object({
         content: z.string().describe("Information to remember"),
         type: z
@@ -52,6 +64,18 @@ export function createMemoryTools(projectName: string): ToolSpec[] {
             "Tags for categorization (e.g., ['feature-x', 'important'])",
           ),
         relatedTo: z.string().optional().describe("Related feature or topic"),
+        triggerDescription: z
+          .string()
+          .optional()
+          .describe(
+            "WHEN to recall this memory \u2014 a retrieval cue embedded separately from the content (e.g. 'when changing auth middleware or session handling'). Improves recall matching for the situations where the memory matters.",
+          ),
+        pin: z
+          .enum(["repo", "all"])
+          .optional()
+          .describe(
+            "Set pin when the user says 'always remember this' / 'load this every session'. 'repo' = always loaded for this project; 'all' = always loaded everywhere.",
+          ),
       }),
       annotations: TOOL_ANNOTATIONS["remember"],
       handler: async (
@@ -62,6 +86,10 @@ export function createMemoryTools(projectName: string): ToolSpec[] {
         const type = (args.type as string) || "note";
         const tags = (args.tags as string[]) || [];
         const relatedTo = args.relatedTo as string | undefined;
+        const triggerDescription = args.triggerDescription as
+          | string
+          | undefined;
+        const pin = args.pin as string | undefined;
 
         const response = await ctx.api.post("/api/memory", {
           projectName: ctx.projectName,
@@ -69,6 +97,11 @@ export function createMemoryTools(projectName: string): ToolSpec[] {
           type,
           tags,
           relatedTo,
+          // M2-6: backend already validates/stores both (createMemorySchema);
+          // forwarding them gives the trigger-embedding feature a producer and
+          // `pin` its first writer for the M3 session digest.
+          triggerDescription,
+          pin,
         });
 
         const memory = response.data.memory;
@@ -79,6 +112,10 @@ export function createMemoryTools(projectName: string): ToolSpec[] {
           `- **Content:** ${truncate(content, 200)}\n` +
           (tags.length > 0 ? `- **Tags:** ${tags.join(", ")}\n` : "") +
           (relatedTo ? `- **Related to:** ${relatedTo}\n` : "") +
+          (triggerDescription
+            ? `- **Trigger:** ${truncate(triggerDescription, 120)}\n`
+            : "") +
+          (pin ? `- **Pinned:** ${pin}\n` : "") +
           `- **Created:** ${new Date(memory.createdAt).toLocaleString()}`
         );
       },
@@ -86,8 +123,7 @@ export function createMemoryTools(projectName: string): ToolSpec[] {
 
     {
       name: "recall",
-      description:
-        "Retrieve relevant memories based on context. Searches agent memory for past decisions, insights, and notes related to the query.",
+      description: RECALL_DESCRIPTION,
       schema: z.object({
         query: z.string().describe("What to recall (semantic search)"),
         type: z
@@ -333,6 +369,18 @@ export function createMemoryTools(projectName: string): ToolSpec[] {
                 .number()
                 .optional()
                 .describe("Unix timestamp (seconds) for temporal filtering"),
+              triggerDescription: z
+                .string()
+                .optional()
+                .describe(
+                  "WHEN to recall this memory — a retrieval cue embedded separately from the content. Improves recall matching.",
+                ),
+              pin: z
+                .enum(["repo", "all"])
+                .optional()
+                .describe(
+                  "Set pin when the user says 'always remember this' / 'load this every session'. 'repo' = always loaded for this project; 'all' = everywhere.",
+                ),
             }),
           )
           .describe("Array of memories to store"),
@@ -351,6 +399,9 @@ export function createMemoryTools(projectName: string): ToolSpec[] {
           factCategory?: string;
           factEntities?: string[];
           factDateTs?: number;
+          // M2-6: forwarded as-is — batchItemSchema validates/stores both.
+          triggerDescription?: string;
+          pin?: "repo" | "all";
         }>;
 
         const response = await ctx.api.post("/api/memory/batch", {

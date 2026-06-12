@@ -69,6 +69,20 @@ function batchReject() {
   selected.value = [];
 }
 
+// Source labels — keep in sync with MemorySource (rag-api/src/services/memory.ts).
+// 'auto_memory_tool' (M2) = writes from the MCP `memory` tool, quarantined by
+// governance until promoted.
+const sourceLabels: Record<string, string> = {
+  manual: "manual",
+  auto_conversation: "conversation",
+  auto_pattern: "pattern",
+  auto_feedback: "feedback",
+  auto_memory_tool: "memory tool",
+};
+function sourceLabel(source?: string): string {
+  return source ? (sourceLabels[source] ?? source) : "—";
+}
+
 // Confidence color
 function confidenceClass(confidence?: number): string {
   if (!confidence) return "";
@@ -137,7 +151,7 @@ function confidenceClass(confidence?: number): string {
       <Column field="source" header="Source" style="width: 8rem">
         <template #body="{ data }">
           <span style="font-size: 0.8rem; color: var(--p-text-muted-color)">{{
-            data.source || "—"
+            sourceLabel(data.source)
           }}</span>
         </template>
       </Column>

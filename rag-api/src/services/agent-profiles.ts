@@ -231,6 +231,11 @@ export function listAgentTypes(): Array<{ name: string; description: string }> {
 
 /**
  * Map of action names to Claude tool definitions (JSON schema).
+ *
+ * M2-5: the trigger descriptions ("Call this when…" + "Do NOT use for…") for
+ * hybrid_search / find_symbol / search_graph / remember / recall_memory MIRROR
+ * the module-level ToolSpec wording in mcp-server (tools/search.ts,
+ * tools/memory.ts, tools/suggestions.ts). Keep the copies in sync.
  */
 const TOOL_DEFINITIONS: Record<string, Anthropic.Tool> = {
   search_codebase: {
@@ -256,7 +261,8 @@ const TOOL_DEFINITIONS: Record<string, Anthropic.Tool> = {
   recall_memory: {
     name: 'recall_memory',
     description:
-      'Recall memories from past sessions — decisions, bugs, context, insights. Useful for understanding prior work and avoiding repeated mistakes.',
+      'Call this when past decisions, insights, ADRs, or notes about this project could change your approach — semantic search over agent memory. ' +
+      'Do NOT use for searching code (use hybrid_search or Grep) or documentation (use search_docs).',
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -337,7 +343,9 @@ const TOOL_DEFINITIONS: Record<string, Anthropic.Tool> = {
   hybrid_search: {
     name: 'hybrid_search',
     description:
-      'Search the codebase using hybrid dense+sparse vectors for better recall. Combines semantic similarity with keyword matching.',
+      'Call this when you need to find code and don\'t already know the exact file or symbol name — conceptual questions ("how does X work", "where is Y handled") or locating the code behind a feature. ' +
+      'Runs hybrid retrieval (semantic + keyword) over the indexed codebase. ' +
+      'Do NOT use for exact strings or known file names (use Grep/Glob) or when you already know a function/class/type name (use find_symbol).',
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -376,7 +384,8 @@ const TOOL_DEFINITIONS: Record<string, Anthropic.Tool> = {
   search_graph: {
     name: 'search_graph',
     description:
-      'Explore file dependency graph — find imports, dependents, and blast radius of a file.',
+      'Call this when you need dependency structure: what imports a file, what a change would break (blast radius), or how modules connect — returns file locations plus connected files via import/call relationships. ' +
+      'Do NOT use for finding code by topic or concept (use hybrid_search) or for plain symbol lookup (use find_symbol).',
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -401,7 +410,8 @@ const TOOL_DEFINITIONS: Record<string, Anthropic.Tool> = {
   find_symbol: {
     name: 'find_symbol',
     description:
-      'Fast lookup of function, class, or type definitions by name. Returns file path and line number.',
+      'Call this when you know a function/class/type NAME and want its exact definition and location — fast symbol-index lookup, faster and more precise than search. ' +
+      'Do NOT use for conceptual questions ("how does X work") or locating a feature by topic — use hybrid_search.',
     input_schema: {
       type: 'object' as const,
       properties: {
@@ -425,7 +435,8 @@ const TOOL_DEFINITIONS: Record<string, Anthropic.Tool> = {
   remember: {
     name: 'remember',
     description:
-      'Save a memory (insight, decision, pattern) for future recall. Persists across sessions.',
+      'Call this once per work item, and only when you learned something non-obvious — a decision, a gotcha, or a new procedure — and include the WHY, not just the what. Persists to durable project memory so future sessions recall it. ' +
+      'Do NOT save memories for mechanical changes (typos, renames, version bumps) or restate what the code already says — they pollute recall.',
     input_schema: {
       type: 'object' as const,
       properties: {

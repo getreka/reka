@@ -2,6 +2,7 @@ import { describe, it, expect, vi, beforeEach } from "vitest";
 import {
   MemoryToolAdapter,
   PATH_TAG_PREFIX,
+  DIR_TAG_PREFIX,
   type MemoryCommand,
 } from "../memory-tool-adapter.js";
 import type { ApiClient } from "../api-client.js";
@@ -87,6 +88,61 @@ describe("MemoryToolAdapter", () => {
       expect(out).toContain("m1");
     });
 
+    it("attributes writes with source auto_memory_tool and NO confidence (M2 governance)", async () => {
+      mock.setResponse("POST /api/memory", {
+        data: { memory: { id: "m1", content: "hi" } },
+      });
+
+      await adapter.handle({
+        command: "create",
+        path: "/memories/auth.md",
+        file_text: "we use BGE-M3",
+      });
+
+      const post = mock.calls.find(
+        (c) => c.method === "POST" && c.path === "/api/memory",
+      )!;
+      const body = post.body as {
+        metadata?: Record<string, unknown>;
+        confidence?: number;
+      };
+      // source routes the write into quarantine; confidence must be ABSENT so
+      // governance can never threshold-drop it (create always succeeds).
+      expect(body.metadata).toEqual({ source: "auto_memory_tool" });
+      expect(body.confidence).toBeUndefined();
+      expect(
+        (body.metadata as Record<string, unknown>).confidence,
+      ).toBeUndefined();
+    });
+
+    it("round-trips a 100+ char path (M2-1: tag cap is 256, not 50)", async () => {
+      const longPath = `/memories/${"deeply/nested/".repeat(8)}decisions-and-context.md`;
+      const tag = `${PATH_TAG_PREFIX}${longPath}`;
+      expect(tag.length).toBeGreaterThan(100);
+
+      // create: the full path is encoded as a single tag
+      mock.setResponse("POST /api/memory", {
+        data: { memory: { id: "long1", content: "deep fact" } },
+      });
+      const created = await adapter.handle({
+        command: "create",
+        path: longPath,
+        file_text: "deep fact",
+      });
+      expect(created).toContain(`Created memory file ${longPath}`);
+      const post = mock.calls.find((c) => c.path === "/api/memory")!;
+      expect((post.body as { tags: string[] }).tags).toContain(tag);
+
+      // view: the same path tag finds the content again
+      mock.setResponse("GET /api/memory/list", {
+        data: {
+          memories: [{ id: "long1", content: "deep fact", tags: [tag] }],
+        },
+      });
+      const viewed = await adapter.handle({ command: "view", path: longPath });
+      expect(viewed).toContain("deep fact");
+    });
+
     it("normalizes a path missing the leading slash", async () => {
       mock.setResponse("POST /api/memory", {
         data: { memory: { id: "m2", content: "x" } },
@@ -100,6 +156,150 @@ describe("MemoryToolAdapter", () => {
       const body = post.body as { tags: string[]; relatedTo: string };
       expect(body.relatedTo).toBe("/memories/notes.md");
       expect(body.tags[0]).toBe(`${PATH_TAG_PREFIX}/memories/notes.md`);
+    });
+  });
+
+  describe("ancestor-dir tags (M2-4)", () => {
+    it("create writes mem:dir tags for every ancestor, nearest first", async () => {
+      mock.setResponse("POST /api/memory", {
+        data: { memory: { id: "d1", content: "x" } },
+      });
+      await adapter.handle({
+        command: "create",
+        path: "/memories/auth/decisions.md",
+        file_text: "x",
+      });
+      const post = mock.calls.find((c) => c.path === "/api/memory")!;
+      const tags = (post.body as { tags: string[] }).tags;
+      expect(tags).toEqual([
+        `${PATH_TAG_PREFIX}/memories/auth/decisions.md`,
+        `${DIR_TAG_PREFIX}/memories/auth`,
+        `${DIR_TAG_PREFIX}/memories`,
+      ]);
+    });
+
+    it("caps dir tags at 5 levels (20-tag schema cap headroom)", async () => {
+      mock.setResponse("POST /api/memory", {
+        data: { memory: { id: "d2", content: "x" } },
+      });
+      await adapter.handle({
+        command: "create",
+        path: "/a/b/c/d/e/f/g/file.md", // 7 ancestors
+        file_text: "x",
+      });
+      const post = mock.calls.find((c) => c.path === "/api/memory")!;
+      const tags = (post.body as { tags: string[] }).tags;
+      const dirTags = tags.filter((t) => t.startsWith(DIR_TAG_PREFIX));
+      expect(dirTags).toHaveLength(5);
+      expect(dirTags[0]).toBe(`${DIR_TAG_PREFIX}/a/b/c/d/e/f/g`);
+      expect(dirTags[4]).toBe(`${DIR_TAG_PREFIX}/a/b/c`);
+      expect(tags.length).toBeLessThanOrEqual(20);
+    });
+
+    it("directory view = ONE exact mem:dir tag query (no unfiltered scan)", async () => {
+      const dirTag = `${DIR_TAG_PREFIX}/memories/auth`;
+      const apiGet = mock.api.get as ReturnType<typeof vi.fn>;
+      apiGet.mockImplementation(async (path: string) => {
+        mock.calls.push({ method: "GET", path });
+        if (path.startsWith("/api/memory/quarantine")) {
+          return { data: { memories: [] } };
+        }
+        // Durable list: children only when queried by the dir tag.
+        if (path.includes(encodeURIComponent(dirTag))) {
+          return {
+            data: {
+              memories: [
+                {
+                  id: "c1",
+                  content: "one",
+                  tags: [`${PATH_TAG_PREFIX}/memories/auth/a.md`, dirTag],
+                },
+                {
+                  id: "c2",
+                  content: "two",
+                  tags: [`${PATH_TAG_PREFIX}/memories/auth/b.md`, dirTag],
+                },
+              ],
+            },
+          };
+        }
+        return { data: { memories: [] } };
+      });
+
+      const out = await adapter.handle({
+        command: "view",
+        path: "/memories/auth",
+      });
+
+      expect(out).toContain("Directory /memories/auth");
+      expect(out).toContain("/memories/auth/a.md");
+      expect(out).toContain("/memories/auth/b.md");
+      // No unfiltered durable list call happened (every list GET carried a tag).
+      const listCalls = mock.calls.filter(
+        (c) => c.method === "GET" && c.path.startsWith("/api/memory/list"),
+      );
+      expect(listCalls.length).toBeGreaterThan(0);
+      for (const c of listCalls) {
+        expect(c.path).toContain("tag=");
+      }
+    });
+
+    it("keeps the prefix fallback for pre-existing entries without dir tags", async () => {
+      const legacyTag = `${PATH_TAG_PREFIX}/memories/auth/legacy.md`;
+      const apiGet = mock.api.get as ReturnType<typeof vi.fn>;
+      apiGet.mockImplementation(async (path: string) => {
+        mock.calls.push({ method: "GET", path });
+        if (path.startsWith("/api/memory/quarantine")) {
+          return { data: { memories: [] } };
+        }
+        // Tagged queries (exact path tag AND dir tag) find nothing — the entry
+        // predates dir tags. Only the unfiltered scan returns it.
+        if (path.includes("tag=")) {
+          return { data: { memories: [] } };
+        }
+        return {
+          data: {
+            memories: [{ id: "l1", content: "old", tags: [legacyTag] }],
+          },
+        };
+      });
+
+      const out = await adapter.handle({
+        command: "view",
+        path: "/memories/auth",
+      });
+      expect(out).toContain("/memories/auth/legacy.md");
+    });
+
+    it("rename rewrites dir tags for the new location", async () => {
+      const oldTag = `${PATH_TAG_PREFIX}/memories/old/file.md`;
+      mock.setResponse("GET /api/memory/list", {
+        data: {
+          memories: [
+            {
+              id: "x",
+              content: "body",
+              tags: [oldTag, `${DIR_TAG_PREFIX}/memories/old`],
+            },
+          ],
+        },
+      });
+      mock.setResponse("POST /api/memory", {
+        data: { memory: { id: "y", content: "body" } },
+      });
+      mock.setResponse("DELETE /api/memory/", { data: { success: true } });
+
+      await adapter.handle({
+        command: "rename",
+        old_path: "/memories/old/file.md",
+        new_path: "/memories/new/file.md",
+      });
+
+      const post = mock.calls.find((c) => c.path === "/api/memory")!;
+      const tags = (post.body as { tags: string[] }).tags;
+      expect(tags).toContain(`${PATH_TAG_PREFIX}/memories/new/file.md`);
+      expect(tags).toContain(`${DIR_TAG_PREFIX}/memories/new`);
+      expect(tags).not.toContain(`${DIR_TAG_PREFIX}/memories/old`);
     });
   });
 
@@ -232,6 +432,82 @@ describe("MemoryToolAdapter", () => {
         view_range: [2, 3],
       });
       expect(out).toBe("l2\nl3");
+    });
+
+    it("merges unpromoted quarantine writes into view (read-your-writes, M2)", async () => {
+      const tag = `${PATH_TAG_PREFIX}/memories/fresh.md`;
+      // Durable tier: empty — the write has not been promoted yet.
+      mock.setResponse("GET /api/memory/list", { data: { memories: [] } });
+      // Quarantine tier: the just-created memory, found via ?tag=.
+      mock.setResponse("GET /api/memory/quarantine", {
+        data: {
+          memories: [{ id: "q1", content: "just written", tags: [tag] }],
+        },
+      });
+
+      const out = await adapter.handle({
+        command: "view",
+        path: "/memories/fresh.md",
+      });
+
+      // The quarantine endpoint must have been queried with the path tag.
+      const qGet = mock.calls.find(
+        (c) =>
+          c.method === "GET" && c.path.startsWith("/api/memory/quarantine"),
+      );
+      expect(qGet).toBeDefined();
+      expect(qGet!.path).toContain("tag=");
+      expect(out).toContain("just written");
+      // No semantic-recall fallback needed — the quarantine copy satisfied the view.
+      expect(mock.calls.some((c) => c.path === "/api/memory/recall")).toBe(
+        false,
+      );
+    });
+
+    it("dedupes by id when a memory appears in both tiers", async () => {
+      const tag = `${PATH_TAG_PREFIX}/memories/dup.md`;
+      const mem = { id: "same1", content: "one copy", tags: [tag] };
+      mock.setResponse("GET /api/memory/list", { data: { memories: [mem] } });
+      mock.setResponse("GET /api/memory/quarantine", {
+        data: { memories: [mem] },
+      });
+
+      const out = await adapter.handle({
+        command: "view",
+        path: "/memories/dup.md",
+      });
+
+      // Exactly one copy of the content (duplicate id dropped).
+      expect(out.split("one copy").length - 1).toBe(1);
+    });
+
+    it("survives a failing quarantine endpoint (additive read, M2)", async () => {
+      const tag = `${PATH_TAG_PREFIX}/memories/auth.md`;
+      mock.setResponse("GET /api/memory/list", {
+        data: {
+          memories: [{ id: "m1", content: "durable body", tags: [tag] }],
+        },
+      });
+      // Simulate a quarantine endpoint failure (e.g. older rag-api): the view
+      // must still return the durable content.
+      const apiGet = mock.api.get as ReturnType<typeof vi.fn>;
+      apiGet.mockImplementation(async (path: string) => {
+        mock.calls.push({ method: "GET", path });
+        if (path.startsWith("/api/memory/quarantine")) {
+          throw new Error("503");
+        }
+        return {
+          data: {
+            memories: [{ id: "m1", content: "durable body", tags: [tag] }],
+          },
+        };
+      });
+
+      const out = await adapter.handle({
+        command: "view",
+        path: "/memories/auth.md",
+      });
+      expect(out).toContain("durable body");
     });
 
     it("falls back to semantic recall when nothing is at the path", async () => {

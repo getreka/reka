@@ -188,7 +188,7 @@ No cross-contamination between projects. One backend serves them all.
 
 - **Claude Code plugin** -- 9 commands, 4 agents, 2 hooks, auto-configured MCP
 - **MCP native** -- works with Claude Code, Cursor, Windsurf out of the box
-- **28 tools, 0 hidden** -- search, memory, indexing, agents, architecture
+- **29 tools, 0 hidden** -- search, memory, indexing, agents, architecture
 - **Dashboard** -- Vue 3 web UI for memory review and analytics
 
 ### LLM & Embedding
@@ -243,21 +243,78 @@ Default config runs fully local -- no API keys needed.
 
 ## MCP Tools
 
-Reka exposes 28 tools to your AI assistant (none hidden). The most used:
+Reka exposes 29 tools to your AI assistant (none hidden). The most used:
 
-| Tool                            | What it does                                |
-| ------------------------------- | ------------------------------------------- |
-| `hybrid_search`                 | Semantic + keyword search over your code    |
-| `find_symbol`                   | Fast lookup: functions, classes, types      |
-| `search_graph`                  | Traverse imports, find dependencies         |
-| `search_docs`                   | Search indexed documentation                |
-| `context_briefing`              | Multi-strategy lookup before making changes |
-| `remember`                      | Store a decision, insight, or pattern       |
-| `recall`                        | Retrieve relevant memories                  |
-| `record_adr`                    | Record an architecture decision             |
-| `index_codebase`                | Index or re-index the project               |
-| `start_session` / `end_session` | Session lifecycle with continuity           |
-| `run_agent`                     | Launch an autonomous sub-agent              |
+| Tool                            | What it does                                                                  |
+| ------------------------------- | ----------------------------------------------------------------------------- |
+| `hybrid_search`                 | Semantic + keyword search over your code                                      |
+| `find_symbol`                   | Fast lookup: functions, classes, types                                        |
+| `search_graph`                  | Traverse imports, find dependencies                                           |
+| `search_docs`                   | Search indexed documentation                                                  |
+| `context_briefing`              | Multi-strategy lookup before making changes                                   |
+| `memory`                        | Anthropic memory-tool surface (six commands) over governed server-side memory |
+| `remember`                      | Store a decision, insight, or pattern                                         |
+| `recall`                        | Retrieve relevant memories                                                    |
+| `record_adr`                    | Record an architecture decision                                               |
+| `index_codebase`                | Index or re-index the project                                                 |
+| `start_session` / `end_session` | Session lifecycle with continuity                                             |
+| `run_agent`                     | Launch an autonomous sub-agent                                                |
+
+---
+
+## Reka and Anthropic's memory tool
+
+Anthropic's `memory_20250818` tool gives Claude a `/memories` directory it is
+RL-trained to use unprompted, through six commands: `view`, `create`,
+`str_replace`, `insert`, `delete`, `rename`. Two facts about how that relates
+to Reka, stated plainly:
+
+- **In Claude Code, the native memory tool is host-implemented over local
+  files.** The host executes the commands against a directory on your machine
+  and exposes **no pluggable backend** — Reka cannot intercept those calls, and
+  we don't claim to.
+- **What Reka offers is the same six-command surface as an MCP tool named
+  `memory`**, so the model's trained triggering carries over — but the writes
+  land in Reka instead of a local folder: **project-scoped** (shared across
+  machines and sessions) and **governed**. Every write is attributed
+  (`source: auto_memory_tool`) and quarantined; the tool's own path-based
+  `view` sees it immediately (read-your-writes), but it only enters semantic
+  `recall` once promoted. Review queue lives in the dashboard and
+  `review_memories`/`promote_memory`.
+
+For **direct Anthropic SDK users** the adapter is a true backend: wire it into
+the SDK's `betaMemoryTool` helper and Claude's native memory calls persist to
+Reka (adapter source: `mcp-server/src/memory-tool-adapter.ts`):
+
+```ts
+import Anthropic from "@anthropic-ai/sdk";
+import { betaMemoryTool } from "@anthropic-ai/sdk/helpers/beta/memory";
+import { createApiClient } from "./api-client.js";
+import { MemoryToolAdapter } from "./memory-tool-adapter.js";
+
+const api = createApiClient(
+  RAG_API_URL,
+  PROJECT_NAME,
+  PROJECT_PATH,
+  REKA_API_KEY,
+);
+const adapter = new MemoryToolAdapter(api, PROJECT_NAME);
+
+// betaMemoryTool takes one handler per command; the adapter exposes exactly
+// that { [command]: (cmd) => Promise<string> } shape:
+const memoryTool = betaMemoryTool(adapter.toHandlers());
+
+const client = new Anthropic();
+const runner = client.beta.messages.toolRunner({
+  model: "claude-opus-4-8",
+  max_tokens: 1024,
+  tools: [memoryTool],
+  messages: [
+    { role: "user", content: "Remember that we use qwen3-embedding:4b." },
+  ],
+});
+for await (const message of runner) console.log(message);
+```
 
 ---
 

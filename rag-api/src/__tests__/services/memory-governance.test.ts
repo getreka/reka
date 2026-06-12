@@ -213,6 +213,39 @@ describe('MemoryGovernanceService', () => {
       expect(result.metadata?.skipped).toBeUndefined();
       expect(mockedVS.upsert).toHaveBeenCalled();
     });
+
+    it('ALWAYS quarantines auto_memory_tool writes (no confidence -> never threshold-dropped)', async () => {
+      // M2: the memory-tool adapter sends source 'auto_memory_tool' and NO
+      // confidence. Even with a hostile review history (threshold at max 0.8)
+      // the write must land in quarantine — confidence-undefined writes are
+      // never dropped, preserving memory_20250818's create-succeeds contract.
+      counters.set('governance:test:promoted', 0);
+      counters.set('governance:test:rejected', 10);
+      mockedVS.upsert.mockResolvedValue(undefined);
+
+      const result = await memoryGovernance.ingest({
+        projectName: 'test',
+        content: 'memory tool write',
+        type: 'note',
+        tags: ['mem:path=/memories/auth.md'],
+        source: 'auto_memory_tool',
+        // no confidence — deliberate
+      });
+
+      expect(result.metadata?.skipped).toBeUndefined();
+      expect(mockedMemory.remember).not.toHaveBeenCalled();
+      expect(mockedVS.upsert).toHaveBeenCalledWith(
+        'test_memory_pending',
+        expect.arrayContaining([
+          expect.objectContaining({
+            payload: expect.objectContaining({
+              source: 'auto_memory_tool',
+              validated: false,
+            }),
+          }),
+        ])
+      );
+    });
   });
 
   describe('promote', () => {
@@ -329,6 +362,76 @@ describe('MemoryGovernanceService', () => {
       const result = await memoryGovernance.reject('test', 'q-1');
 
       expect(result).toBe(false);
+    });
+  });
+
+  describe('listQuarantine (?tag= filter, M2)', () => {
+    it('passes an exact-tag filter to the quarantine scroll', async () => {
+      const tag = 'mem:path=/memories/auth.md';
+      mockQdrantClient.scroll.mockResolvedValue({
+        points: [{ id: 'q-1', payload: { id: 'q-1', type: 'note', content: 'c', tags: [tag] } }],
+      });
+
+      const memories = await memoryGovernance.listQuarantine('test', 20, undefined, tag);
+
+      expect(mockQdrantClient.scroll).toHaveBeenCalledWith(
+        'test_memory_pending',
+        expect.objectContaining({
+          filter: { must: [{ key: 'tags', match: { any: [tag] } }] },
+        })
+      );
+      expect(memories).toHaveLength(1);
+      expect(memories[0].tags).toContain(tag);
+    });
+
+    it('omits the filter when no tag is given', async () => {
+      mockQdrantClient.scroll.mockResolvedValue({ points: [] });
+
+      await memoryGovernance.listQuarantine('test', 20);
+
+      const args = mockQdrantClient.scroll.mock.calls[0][1];
+      expect(args.filter).toBeUndefined();
+    });
+  });
+
+  describe('getQuarantineById / deleteFromQuarantine (M2)', () => {
+    it('getQuarantineById finds a quarantine memory by exact id', async () => {
+      mockQdrantClient.scroll.mockResolvedValue({
+        points: [{ id: 'q-7', payload: { id: 'q-7', type: 'note', content: 'pending write' } }],
+      });
+
+      const memory = await memoryGovernance.getQuarantineById('test', 'q-7');
+
+      expect(mockQdrantClient.scroll).toHaveBeenCalledWith(
+        'test_memory_pending',
+        expect.objectContaining({
+          filter: { must: [{ key: 'id', match: { value: 'q-7' } }] },
+        })
+      );
+      expect(memory?.id).toBe('q-7');
+      expect(memory?.content).toBe('pending write');
+    });
+
+    it('getQuarantineById returns null when missing or collection absent', async () => {
+      mockQdrantClient.scroll.mockResolvedValue({ points: [] });
+      expect(await memoryGovernance.getQuarantineById('test', 'nope')).toBeNull();
+
+      const err = new Error('Not found') as any;
+      err.status = 404;
+      mockQdrantClient.scroll.mockRejectedValue(err);
+      expect(await memoryGovernance.getQuarantineById('test', 'nope')).toBeNull();
+    });
+
+    it('deleteFromQuarantine deletes WITHOUT counting a review outcome', async () => {
+      mockedVS.delete.mockResolvedValue(undefined);
+
+      const ok = await memoryGovernance.deleteFromQuarantine('counterproj', 'q-8');
+
+      expect(ok).toBe(true);
+      expect(mockedVS.delete).toHaveBeenCalledWith('counterproj_memory_pending', ['q-8']);
+      // Unlike reject(): the adaptive-threshold rejected counter must NOT move —
+      // an agent deleting/superseding its own unpromoted write is not a review.
+      expect(counters.get('governance:counterproj:rejected')).toBeUndefined();
     });
   });
 

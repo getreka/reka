@@ -23,8 +23,18 @@
  *
  * A "path" (e.g. `/memories/auth/decisions.md`) has no first-class column in
  * Reka, so we encode it as BOTH a tag (`mem:path=/memories/auth/decisions.md`)
- * for exact lookup AND `relatedTo` for human readability. Directory listings
- * use a tag *prefix* match performed client-side over the project's memory list.
+ * for exact lookup AND `relatedTo` for human readability. Writes also carry
+ * ancestor-dir tags (`mem:dir=/memories/auth`, …, ≤5 levels) so a directory
+ * listing is one exact tag query; a client-side tag-*prefix* scan remains as
+ * the fallback for entries written before dir tags existed.
+ *
+ * ── Governance (M2) ──
+ * Every write is attributed with `metadata.source = 'auto_memory_tool'` and NO
+ * confidence, so memoryGovernance.ingest always QUARANTINES it (and never
+ * threshold-drops it — create succeeds, as memory_20250818 expects). Reads at a
+ * path merge durable + quarantine (read-your-writes), but quarantined writes
+ * stay invisible to semantic `recall` until a human/gate promotes them — that
+ * is the governance gate this adapter is wired through.
  *
  * ── Wiring into @anthropic-ai/sdk (betaMemoryTool / BetaAbstractMemoryTool) ──
  *
@@ -41,13 +51,13 @@
  *   const memoryTool = betaMemoryTool(adapter.toHandlers());
  *
  *   const client = new Anthropic();
- *   await client.beta.messages.toolRunner({
+ *   const runner = client.beta.messages.toolRunner({
  *     model: 'claude-opus-4-8',
  *     max_tokens: 1024,
- *     messages: [{ role: 'user', content: 'Remember that we use BGE-M3 (1024d).' }],
+ *     messages: [{ role: 'user', content: 'Remember that we use qwen3-embedding:4b.' }],
  *     tools: [memoryTool],
- *     betas: ['context-management-2025-06-27'],
  *   });
+ *   for await (const message of runner) console.log(message);
  *
  * Alternatively, subclass-style (BetaAbstractMemoryTool): forward each abstract
  * method to `adapter.handle(command)` — e.g. `view(cmd) { return adapter.handle(cmd); }`.
@@ -134,6 +144,20 @@ export type MemoryToolHandlers = {
 /** Tag prefix used to encode a memory-tool path as a Reka tag. */
 export const PATH_TAG_PREFIX = "mem:path=";
 
+/**
+ * Tag prefix used to encode each ANCESTOR DIRECTORY of a path (M2-4).
+ * `/memories/auth/decisions.md` also gets `mem:dir=/memories/auth` and
+ * `mem:dir=/memories`, so a directory `view` is ONE exact-tag query instead of
+ * an unfiltered semantic top-100 scan (silently incomplete past ~100 memories).
+ */
+export const DIR_TAG_PREFIX = "mem:dir=";
+
+/**
+ * Max ancestor-dir tags per memory. 1 path tag + 5 dir tags = 6, well inside
+ * the 20-tag schema cap; deeper ancestors fall back to the prefix scan.
+ */
+const MAX_DIR_TAGS = 5;
+
 /** Minimal shape of a Reka memory record we read back. */
 interface RekaMemory {
   id: string;
@@ -158,6 +182,22 @@ export class MemoryToolAdapter {
   /** Encode a memory-tool path into the Reka tag used for exact lookups. */
   private pathTag(path: string): string {
     return `${PATH_TAG_PREFIX}${this.normalizePath(path)}`;
+  }
+
+  /**
+   * Ancestor-directory tags for a path, nearest first, capped at
+   * {@link MAX_DIR_TAGS} levels. `/a/b/c.md` -> [`mem:dir=/a/b`, `mem:dir=/a`].
+   */
+  private dirTags(path: string): string[] {
+    const tags: string[] = [];
+    let current = this.normalizePath(path);
+    while (tags.length < MAX_DIR_TAGS) {
+      const idx = current.lastIndexOf("/");
+      if (idx <= 0) break; // reached the root segment
+      current = current.slice(0, idx);
+      tags.push(`${DIR_TAG_PREFIX}${current}`);
+    }
+    return tags;
   }
 
   /** Normalize a path: ensure a single leading slash, strip a trailing slash. */
@@ -357,10 +397,20 @@ export class MemoryToolAdapter {
   /**
    * remember: POST /api/memory with the path encoded as a tag + relatedTo.
    *
+   * Attribution + governance routing (M2): `metadata.source = 'auto_memory_tool'`
+   * routes the write through memoryGovernance.ingest into QUARANTINE
+   * (`{project}_memory_pending`). We deliberately send NO confidence — ingest
+   * only threshold-drops a write when confidence is defined, so a create always
+   * persists (memory_20250818's create-succeeds expectation) and always lands
+   * in quarantine. Quarantined writes are visible to this adapter's path-based
+   * `view` (listByPathPrefix merges the quarantine tier — read-your-writes)
+   * but NOT to `recall` until promoted: that IS the governance gate.
+   *
    * The route returns `{ success, skipped, memory }` where `skipped: true` means
    * memory governance dropped the write (below the adaptive salience threshold) —
-   * NOTHING was persisted. We surface that flag so callers don't report a write
-   * succeeded that a later `view` can't find.
+   * NOTHING was persisted. Unreachable for confidence-less writes, but we keep
+   * surfacing the flag so callers don't report a write succeeded that a later
+   * `view` can't find.
    */
   private async remember(
     path: string,
@@ -370,8 +420,12 @@ export class MemoryToolAdapter {
       projectName: this.projectName,
       content,
       type: "note",
-      tags: [this.pathTag(path)],
+      // Exact path tag + ancestor-dir tags (M2-4): create/insert/rename all
+      // funnel through here, so dir tags are written on every write path and
+      // rename() naturally REWRITES them for the new location.
+      tags: [this.pathTag(path), ...this.dirTags(path)],
       relatedTo: path,
+      metadata: { source: "auto_memory_tool" },
     });
     const skipped = res.data?.skipped === true;
     return { memory: res.data.memory as RekaMemory, persisted: !skipped };
@@ -407,36 +461,93 @@ export class MemoryToolAdapter {
 
   /**
    * List memories whose encoded path-tag matches `path` exactly OR sits under it
-   * as a directory prefix. Uses GET /api/memory/list filtered by the path tag,
-   * then refines client-side for true prefix matching.
+   * as a directory prefix.
+   *
+   * Merges TWO tiers (read-your-writes): the durable collection
+   * (GET /api/memory/list) AND the governance quarantine
+   * (GET /api/memory/quarantine?tag=…). Memory-tool writes carry
+   * `source: 'auto_memory_tool'` and stay quarantined until promoted, so
+   * without the quarantine tier a `view` right after `create` would come back
+   * empty. The asymmetry is deliberate: path-based view/str_replace/delete/
+   * rename see unpromoted writes, semantic `recall` does NOT — that is the
+   * governance gate, not a bug.
    */
   private async listByPathPrefix(path: string): Promise<RekaMemory[]> {
+    const tag = this.pathTag(path);
+    const [durable, quarantined] = await Promise.all([
+      this.listDurable(tag),
+      this.listQuarantine(tag),
+    ]);
+    let memories = this.dedupeById([...durable, ...quarantined]);
+
+    // Exact-tag filter found nothing -> treat as a directory. First try the
+    // ancestor-dir tag (M2-4): ONE exact tag query, scales past the 100-item
+    // listing window that made the prefix scan silently incomplete.
+    if (memories.length === 0) {
+      const dirTag = `${DIR_TAG_PREFIX}${this.normalizePath(path)}`;
+      const [dirDurable, dirQuarantined] = await Promise.all([
+        this.listDurable(dirTag),
+        this.listQuarantine(dirTag),
+      ]);
+      memories = this.dedupeById([...dirDurable, ...dirQuarantined]);
+    }
+
+    // Still nothing -> client-side PREFIX fallback for pre-existing entries
+    // written before dir tags existed (and ancestors deeper than MAX_DIR_TAGS).
+    if (memories.length === 0) {
+      const [allDurable, allQuarantined] = await Promise.all([
+        this.listDurable(),
+        this.listQuarantine(),
+      ]);
+      const all = this.dedupeById([...allDurable, ...allQuarantined]);
+      const dirPrefix = this.pathTag(path.endsWith("/") ? path : path + "/");
+      memories = all.filter((m) =>
+        (m.tags || []).some((t) => t === tag || t.startsWith(dirPrefix)),
+      );
+    }
+    return memories;
+  }
+
+  /** GET /api/memory/list — durable tier, optionally filtered by exact tag. */
+  private async listDurable(tag?: string): Promise<RekaMemory[]> {
     const params = new URLSearchParams({
       projectName: this.projectName,
       limit: "100",
       offset: "0",
-      tag: this.pathTag(path),
     });
-    let res = await this.api.get(`/api/memory/list?${params}`);
-    let memories = (res.data.memories || []) as RekaMemory[];
+    if (tag) params.set("tag", tag);
+    const res = await this.api.get(`/api/memory/list?${params}`);
+    return (res.data.memories || []) as RekaMemory[];
+  }
 
-    // Exact-tag filter found nothing -> treat as a directory: re-list unfiltered
-    // and match any memory whose path tag begins with this path.
-    if (memories.length === 0) {
-      const dirParams = new URLSearchParams({
-        projectName: this.projectName,
-        limit: "100",
-        offset: "0",
-      });
-      res = await this.api.get(`/api/memory/list?${dirParams}`);
-      const all = (res.data.memories || []) as RekaMemory[];
-      const prefix = this.pathTag(path);
-      const dirPrefix = this.pathTag(path.endsWith("/") ? path : path + "/");
-      memories = all.filter((m) =>
-        (m.tags || []).some((t) => t === prefix || t.startsWith(dirPrefix)),
-      );
+  /**
+   * GET /api/memory/quarantine — unpromoted memory-tool writes, optionally
+   * filtered by exact tag (`?tag=` is the M2 governance-route extension).
+   * Best-effort: quarantine visibility is additive, so a failure here must
+   * not break viewing durable memories.
+   */
+  private async listQuarantine(tag?: string): Promise<RekaMemory[]> {
+    const params = new URLSearchParams({
+      projectName: this.projectName,
+      limit: "100",
+    });
+    if (tag) params.set("tag", tag);
+    try {
+      const res = await this.api.get(`/api/memory/quarantine?${params}`);
+      return (res.data.memories || []) as RekaMemory[];
+    } catch {
+      return [];
     }
-    return memories;
+  }
+
+  /** Drop duplicate/empty ids, preserving first occurrence (durable wins). */
+  private dedupeById(memories: RekaMemory[]): RekaMemory[] {
+    const seen = new Set<string>();
+    return memories.filter((m) => {
+      if (!m || !m.id || seen.has(m.id)) return false;
+      seen.add(m.id);
+      return true;
+    });
   }
 
   /** Extract the original memory-tool path from a memory's encoded tag. */

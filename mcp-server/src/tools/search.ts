@@ -12,6 +12,25 @@ import {
 import { z } from "zod";
 import { TOOL_ANNOTATIONS } from "../annotations.js";
 
+// ── Trigger descriptions (M2-5) ──────────────────────────────────────────────
+// Prescriptive "Call this when…" + anti-trigger "Do NOT use for…" wording,
+// promoted to module level so EVERY profile (full, lite) and the agent-runtime
+// mirror (rag-api/src/services/agent-profiles.ts TOOL_DEFINITIONS) carry the
+// same triggering language. Keep all three copies in sync.
+
+export const HYBRID_SEARCH_DESCRIPTION =
+  `Call this when you need to find code and don't already know the exact file or symbol name — conceptual questions ("how does X work", "where is Y handled") or locating the code behind a feature. ` +
+  `Runs hybrid retrieval (semantic + keyword) over the indexed codebase; set mode: "navigate" for a compact map of file locations, symbols, and graph connections (no code bodies), then use the Read tool on the returned paths. ` +
+  `Do NOT use for exact strings or known file names (use Grep/Glob) or when you already know a function/class/type name (use find_symbol).`;
+
+export const FIND_SYMBOL_DESCRIPTION =
+  `Call this when you know a function/class/type NAME and want its exact definition and location — fast symbol-index lookup, faster and more precise than search. ` +
+  `Do NOT use for conceptual questions ("how does X work") or locating a feature by topic — use hybrid_search.`;
+
+export const SEARCH_GRAPH_DESCRIPTION =
+  `Call this when you need dependency structure: what imports a file, what a change would break (blast radius), or how modules connect — returns file locations plus connected files via import/call relationships (use the Read tool to view code). ` +
+  `Do NOT use for finding code by topic or concept (use hybrid_search) or for plain symbol lookup (use find_symbol).`;
+
 /**
  * Create the search tools module with project-specific descriptions.
  */
@@ -19,11 +38,7 @@ export function createSearchTools(projectName: string): ToolSpec[] {
   return [
     {
       name: "hybrid_search",
-      description:
-        `Call this when you need to find code in ${projectName} and you don't already know the exact file or symbol name — conceptual questions ("how does X work", "where is Y handled") or locating the code behind a feature. ` +
-        `Runs hybrid retrieval (semantic + keyword) over the indexed codebase and returns the best-matching code. ` +
-        `Set mode: "navigate" for a compact map of file locations, symbols, and graph connections (no code bodies) — then use the Read tool on the returned paths. ` +
-        `Prefer Grep for exact strings and find_symbol when you already know a function/class/type name.`,
+      description: HYBRID_SEARCH_DESCRIPTION,
       schema: z.object({
         query: z.string().describe("Search query"),
         mode: z
@@ -176,7 +191,7 @@ export function createSearchTools(projectName: string): ToolSpec[] {
     },
     {
       name: "find_symbol",
-      description: `Find a function, class, type, or interface by name in ${projectName}. Fast symbol lookup without full-text search.`,
+      description: FIND_SYMBOL_DESCRIPTION,
       schema: z.object({
         symbol: z
           .string()
@@ -252,7 +267,7 @@ export function createSearchTools(projectName: string): ToolSpec[] {
     },
     {
       name: "search_graph",
-      description: `Search ${projectName} codebase with graph expansion. Returns file locations plus connected files via import/call relationships. Use Read tool to view code.`,
+      description: SEARCH_GRAPH_DESCRIPTION,
       schema: z.object({
         query: z.string().describe("Search query"),
         limit: z.coerce

@@ -24,7 +24,16 @@ export type MemoryType =
   | 'conversation'
   | 'note'
   | 'procedure';
-export type MemorySource = 'manual' | 'auto_conversation' | 'auto_pattern' | 'auto_feedback';
+// 'auto_memory_tool' = writes from the MCP `memory` tool (memory_20250818 adapter).
+// Like every auto_* source they are quarantined by governance: visible to the
+// tool's own path-based `view` (read-your-writes) but NOT to `recall` until
+// promoted — that IS the governance gate.
+export type MemorySource =
+  | 'manual'
+  | 'auto_conversation'
+  | 'auto_pattern'
+  | 'auto_feedback'
+  | 'auto_memory_tool';
 export type TodoStatus = 'pending' | 'in_progress' | 'done' | 'cancelled';
 /** Pin scope — controls which surfaces a memory is always loaded in. */
 export type PinScope = 'repo' | 'all' | 'unpinned';
