@@ -7,14 +7,21 @@ import {
   startSession as startSessionApi,
   fetchWorkingMemory,
   fetchSensoryStats,
+  fetchSessionRetrievals,
 } from "@/api/sessions";
-import type { WorkingMemoryState, SensoryStats } from "@/types/session";
+import type {
+  WorkingMemoryState,
+  SensoryStats,
+  SessionRetrieval,
+} from "@/types/session";
+import { useAppStore } from "@/stores/app";
 
 export const useSessionsStore = defineStore("sessions", () => {
   const sessions = ref<Record<string, any>[]>([]);
   const selectedSession = ref<Record<string, any> | null>(null);
   const workingMemory = ref<WorkingMemoryState | null>(null);
   const sensoryStats = ref<SensoryStats | null>(null);
+  const retrievals = ref<SessionRetrieval[]>([]);
   const loading = ref(false);
   const error = ref("");
   const statusFilter = ref<"all" | "active" | "ended">("all");
@@ -37,14 +44,20 @@ export const useSessionsStore = defineStore("sessions", () => {
   async function selectSession(id: string) {
     workingMemory.value = null;
     sensoryStats.value = null;
+    retrievals.value = [];
     try {
       selectedSession.value = await fetchSessionDetail(id);
-      const [wm, ss] = await Promise.allSettled([
+      const app = useAppStore();
+      const projectName =
+        selectedSession.value?.projectName || app.currentProject || undefined;
+      const [wm, ss, rt] = await Promise.allSettled([
         fetchWorkingMemory(id),
         fetchSensoryStats(id),
+        fetchSessionRetrievals(id, projectName),
       ]);
       if (wm.status === "fulfilled") workingMemory.value = wm.value;
       if (ss.status === "fulfilled") sensoryStats.value = ss.value;
+      if (rt.status === "fulfilled") retrievals.value = rt.value;
     } catch (e: any) {
       error.value = e.message || "Failed to load session detail";
     }
@@ -68,6 +81,7 @@ export const useSessionsStore = defineStore("sessions", () => {
     selectedSession.value = null;
     workingMemory.value = null;
     sensoryStats.value = null;
+    retrievals.value = [];
   }
 
   return {
@@ -75,6 +89,7 @@ export const useSessionsStore = defineStore("sessions", () => {
     selectedSession,
     workingMemory,
     sensoryStats,
+    retrievals,
     loading,
     error,
     statusFilter,
