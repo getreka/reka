@@ -62,6 +62,8 @@ const SYNTHETIC_MARKERS = [
   '<bash-input>',
   '<bash-stdout>',
   '<command-name>',
+  '<task-notification>',
+  '<local-command-caveat>',
 ];
 
 // Save-intent phrases (EN + UK), matched case-insensitively anywhere in the

@@ -78,6 +78,12 @@ describe('transcriptMiner', () => {
       JSON.stringify({ type: 'file-history-snapshot', messageId: 'm', snapshot: {} }),
       assistantLine('I did the thing.'),
       userLine('<system-reminder>injected context</system-reminder> plus text'),
+      userLine(
+        '<task-notification>\n<task-id>abc123</task-id>\nЗапамʼятай: background task finished\n</task-notification>'
+      ),
+      userLine(
+        '<local-command-caveat>Caveat: messages below were generated during local commands.</local-command-caveat>\n<bash-stdout>ok</bash-stdout>'
+      ),
       userLine([{ type: 'tool_result', tool_use_id: 't1', content: 'stdout' }]),
       userLine('real human question about the build', { isMeta: true }),
       userLine('   '),
@@ -93,7 +99,7 @@ describe('transcriptMiner', () => {
       sessionId: 'sess-1',
     });
 
-    expect(result.linesTotal).toBe(10);
+    expect(result.linesTotal).toBe(12);
     expect(result.linesUnparseable).toBe(1);
     expect(result.userTexts).toBe(2);
     expect(result.candidates).toBe(0);
