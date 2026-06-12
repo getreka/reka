@@ -22,6 +22,7 @@ const QUEUE_NAMES = [
   'session-lifecycle',
   'indexing',
   'maintenance',
+  'llm-batch',
   'dead-letter',
 ] as const;
 export type QueueName = (typeof QUEUE_NAMES)[number];
