@@ -157,6 +157,12 @@ export interface Config {
 
   // Human Memory Architecture (Phase 2: Consolidation + Episodic/Semantic LTM)
   CONSOLIDATION_ENABLED: boolean;
+  // M4: route consolidation steps 1-2 (pattern detection, abstraction) to
+  // claude-opus-4-8 via the Message Batches API (ADR-003). Requires
+  // ANTHROPIC_API_KEY; off/absent → byte-identical sync Ollama path.
+  CONSOLIDATION_BATCH_ENABLED: boolean;
+  // Coalescing window for batch rows (0 = submit immediately, batch-of-1).
+  CONSOLIDATION_BATCH_WINDOW_MS: number;
   EPISODIC_BASE_STABILITY_DAYS: number;
   SEMANTIC_BASE_STABILITY_DAYS: number;
   PROCEDURAL_BASE_STABILITY_DAYS: number;
@@ -336,6 +342,8 @@ const config: Config = {
 
   // Human Memory Architecture (Phase 2: Consolidation + Episodic/Semantic LTM)
   CONSOLIDATION_ENABLED: process.env.CONSOLIDATION_ENABLED === 'true',
+  CONSOLIDATION_BATCH_ENABLED: process.env.CONSOLIDATION_BATCH_ENABLED === 'true',
+  CONSOLIDATION_BATCH_WINDOW_MS: parseInt(process.env.CONSOLIDATION_BATCH_WINDOW_MS || '0', 10),
   EPISODIC_BASE_STABILITY_DAYS: parseInt(process.env.EPISODIC_BASE_STABILITY_DAYS || '7', 10),
   SEMANTIC_BASE_STABILITY_DAYS: parseInt(process.env.SEMANTIC_BASE_STABILITY_DAYS || '90', 10),
   PROCEDURAL_BASE_STABILITY_DAYS: parseInt(process.env.PROCEDURAL_BASE_STABILITY_DAYS || '180', 10),

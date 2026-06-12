@@ -14,6 +14,7 @@ const ALL_QUEUE_NAMES: QueueName[] = [
   'session-lifecycle',
   'indexing',
   'maintenance',
+  'llm-batch',
   'dead-letter',
 ];
 
@@ -22,6 +23,7 @@ const WORKER_QUEUE_NAMES: QueueName[] = [
   'session-lifecycle',
   'indexing',
   'maintenance',
+  'llm-batch',
 ];
 
 /**

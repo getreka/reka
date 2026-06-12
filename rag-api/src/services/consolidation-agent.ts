@@ -39,7 +39,7 @@ export interface ConsolidationResult {
   durationMs: number;
 }
 
-interface ExtractedPattern {
+export interface ExtractedPattern {
   type: 'repeated_query' | 'error_chain' | 'file_cluster' | 'decision_point';
   description: string;
   events: string[]; // event summaries
@@ -47,13 +47,30 @@ interface ExtractedPattern {
   significance: number; // 0-1
 }
 
-interface AbstractedMemory {
+export interface AbstractedMemory {
   content: string;
   subtype: SemanticSubtype;
   confidence: number;
   tags: string[];
   files: string[];
   isEpisodic: boolean; // true = store as episodic, false = semantic
+}
+
+/**
+ * Self-contained snapshot of a session's consolidation inputs, taken at
+ * batch-submit time (M4). Carried inside job payloads so retries NEVER
+ * re-read the 24h-TTL sensory buffer, and so the raw WM slots can be
+ * restored into working memory on terminal batch failure.
+ */
+export interface ConsolidationSnapshot {
+  /** Raw WM slots — restored via workingMemory.insert on terminal failure. */
+  wmSlots: WorkingMemorySlot[];
+  /** Step-1 (pattern detection) input, built from WM slots + sensory events. */
+  eventSummary: string;
+  /** WM-derived observation lines (salience ≥ 0.5) — step-2 input alongside patterns. */
+  wmObservationLines: string[];
+  /** Sensory event count at snapshot time (drives the <3-items pattern skip). */
+  totalEvents: number;
 }
 
 /**
@@ -70,7 +87,7 @@ export class ConsolidationFailedError extends Error {
 
 // ── Prompts ───────────────────────────────────────────────
 
-const PATTERN_DETECTION_PROMPT = `Analyze these tool events from a coding session and identify important patterns.
+export const PATTERN_DETECTION_PROMPT = `Analyze these tool events from a coding session and identify important patterns.
 
 Look for:
 1. REPEATED QUERIES: Same or similar searches done multiple times (indicates difficulty finding something)
@@ -87,7 +104,7 @@ For each pattern, provide:
 Respond with JSON: {"patterns": [...]}
 Only include patterns with significance >= 0.5. If no significant patterns, return {"patterns": []}`;
 
-const ABSTRACTION_PROMPT = `Convert these session observations into reusable knowledge.
+export const ABSTRACTION_PROMPT = `Convert these session observations into reusable knowledge.
 
 For each observation, classify it as EPISODIC or SEMANTIC:
 
@@ -121,6 +138,61 @@ Rules:
 - Focus on: decisions made, bugs found and how they were fixed, architectural insights, workflow procedures, notable incidents
 - Keep content concise but complete (1-3 sentences; episodic items may keep their step-by-step sequence)
 - Include file paths when relevant`;
+
+// ── Structured-output JSON schemas (M4 batch path) ────────
+//
+// Sent as `output_config.format` json_schema on the Batches path so the
+// output is server-constrained — consumers parse with strict JSON.parse,
+// never the regex parseJson salvage used on the Ollama path.
+
+export const PATTERN_JSON_SCHEMA: Record<string, unknown> = {
+  type: 'object',
+  properties: {
+    patterns: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          type: {
+            type: 'string',
+            enum: ['repeated_query', 'error_chain', 'file_cluster', 'decision_point'],
+          },
+          description: { type: 'string' },
+          significance: { type: 'number' },
+          files: { type: 'array', items: { type: 'string' } },
+        },
+        required: ['type', 'description', 'significance', 'files'],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ['patterns'],
+  additionalProperties: false,
+};
+
+export const MEMORIES_JSON_SCHEMA: Record<string, unknown> = {
+  type: 'object',
+  properties: {
+    memories: {
+      type: 'array',
+      items: {
+        type: 'object',
+        properties: {
+          content: { type: 'string' },
+          subtype: { type: 'string', enum: ['decision', 'insight', 'pattern', 'procedure'] },
+          confidence: { type: 'number' },
+          tags: { type: 'array', items: { type: 'string' } },
+          files: { type: 'array', items: { type: 'string' } },
+          isEpisodic: { type: 'boolean' },
+        },
+        required: ['content', 'subtype', 'confidence', 'tags', 'files', 'isEpisodic'],
+        additionalProperties: false,
+      },
+    },
+  },
+  required: ['memories'],
+  additionalProperties: false,
+};
 
 // ── Service ───────────────────────────────────────────────
 
@@ -185,75 +257,12 @@ class ConsolidationAgentService {
       if (Date.now() - startTime > timeout)
         return this.finalize(result, startTime, projectName, sessionId);
 
-      // Step 5 & 6 & 7: Store memories with relationships and anchors
-      for (const mem of abstracted) {
-        if (Date.now() - startTime > timeout) break;
-
-        try {
-          // Step 7: ANCHORING — extract file/symbol references
-          const anchors = this.extractAnchors(mem.content, mem.files);
-          result.anchors.push(...anchors);
-
-          // File paths from anchors for graph cross-linking
-          const anchorFiles = anchors.filter((a) => a.type === 'file').map((a) => a.path);
-
-          if (mem.isEpisodic) {
-            // Store as episodic
-            const stored = await memoryLtm.storeEpisodic({
-              projectName,
-              content: mem.content,
-              sessionId,
-              files: mem.files,
-              tags: mem.tags,
-              anchors,
-            });
-            result.episodic.push({ id: stored.id, content: stored.content });
-
-            // Cross-link memory → files in graph
-            await graphStore.indexMemoryEdges(projectName, stored.id, 'episodic', anchorFiles);
-          } else {
-            // Step 5 & 6: Classify relationships with existing semantic memories
-            let relationships: MemoryRelation[] = [];
-            try {
-              relationships = await this.classifyWithExisting(
-                projectName,
-                mem.content,
-                mem.subtype
-              );
-              result.relationships.push(
-                ...relationships.map((r) => ({
-                  targetId: r.targetId,
-                  type: r.type as any,
-                  reason: r.reason ?? '',
-                  confidence: 0.7,
-                }))
-              );
-            } catch {
-              /* non-critical */
-            }
-
-            // Store as semantic
-            const stored = await memoryLtm.storeSemantic({
-              projectName,
-              content: mem.content,
-              subtype: mem.subtype,
-              confidence: mem.confidence,
-              tags: mem.tags,
-              anchors,
-              relationships,
-              source: 'consolidation',
-            });
-            result.semantic.push({ id: stored.id, content: stored.content, subtype: mem.subtype });
-
-            // Cross-link memory → files in graph
-            await graphStore.indexMemoryEdges(projectName, stored.id, mem.subtype, anchorFiles);
-          }
-        } catch (error: any) {
-          logger.debug('Failed to store consolidated memory', { error: error.message });
-        }
-      }
-
-      return this.finalize(result, startTime, projectName, sessionId);
+      // Steps 5 & 6 & 7: store memories with relationships and anchors
+      return await this.storeAbstracted(projectName, sessionId, abstracted, {
+        result,
+        startTime,
+        timeout,
+      });
     } catch (error: any) {
       logger.warn('Consolidation failed', { error: error.message, projectName, sessionId });
       result.durationMs = Date.now() - startTime;
@@ -268,17 +277,191 @@ class ConsolidationAgentService {
     }
   }
 
+  // ── Snapshot path (M4 batch consolidation) ────────────────
+
+  /**
+   * Build a self-contained consolidation snapshot from WM slots + sensory
+   * events. Taken at batch-submit time so retries/continuations never have
+   * to re-read the 24h-TTL sensory buffer.
+   */
+  buildSnapshot(wmSlots: WorkingMemorySlot[], events: SensoryEvent[]): ConsolidationSnapshot {
+    return {
+      wmSlots,
+      eventSummary: this.buildEventSummary(wmSlots, events),
+      wmObservationLines: this.buildWmObservationLines(wmSlots),
+      totalEvents: events.length,
+    };
+  }
+
+  /**
+   * Sync (Ollama) consolidation driven entirely from a snapshot — the
+   * fallback when the batch path terminally fails. Mirrors consolidate()
+   * step-for-step but never touches working memory or the sensory buffer.
+   */
+  async consolidateSnapshot(
+    projectName: string,
+    sessionId: string,
+    snapshot: ConsolidationSnapshot,
+    options?: { timeout?: number }
+  ): Promise<ConsolidationResult> {
+    const startTime = Date.now();
+    const timeout = options?.timeout ?? config.CONSOLIDATION_TIMEOUT_MS;
+
+    const result: ConsolidationResult = {
+      episodic: [],
+      semantic: [],
+      relationships: [],
+      anchors: [],
+      patternsDetected: 0,
+      totalEventsProcessed: snapshot.totalEvents,
+      durationMs: 0,
+    };
+
+    try {
+      // Step 2: PATTERN DETECTION (same <3-items skip as the live path)
+      let patterns: ExtractedPattern[] = [];
+      if (
+        snapshot.wmSlots.length + snapshot.totalEvents >= 3 &&
+        snapshot.eventSummary.trim().length > 0
+      ) {
+        patterns = await this.detectPatternsFromSummary(
+          snapshot.eventSummary,
+          timeout - (Date.now() - startTime)
+        );
+      }
+      result.patternsDetected = patterns.length;
+
+      if (Date.now() - startTime > timeout)
+        return this.finalize(result, startTime, projectName, sessionId);
+
+      // Step 3 + 4: significance filter, then abstraction
+      const significantPatterns = patterns.filter((p) => p.significance >= 0.5);
+      const observations = this.buildObservations(significantPatterns, snapshot.wmObservationLines);
+      if (!observations.trim()) {
+        return this.finalize(result, startTime, projectName, sessionId);
+      }
+
+      const abstracted = await this.abstractFromObservations(
+        observations,
+        timeout - (Date.now() - startTime)
+      );
+
+      if (Date.now() - startTime > timeout)
+        return this.finalize(result, startTime, projectName, sessionId);
+
+      return await this.storeAbstracted(projectName, sessionId, abstracted, {
+        result,
+        startTime,
+        timeout,
+      });
+    } catch (error: any) {
+      logger.warn('Snapshot consolidation failed', {
+        error: error.message,
+        projectName,
+        sessionId,
+      });
+      result.durationMs = Date.now() - startTime;
+      this.ingestConsolidationEvent(projectName, sessionId, result, false, error.message);
+      throw error instanceof ConsolidationFailedError
+        ? error
+        : new ConsolidationFailedError(`Snapshot consolidation failed: ${error.message}`);
+    }
+  }
+
+  /**
+   * Steps 5 & 6 & 7 — store abstracted memories with relationships and
+   * anchors, then finalize. Shared by consolidate(), consolidateSnapshot()
+   * and the batch finalize continuation. Relationship classification stays
+   * sync Ollama (v1) on every path.
+   */
+  async storeAbstracted(
+    projectName: string,
+    sessionId: string,
+    abstracted: AbstractedMemory[],
+    opts: { result?: ConsolidationResult; startTime?: number; timeout?: number } = {}
+  ): Promise<ConsolidationResult> {
+    const startTime = opts.startTime ?? Date.now();
+    const timeout = opts.timeout ?? config.CONSOLIDATION_TIMEOUT_MS;
+    const result: ConsolidationResult = opts.result ?? {
+      episodic: [],
+      semantic: [],
+      relationships: [],
+      anchors: [],
+      patternsDetected: 0,
+      totalEventsProcessed: 0,
+      durationMs: 0,
+    };
+
+    for (const mem of abstracted) {
+      if (Date.now() - startTime > timeout) break;
+
+      try {
+        // Step 7: ANCHORING — extract file/symbol references
+        const anchors = this.extractAnchors(mem.content, mem.files);
+        result.anchors.push(...anchors);
+
+        // File paths from anchors for graph cross-linking
+        const anchorFiles = anchors.filter((a) => a.type === 'file').map((a) => a.path);
+
+        if (mem.isEpisodic) {
+          // Store as episodic
+          const stored = await memoryLtm.storeEpisodic({
+            projectName,
+            content: mem.content,
+            sessionId,
+            files: mem.files,
+            tags: mem.tags,
+            anchors,
+          });
+          result.episodic.push({ id: stored.id, content: stored.content });
+
+          // Cross-link memory → files in graph
+          await graphStore.indexMemoryEdges(projectName, stored.id, 'episodic', anchorFiles);
+        } else {
+          // Step 5 & 6: Classify relationships with existing semantic memories
+          let relationships: MemoryRelation[] = [];
+          try {
+            relationships = await this.classifyWithExisting(projectName, mem.content, mem.subtype);
+            result.relationships.push(
+              ...relationships.map((r) => ({
+                targetId: r.targetId,
+                type: r.type as any,
+                reason: r.reason ?? '',
+                confidence: 0.7,
+              }))
+            );
+          } catch {
+            /* non-critical */
+          }
+
+          // Store as semantic
+          const stored = await memoryLtm.storeSemantic({
+            projectName,
+            content: mem.content,
+            subtype: mem.subtype,
+            confidence: mem.confidence,
+            tags: mem.tags,
+            anchors,
+            relationships,
+            source: 'consolidation',
+          });
+          result.semantic.push({ id: stored.id, content: stored.content, subtype: mem.subtype });
+
+          // Cross-link memory → files in graph
+          await graphStore.indexMemoryEdges(projectName, stored.id, mem.subtype, anchorFiles);
+        }
+      } catch (error: any) {
+        logger.debug('Failed to store consolidated memory', { error: error.message });
+      }
+    }
+
+    return this.finalize(result, startTime, projectName, sessionId);
+  }
+
   // ── Step 2: Pattern Detection ─────────────────────────────
 
-  private async detectPatterns(
-    wmSlots: WorkingMemorySlot[],
-    events: SensoryEvent[],
-    remainingMs: number
-  ): Promise<ExtractedPattern[]> {
-    if (wmSlots.length + events.length < 3) return [];
-
-    // Build event summary for LLM
-    const eventSummary = [
+  private buildEventSummary(wmSlots: WorkingMemorySlot[], events: SensoryEvent[]): string {
+    return [
       ...wmSlots.map(
         (s) =>
           `[WM] ${s.toolName}: ${s.content} (salience=${s.salience.toFixed(1)}, files=${s.files.join(',')})`
@@ -290,15 +473,33 @@ class ConsolidationAgentService {
             `[${e.success ? 'OK' : 'ERR'}] ${e.toolName}: ${e.inputSummary} (${e.durationMs}ms)`
         ),
     ].join('\n');
+  }
 
+  private async detectPatterns(
+    wmSlots: WorkingMemorySlot[],
+    events: SensoryEvent[],
+    remainingMs: number
+  ): Promise<ExtractedPattern[]> {
+    if (wmSlots.length + events.length < 3) return [];
+
+    // Build event summary for LLM
+    const eventSummary = this.buildEventSummary(wmSlots, events);
+
+    logger.debug('Consolidation REPLAY input', {
+      wmSlots: wmSlots.length,
+      events: events.length,
+      eventSummaryLen: eventSummary.length,
+      eventSummaryPreview: eventSummary.slice(0, 500),
+    });
+
+    return this.detectPatternsFromSummary(eventSummary, remainingMs);
+  }
+
+  private async detectPatternsFromSummary(
+    eventSummary: string,
+    remainingMs: number
+  ): Promise<ExtractedPattern[]> {
     try {
-      logger.debug('Consolidation REPLAY input', {
-        wmSlots: wmSlots.length,
-        events: events.length,
-        eventSummaryLen: eventSummary.length,
-        eventSummaryPreview: eventSummary.slice(0, 500),
-      });
-
       const result = await this.llmCall(
         `Session events:\n${eventSummary.slice(0, 3000)}`,
         PATTERN_DETECTION_PROMPT,
@@ -321,6 +522,21 @@ class ConsolidationAgentService {
 
   // ── Step 4: Abstraction ───────────────────────────────────
 
+  private buildWmObservationLines(wmSlots: WorkingMemorySlot[]): string[] {
+    return wmSlots
+      .filter((s) => s.salience >= 0.5)
+      .map((s) => `[${s.toolName}] ${s.content} (files: ${s.files.join(', ')})`);
+  }
+
+  private buildObservations(patterns: ExtractedPattern[], wmLines: string[]): string {
+    return [
+      ...patterns.map(
+        (p) => `[PATTERN: ${p.type}] ${p.description} (files: ${p.files.join(', ')})`
+      ),
+      ...wmLines,
+    ].join('\n');
+  }
+
   private async abstract(
     wmSlots: WorkingMemorySlot[],
     patterns: ExtractedPattern[],
@@ -328,14 +544,7 @@ class ConsolidationAgentService {
   ): Promise<AbstractedMemory[]> {
     if (wmSlots.length === 0 && patterns.length === 0) return [];
 
-    const observations = [
-      ...patterns.map(
-        (p) => `[PATTERN: ${p.type}] ${p.description} (files: ${p.files.join(', ')})`
-      ),
-      ...wmSlots
-        .filter((s) => s.salience >= 0.5)
-        .map((s) => `[${s.toolName}] ${s.content} (files: ${s.files.join(', ')})`),
-    ].join('\n');
+    const observations = this.buildObservations(patterns, this.buildWmObservationLines(wmSlots));
 
     logger.debug('Consolidation ABSTRACTION input', {
       patternsCount: patterns.length,
@@ -349,6 +558,13 @@ class ConsolidationAgentService {
       return [];
     }
 
+    return this.abstractFromObservations(observations, remainingMs);
+  }
+
+  private async abstractFromObservations(
+    observations: string,
+    remainingMs: number
+  ): Promise<AbstractedMemory[]> {
     try {
       const result = await this.llmCall(
         `Session observations:\n${observations.slice(0, 3000)}`,
@@ -365,23 +581,27 @@ class ConsolidationAgentService {
       // A well-formed empty list is a legitimate "nothing worth storing" outcome.
       if (!parsed?.memories) return [];
 
-      // Validate and normalize
-      const validSubtypes = new Set<string>(['decision', 'insight', 'pattern', 'procedure']);
-      return parsed.memories
-        .filter((m) => m.content && m.content.length > 10)
-        .map((m) => ({
-          content: m.content.slice(0, 2000),
-          subtype: validSubtypes.has(m.subtype) ? m.subtype : ('insight' as SemanticSubtype),
-          confidence: Math.min(1, Math.max(0, m.confidence ?? 0.6)),
-          tags: Array.isArray(m.tags) ? m.tags.slice(0, 10) : [],
-          files: Array.isArray(m.files) ? m.files.slice(0, 20) : [],
-          isEpisodic: m.isEpisodic ?? false,
-        }));
+      return this.normalizeAbstracted(parsed.memories);
     } catch (error: any) {
       logger.debug('Abstraction LLM call failed', { error });
       // Surface as a failure so consolidate() can fail the job (BullMQ retry).
       throw new ConsolidationFailedError(`Abstraction failed: ${error?.message ?? error}`);
     }
+  }
+
+  /** Validate and normalize raw LLM-produced memories (shared sync + batch). */
+  normalizeAbstracted(memories: AbstractedMemory[]): AbstractedMemory[] {
+    const validSubtypes = new Set<string>(['decision', 'insight', 'pattern', 'procedure']);
+    return memories
+      .filter((m) => m.content && m.content.length > 10)
+      .map((m) => ({
+        content: m.content.slice(0, 2000),
+        subtype: validSubtypes.has(m.subtype) ? m.subtype : ('insight' as SemanticSubtype),
+        confidence: Math.min(1, Math.max(0, m.confidence ?? 0.6)),
+        tags: Array.isArray(m.tags) ? m.tags.slice(0, 10) : [],
+        files: Array.isArray(m.files) ? m.files.slice(0, 20) : [],
+        isEpisodic: m.isEpisodic ?? false,
+      }));
   }
 
   // ── Step 5 & 6: Relationship Classification + Integration ──

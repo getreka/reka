@@ -3,14 +3,6 @@ import { logger } from '../utils/logger';
 import type { SensoryEvent } from '../services/sensory-buffer';
 
 // Lazy imports — avoid circular deps and defer service initialization
-async function getConsolidationAgent() {
-  const mod = await import('../services/consolidation-agent');
-  return mod.consolidationAgent;
-}
-async function getStaleDetector() {
-  const mod = await import('../services/stale-memory-detector');
-  return mod.staleMemoryDetector;
-}
 async function getWorkingMemory() {
   const mod = await import('../services/working-memory');
   return mod.workingMemory;
@@ -28,8 +20,7 @@ export interface SessionActorState {
 type SessionActorMessage =
   | { projectName: string; sessionId: string }
   | { projectName: string; sessionId: string; activityType: string }
-  | { projectName: string; sessionId: string; eventType: string; value: SensoryEvent }
-  | { projectName: string; sessionId: string; summary?: string };
+  | { projectName: string; sessionId: string; eventType: string; value: SensoryEvent };
 
 const DEFAULT_STATE: SessionActorState = {
   projectName: '',
@@ -139,97 +130,13 @@ class SessionActor extends Actor<SessionActorState, SessionActorMessage> {
         break;
       }
 
-      case 'session:ending': {
-        const { projectName, sessionId } = message.payload as {
-          projectName: string;
-          sessionId: string;
-          summary?: string;
-        };
-
-        newState.status = 'ending';
-
-        // Run consolidation agent. Track success so we only clear working memory
-        // (and the 24h sensory buffer source) AFTER a successful consolidation —
-        // otherwise a transient LLM failure would wipe the buffer and lose the
-        // session forever.
-        //
-        // RETRY SEMANTICS: A bare re-throw here would NOT retry consolidation — the
-        // actor's supervision treats repeated failures as restarts and routes the
-        // message to the DLQ after maxRestarts, so the session knowledge is still
-        // lost (just via DLQ instead of buffer TTL). The actor mailbox has no
-        // BullMQ attempts/backoff per message. So on failure we instead enqueue a
-        // `session:ending` retry job onto the session-lifecycle BullMQ queue (the
-        // same queue the worker consumes), which DOES carry attempts/backoff and
-        // re-consolidates from the still-intact buffer. We also leave the actor
-        // state un-cleared and status NOT 'ended' so the session remains
-        // re-consolidatable; clearState only runs on success.
-        let consolidationOk = false;
-        try {
-          const agent = await getConsolidationAgent();
-          await agent.consolidate(projectName, sessionId);
-          consolidationOk = true;
-          logger.debug('Session consolidation completed', { sessionId });
-        } catch (err: any) {
-          logger.warn('Consolidation failed — preserving working memory for retry', {
-            error: err.message,
-            sessionId,
-          });
-        }
-
-        // Stale memory detection
-        try {
-          const detector = await getStaleDetector();
-          await detector.detectStaleMemories(projectName);
-        } catch (err: any) {
-          logger.debug('Stale detection failed', { error: err.message });
-        }
-
-        // Cleanup working memory — ONLY if consolidation succeeded.
-        if (consolidationOk) {
-          try {
-            const wm = await getWorkingMemory();
-            await wm.clear(projectName, sessionId);
-          } catch (err: any) {
-            logger.debug('Working memory cleanup failed', { error: err.message });
-          }
-        }
-
-        if (consolidationOk) {
-          newState.status = 'ended';
-          // Remove actor state from Redis — session is done
-          await this.clearState(actorId);
-        } else {
-          // Consolidation failed: keep the actor alive in 'ending' state (NOT
-          // 'ended', NOT cleared) and enqueue a retry onto the session-lifecycle
-          // queue so the worker re-runs consolidation with attempts/backoff. The
-          // buffer + working memory survive for that retry.
-          try {
-            const { getQueue } = await import('../events/queues');
-            const queue = getQueue('session-lifecycle');
-            await queue.add(
-              'session:ending',
-              { projectName, sessionId },
-              {
-                attempts: 3,
-                backoff: { type: 'exponential', delay: 5000 },
-                removeOnComplete: 100,
-                removeOnFail: 50,
-              }
-            );
-            logger.info('Consolidation retry enqueued on session-lifecycle queue', {
-              sessionId,
-              projectName,
-            });
-          } catch (err: any) {
-            logger.error('Failed to enqueue consolidation retry — session knowledge at risk', {
-              error: err.message,
-              sessionId,
-            });
-          }
-        }
-
-        break;
-      }
+      // NOTE: there is deliberately NO 'session:ending' case here. The emitter
+      // routes 'session:ending' to the session-lifecycle BullMQ queue (see
+      // events/emitter.ts EVENT_QUEUE_MAP), never to this actor — the queue
+      // carries the attempts/backoff retry semantics consolidation needs, and
+      // (M4) the CONSOLIDATION_BATCH_ENABLED split lives in
+      // events/workers/session-lifecycle.worker.ts. The previous dead handler
+      // here was pruned so the worker is the single consolidation entry point.
 
       default:
         logger.warn(`SessionActor received unknown message type: ${message.type}`, { actorId });

@@ -347,7 +347,7 @@ export async function startServer(): Promise<void> {
     serverAdapter.setBasePath('/admin/queues');
 
     createBullBoard({
-      queues: ['session-lifecycle', 'indexing', 'maintenance', 'dead-letter'].map(
+      queues: ['session-lifecycle', 'indexing', 'maintenance', 'llm-batch', 'dead-letter'].map(
         (name) => new BullMQAdapter(getQueue(name as Parameters<typeof getQueue>[0]))
       ),
       serverAdapter,
@@ -359,6 +359,10 @@ export async function startServer(): Promise<void> {
     const { startSessionLifecycleWorker } =
       await import('./events/workers/session-lifecycle.worker');
     startSessionLifecycleWorker();
+
+    // Start llm-batch worker (Anthropic Message Batches poll/dispatch — M4)
+    const { startLlmBatchWorker } = await import('./events/workers/llm-batch.worker');
+    startLlmBatchWorker();
 
     logger.info('BullMQ event queues initialized with Bull Board at /admin/queues');
 
