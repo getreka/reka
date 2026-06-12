@@ -23,8 +23,10 @@
  *
  * A "path" (e.g. `/memories/auth/decisions.md`) has no first-class column in
  * Reka, so we encode it as BOTH a tag (`mem:path=/memories/auth/decisions.md`)
- * for exact lookup AND `relatedTo` for human readability. Directory listings
- * use a tag *prefix* match performed client-side over the project's memory list.
+ * for exact lookup AND `relatedTo` for human readability. Writes also carry
+ * ancestor-dir tags (`mem:dir=/memories/auth`, …, ≤5 levels) so a directory
+ * listing is one exact tag query; a client-side tag-*prefix* scan remains as
+ * the fallback for entries written before dir tags existed.
  *
  * ── Governance (M2) ──
  * Every write is attributed with `metadata.source = 'auto_memory_tool'` and NO
@@ -142,6 +144,20 @@ export type MemoryToolHandlers = {
 /** Tag prefix used to encode a memory-tool path as a Reka tag. */
 export const PATH_TAG_PREFIX = "mem:path=";
 
+/**
+ * Tag prefix used to encode each ANCESTOR DIRECTORY of a path (M2-4).
+ * `/memories/auth/decisions.md` also gets `mem:dir=/memories/auth` and
+ * `mem:dir=/memories`, so a directory `view` is ONE exact-tag query instead of
+ * an unfiltered semantic top-100 scan (silently incomplete past ~100 memories).
+ */
+export const DIR_TAG_PREFIX = "mem:dir=";
+
+/**
+ * Max ancestor-dir tags per memory. 1 path tag + 5 dir tags = 6, well inside
+ * the 20-tag schema cap; deeper ancestors fall back to the prefix scan.
+ */
+const MAX_DIR_TAGS = 5;
+
 /** Minimal shape of a Reka memory record we read back. */
 interface RekaMemory {
   id: string;
@@ -166,6 +182,22 @@ export class MemoryToolAdapter {
   /** Encode a memory-tool path into the Reka tag used for exact lookups. */
   private pathTag(path: string): string {
     return `${PATH_TAG_PREFIX}${this.normalizePath(path)}`;
+  }
+
+  /**
+   * Ancestor-directory tags for a path, nearest first, capped at
+   * {@link MAX_DIR_TAGS} levels. `/a/b/c.md` -> [`mem:dir=/a/b`, `mem:dir=/a`].
+   */
+  private dirTags(path: string): string[] {
+    const tags: string[] = [];
+    let current = this.normalizePath(path);
+    while (tags.length < MAX_DIR_TAGS) {
+      const idx = current.lastIndexOf("/");
+      if (idx <= 0) break; // reached the root segment
+      current = current.slice(0, idx);
+      tags.push(`${DIR_TAG_PREFIX}${current}`);
+    }
+    return tags;
   }
 
   /** Normalize a path: ensure a single leading slash, strip a trailing slash. */
@@ -388,7 +420,10 @@ export class MemoryToolAdapter {
       projectName: this.projectName,
       content,
       type: "note",
-      tags: [this.pathTag(path)],
+      // Exact path tag + ancestor-dir tags (M2-4): create/insert/rename all
+      // funnel through here, so dir tags are written on every write path and
+      // rename() naturally REWRITES them for the new location.
+      tags: [this.pathTag(path), ...this.dirTags(path)],
       relatedTo: path,
       metadata: { source: "auto_memory_tool" },
     });
@@ -445,8 +480,20 @@ export class MemoryToolAdapter {
     ]);
     let memories = this.dedupeById([...durable, ...quarantined]);
 
-    // Exact-tag filter found nothing -> treat as a directory: re-list unfiltered
-    // and match any memory whose path tag begins with this path.
+    // Exact-tag filter found nothing -> treat as a directory. First try the
+    // ancestor-dir tag (M2-4): ONE exact tag query, scales past the 100-item
+    // listing window that made the prefix scan silently incomplete.
+    if (memories.length === 0) {
+      const dirTag = `${DIR_TAG_PREFIX}${this.normalizePath(path)}`;
+      const [dirDurable, dirQuarantined] = await Promise.all([
+        this.listDurable(dirTag),
+        this.listQuarantine(dirTag),
+      ]);
+      memories = this.dedupeById([...dirDurable, ...dirQuarantined]);
+    }
+
+    // Still nothing -> client-side PREFIX fallback for pre-existing entries
+    // written before dir tags existed (and ancestors deeper than MAX_DIR_TAGS).
     if (memories.length === 0) {
       const [allDurable, allQuarantined] = await Promise.all([
         this.listDurable(),
