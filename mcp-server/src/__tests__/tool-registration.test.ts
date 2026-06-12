@@ -10,7 +10,7 @@ import { createAgentTools } from "../tools/agents.js";
 import { createQualityTools } from "../tools/quality.js";
 
 /**
- * The 0.5.0 public tool surface — en route to 28 tools, 0 hidden.
+ * The 0.5.0 public tool surface — 29 tools, 0 hidden.
  *
  * This is the documented registered count (README tool count,
  * CLAUDE.md "MCP Server Tools"). The default MCP_PROFILE=full
