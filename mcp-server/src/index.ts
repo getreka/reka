@@ -29,13 +29,24 @@ configureConnectionPool({
 });
 
 // Tool modules
-import { createSearchTools } from "./tools/search.js";
+import {
+  createSearchTools,
+  HYBRID_SEARCH_DESCRIPTION,
+  FIND_SYMBOL_DESCRIPTION,
+} from "./tools/search.js";
 import { createIndexingTools } from "./tools/indexing.js";
-import { createMemoryTools } from "./tools/memory.js";
+import {
+  createMemoryTools,
+  REMEMBER_DESCRIPTION,
+  RECALL_DESCRIPTION,
+} from "./tools/memory.js";
 import { createMemoryToolTools } from "./tools/memory-tool.js";
 import { createArchitectureTools } from "./tools/architecture.js";
 import { createSessionTools } from "./tools/session.js";
-import { createSuggestionTools } from "./tools/suggestions.js";
+import {
+  createSuggestionTools,
+  CONTEXT_BRIEFING_DESCRIPTION,
+} from "./tools/suggestions.js";
 import { createAgentTools } from "./tools/agents.js";
 import { createQualityTools } from "./tools/quality.js";
 
@@ -136,20 +147,16 @@ const LITE_TOOLS = new Set([
   "run_agent",
 ]);
 
-// Search-friendly, prescriptive descriptions for the lite set ("Call this
-// when…") so ToolSearch / the host ranks them well. Only overrides the lite
-// tools; all other tools keep their module-defined descriptions.
+// M2-5: the prescriptive "Call this when…" wording (with anti-triggers) now
+// lives in the tool MODULES, so every profile carries it. LITE_DESCRIPTIONS is
+// a pure re-export of those module descriptions — the lite override is a
+// deliberate no-op kept for grep-ability. Do NOT fork wording here.
 const LITE_DESCRIPTIONS: Record<string, string> = {
-  hybrid_search:
-    "Call this when you need to find code and don't know the exact file or symbol name — conceptual questions ('how does X work', 'where is auth handled') or locating a feature. Hybrid semantic + keyword retrieval; mode: 'navigate' returns a file/symbol map instead of code.",
-  find_symbol:
-    "Call this when you know a function/class/type NAME and want its exact definition and location. Fast symbol-index lookup, faster and more precise than search.",
-  context_briefing:
-    "Call this BEFORE making any code change: it runs codebase search, symbol lookup, graph (blast radius) and memory recall in parallel and returns a single briefing.",
-  remember:
-    "Call this AFTER you make a decision, learn something, or finish a change — persists it to durable project memory so future sessions recall it.",
-  recall:
-    "Call this when you need past decisions, insights, ADRs, or notes about this project — semantic search over agent memory.",
+  hybrid_search: HYBRID_SEARCH_DESCRIPTION,
+  find_symbol: FIND_SYMBOL_DESCRIPTION,
+  context_briefing: CONTEXT_BRIEFING_DESCRIPTION,
+  remember: REMEMBER_DESCRIPTION,
+  recall: RECALL_DESCRIPTION,
 };
 
 // Profile selection. Default 'full' — every tool that survived the 0.4.0

@@ -160,6 +160,15 @@ function mergeRagServer(
   };
 }
 
+// ── Trigger description (M2-5) ───────────────────────────────────────────────
+// Scoped per the PR #4 wording — NOT "REQUIRED before code changes" (that
+// absolute contradicted CLAUDE.md and invited briefings for one-line edits).
+// Module-level so every profile and the agent-runtime mirror share it.
+
+export const CONTEXT_BRIEFING_DESCRIPTION =
+  `Call this before changes that span multiple files, touch shared services or exports, or where prior decisions (patterns/ADRs) could affect the approach — one call runs recall + code search + patterns + ADRs + graph blast-radius in parallel and returns a single briefing. ` +
+  `Do NOT use for mechanical single-line edits (typos, renames, version bumps, formatting); make those directly.`;
+
 /**
  * Create the suggestions tools module with project-specific descriptions.
  */
@@ -167,7 +176,7 @@ export function createSuggestionTools(projectName: string): ToolSpec[] {
   return [
     {
       name: "context_briefing",
-      description: `REQUIRED before code changes. Parallel lookup of recall + search + patterns + ADRs + graph for ${projectName}. One call replaces 5 separate RAG lookups.`,
+      description: CONTEXT_BRIEFING_DESCRIPTION,
       schema: z.object({
         task: z.string().describe("What you will implement/change"),
         files: z
@@ -424,13 +433,16 @@ export function createSuggestionTools(projectName: string): ToolSpec[] {
 
           const ragSection = `\n## RAG Integration
 
-You MUST call \`context_briefing\` before making any code changes.
-This single tool performs all RAG lookups in parallel (recall, search, patterns, ADRs, graph).
+Call \`context_briefing\` when a change spans multiple files, touches shared
+services/exports, or when prior decisions (patterns/ADRs) could affect the
+approach. It performs all RAG lookups in parallel (recall, search, patterns,
+ADRs, graph). Skip it for mechanical single-line edits (typos, renames,
+version bumps).
 
 Example: \`context_briefing(task: "describe your change", files: ["path/to/file.ts"])\`
 
-After completing significant changes:
-- \`remember\` — save important context for future sessions
+After meaningful work:
+- \`remember\` — once per work item, only when you learned something non-obvious (a decision, a gotcha, a new procedure); include the why
 - \`record_adr\` — document architectural decisions
 `;
 
@@ -499,7 +511,7 @@ After completing significant changes:
         result += `\n## Next Steps\n`;
         result += `1. Restart Claude Code to load the new MCP server\n`;
         result += `2. Run \`index_codebase\` if not indexed yet\n`;
-        result += `3. Use \`context_briefing\` before code changes\n`;
+        result += `3. Use \`context_briefing\` before multi-file or shared-service changes\n`;
         result += `\n_For full setup (API key minting, Docker stack checks), prefer \`npx @getreka/cli init\` — this tool only writes the project files._\n`;
 
         return result;

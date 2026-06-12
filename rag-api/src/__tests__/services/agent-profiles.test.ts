@@ -117,4 +117,18 @@ describe('getToolDefinitions()', () => {
       expect(tool.input_schema.type).toBe('object');
     }
   });
+
+  // M2-5: trigger descriptions mirror the mcp-server module ToolSpec wording
+  // (tools/search.ts, tools/memory.ts) — prescriptive "Call this …" plus a
+  // negative-trigger "Do NOT …" clause, same language for the agent runtime.
+  it('mirrored trigger descriptions carry "Call this" + a negative trigger', () => {
+    const mirrored = ['hybrid_search', 'find_symbol', 'search_graph', 'remember', 'recall_memory'];
+    const tools = getToolDefinitions(mirrored);
+    expect(tools).toHaveLength(mirrored.length);
+
+    for (const tool of tools) {
+      expect(tool.description, tool.name).toContain('Call this');
+      expect(tool.description, tool.name).toMatch(/Do NOT/);
+    }
+  });
 });

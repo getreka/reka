@@ -25,12 +25,24 @@ const typeEmojis: Record<string, string> = {
   procedure: "\u{1F4D6}",
 };
 
+// ── Trigger descriptions (M2-5) ──────────────────────────────────────────────
+// Prescriptive "Call this when…" + anti-trigger wording at module level, so
+// every profile and the agent-runtime mirror (rag-api agent-profiles.ts
+// TOOL_DEFINITIONS) share the same triggering language. Keep copies in sync.
+
+export const REMEMBER_DESCRIPTION =
+  `Call this once per work item, and only when you learned something non-obvious — a decision, a gotcha, or a new procedure — and include the WHY, not just the what. Persists to durable project memory so future sessions recall it. ` +
+  `Do NOT save memories for mechanical changes (typos, renames, version bumps) or restate what the code already says — they pollute recall.`;
+
+export const RECALL_DESCRIPTION =
+  `Call this when past decisions, insights, ADRs, or notes about this project could change your approach — semantic search over agent memory. ` +
+  `Do NOT use for searching code (use hybrid_search or Grep) or documentation (use search_docs).`;
+
 export function createMemoryTools(projectName: string): ToolSpec[] {
   return [
     {
       name: "remember",
-      description:
-        "Store important information in agent memory. Use this to save decisions, insights, context, todos, or important conversations for future reference.",
+      description: REMEMBER_DESCRIPTION,
       schema: z.object({
         content: z.string().describe("Information to remember"),
         type: z
@@ -86,8 +98,7 @@ export function createMemoryTools(projectName: string): ToolSpec[] {
 
     {
       name: "recall",
-      description:
-        "Retrieve relevant memories based on context. Searches agent memory for past decisions, insights, and notes related to the query.",
+      description: RECALL_DESCRIPTION,
       schema: z.object({
         query: z.string().describe("What to recall (semantic search)"),
         type: z
