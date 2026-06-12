@@ -205,7 +205,7 @@ function extractFiles(args: Record<string, unknown>): string[] {
  */
 let fallbackSessionId: string | null = null;
 
-function getFallbackSessionId(): string {
+export function getFallbackSessionId(): string {
   if (!fallbackSessionId) {
     fallbackSessionId = `local-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`;
   }

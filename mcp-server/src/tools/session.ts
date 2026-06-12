@@ -86,10 +86,10 @@ export function createSessionTools(
           result += `\n**Predictive Prefetch:** ${pf.prefetchedCount ?? 0} resources prefetched\n`;
         }
 
-        // Include briefing if available (Sprint E)
-        if (data.briefing) {
-          result += `\n**Session Briefing:**\n${data.briefing}\n`;
-        }
+        // NOTE: the old `data.briefing` render was DELETED (M3): POST
+        // /api/session/start returns only {success, session} — the field never
+        // existed, and the session-start digest is delivered by the plugin
+        // hook via GET /api/session/digest, not by this tool.
 
         // Ingest session start into sensory buffer (fire-and-forget)
         if (sid) {

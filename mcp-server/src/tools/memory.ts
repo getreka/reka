@@ -14,6 +14,7 @@ import {
 } from "../formatters.js";
 import { z } from "zod";
 import { TOOL_ANNOTATIONS } from "../annotations.js";
+import { getFallbackSessionId } from "../tool-middleware.js";
 
 const typeEmojis: Record<string, string> = {
   decision: "\u{1F3AF}",
@@ -166,6 +167,11 @@ export function createMemoryTools(projectName: string): ToolSpec[] {
           type,
           limit,
           graphRecall,
+          // M3: session linkage for the retrieval audit log. The hook →
+          // RAG_SESSION_ID → ctx plumbing ends here; fall back to the
+          // per-process local-* id so recalls are still attributable when
+          // start_session failed.
+          sessionId: ctx.activeSessionId || getFallbackSessionId(),
         });
 
         const results = response.data.results || [];

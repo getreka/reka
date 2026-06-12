@@ -95,6 +95,28 @@ describe("Memory Tools", () => {
       );
       expect(result).toContain("No memories found");
     });
+
+    it("passes the active sessionId for the retrieval audit log (M3)", async () => {
+      (ctx.api.post as any).mockResolvedValue({ data: { results: [] } });
+      ctx.activeSessionId = "sess-42";
+
+      await findTool("recall").handler({ query: "find something" }, ctx);
+
+      expect(ctx.api.post).toHaveBeenCalledWith(
+        "/api/memory/recall",
+        expect.objectContaining({ sessionId: "sess-42" }),
+      );
+    });
+
+    it("falls back to a local-* sessionId when no session is active", async () => {
+      (ctx.api.post as any).mockResolvedValue({ data: { results: [] } });
+      ctx.activeSessionId = undefined;
+
+      await findTool("recall").handler({ query: "find something" }, ctx);
+
+      const body = (ctx.api.post as any).mock.calls[0][1];
+      expect(body.sessionId).toMatch(/^local-/);
+    });
   });
 
   describe("forget", () => {
