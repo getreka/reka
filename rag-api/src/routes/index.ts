@@ -604,6 +604,41 @@ router.post(
 );
 
 /**
+ * Session-start digest — server-built markdown briefing (M3).
+ * GET /api/session/digest?projectName=<p>&sessionId=<sid>
+ *
+ * Returns Content-Type text/markdown; the BODY is the digest markdown itself
+ * (no JSON wrapper), <=200 lines, empty sections omitted. On any internal
+ * error it still answers 200 with whatever sections were built — a session
+ * start must never be blocked by the digest.
+ *
+ * NOTE: registered BEFORE GET /session/:sessionId so 'digest' is not
+ * captured by the :sessionId param route.
+ */
+router.get(
+  '/session/digest',
+  validateProjectName,
+  asyncHandler(async (req: Request, res: Response) => {
+    const { projectName } = req.body;
+    const sessionId = req.query.sessionId as string | undefined;
+
+    let markdown = `# Session Digest — ${projectName}`;
+    try {
+      const { digestBuilder } = await import('../services/digest-builder');
+      const digest = await digestBuilder.build(projectName, sessionId);
+      markdown = digest.markdown;
+    } catch (error: any) {
+      logger.warn('Digest build failed — returning minimal digest', {
+        projectName,
+        error: error?.message,
+      });
+    }
+
+    res.status(200).type('text/markdown').send(markdown);
+  })
+);
+
+/**
  * Get session context
  * GET /api/session/:sessionId
  */

@@ -11,12 +11,10 @@
 import { v4 as uuidv4 } from 'uuid';
 import { vectorStore, VectorPoint } from './vector-store';
 import { embeddingService } from './embedding';
-import { memoryService } from './memory';
 import { memoryGovernance } from './memory-governance';
 import { conversationAnalyzer } from './conversation-analyzer';
 import { usagePatterns } from './usage-patterns';
 import { cacheService } from './cache';
-import { projectProfileService } from './project-profile';
 import { workingMemory } from './working-memory';
 // consolidation runs async via session-lifecycle worker (not in endSession request path)
 import { logger } from '../utils/logger';
@@ -84,7 +82,7 @@ class SessionContextService {
    *
    * Returns fast with a minimal context (cache + working memory init only).
    * Heavy operations (stale cleanup, previous session lookup, entity extraction,
-   * Qdrant persist, briefing) run in the background and update the cached context
+   * Qdrant persist) run in the background and update the cached context
    * when they complete.
    */
   async startSession(options: StartSessionOptions): Promise<SessionContext> {
@@ -126,7 +124,7 @@ class SessionContextService {
   /**
    * Background enrichment: runs after startSession returns.
    * Updates the cached session context with data from previous sessions,
-   * entity extraction, Qdrant persistence, and briefing.
+   * entity extraction, and Qdrant persistence.
    */
   private async enrichSessionBackground(
     context: SessionContext,
@@ -177,24 +175,18 @@ class SessionContextService {
       logger.debug('Session persist failed', { error: err.message })
     );
 
-    // 5. Build briefing (project profile + memory recall)
-    try {
-      const briefing = await this.buildSessionBriefing(enriched);
-      if (briefing) {
-        enriched.metadata = { ...enriched.metadata, briefing };
-      }
-    } catch (err: any) {
-      logger.debug('Failed to build session briefing', { error: err.message });
-    }
-
-    // 6. Update cache with enriched context
+    // 5. Update cache with enriched context
+    // (The old step-5 "session briefing" was DELETED in M3: it wrote
+    // metadata.briefing into Redis only, and nothing ever read it — the MCP
+    // start_session render checked a response field the route never returned.
+    // The session-start digest is now built on demand by digest-builder.ts
+    // via GET /api/session/digest.)
     await cacheService.set(this.getCacheKey(projectName, sessionId), enriched, 3600);
 
     logger.info(`Session enriched (background): ${sessionId}`, {
       projectName,
       files: enriched.currentFiles.length,
       features: enriched.activeFeatures.length,
-      hasBriefing: !!enriched.metadata?.briefing,
     });
   }
 
@@ -450,72 +442,6 @@ class SessionContextService {
   // ============================================
   // Private Helpers
   // ============================================
-
-  /**
-   * Build a session briefing with project profile + developer profile + recalled context.
-   */
-  private async buildSessionBriefing(context: SessionContext): Promise<string | null> {
-    const parts: string[] = [];
-
-    // Get project profile summary
-    try {
-      const summary = await projectProfileService.getCompactSummary(context.projectName);
-      if (summary) {
-        parts.push(summary);
-      }
-    } catch {
-      // Profile not available yet
-    }
-
-    // Add developer profile highlights
-    try {
-      const devProfile = await usagePatterns.buildDeveloperProfile(context.projectName);
-      if (devProfile.totalToolCalls > 0) {
-        const topFiles = devProfile.frequentFiles
-          .slice(0, 5)
-          .map((f) => f.file)
-          .join(', ');
-        const topTools = devProfile.preferredTools
-          .slice(0, 3)
-          .map((t) => t.tool)
-          .join(', ');
-        const peakHrs = devProfile.peakHours
-          .slice(0, 2)
-          .map((h) => `${h.hour}:00`)
-          .join(', ');
-        parts.push(
-          `Developer: ${devProfile.totalSessions} sessions, top files: ${topFiles}, top tools: ${topTools}, peak hours: ${peakHrs}`
-        );
-      }
-    } catch {
-      // Non-critical
-    }
-
-    // Auto-recall memories relevant to initial context
-    if (context.activeFeatures.length > 0 || context.recentQueries.length > 0) {
-      try {
-        const query = [...context.activeFeatures, ...context.recentQueries.slice(-3)].join(' ');
-        const memories = await memoryService.recall({
-          projectName: context.projectName,
-          query,
-          limit: 5,
-          type: 'all',
-        });
-
-        const relevant = memories.filter((m) => m.score >= 0.6);
-        if (relevant.length > 0) {
-          parts.push('Relevant context:');
-          for (const m of relevant.slice(0, 5)) {
-            parts.push(`- [${m.memory.type}] ${m.memory.content.slice(0, 150)}`);
-          }
-        }
-      } catch {
-        // Non-critical
-      }
-    }
-
-    return parts.length > 0 ? parts.join('\n') : null;
-  }
 
   /**
    * End stale active sessions (no activity for 2+ hours).
