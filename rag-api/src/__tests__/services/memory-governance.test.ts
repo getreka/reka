@@ -508,6 +508,111 @@ describe('MemoryGovernanceService', () => {
     });
   });
 
+  describe('per-source capture-funnel counters (M5)', () => {
+    it('bumps ingest:{source} when an auto-memory is quarantined', async () => {
+      mockedVS.upsert.mockResolvedValue(undefined);
+
+      await memoryGovernance.ingest({
+        projectName: 'srcproj',
+        content: 'mined from a transcript',
+        type: 'context',
+        source: 'auto_transcript',
+        confidence: 0.9,
+      });
+
+      expect(counters.get('governance:srcproj:ingest:auto_transcript')).toBe(1);
+    });
+
+    it('does NOT bump ingest:{source} when the memory is threshold-dropped', async () => {
+      counters.set('governance:srcproj:promoted', 0);
+      counters.set('governance:srcproj:rejected', 10); // threshold → 0.8
+
+      await memoryGovernance.ingest({
+        projectName: 'srcproj',
+        content: 'low confidence',
+        type: 'note',
+        source: 'auto_transcript',
+        confidence: 0.3,
+      });
+
+      expect(counters.get('governance:srcproj:ingest:auto_transcript')).toBeUndefined();
+    });
+
+    it('bumps promote:{source} from the quarantine payload on promote()', async () => {
+      mockQdrantClient.scroll.mockResolvedValue({
+        points: [
+          {
+            id: 'q-1',
+            payload: {
+              id: 'q-1',
+              type: 'context',
+              content: 'c',
+              tags: [],
+              source: 'auto_transcript',
+              metadata: {},
+            },
+          },
+        ],
+      });
+      mockedVS.delete.mockResolvedValue(undefined);
+      mockedMemory.remember.mockResolvedValue({
+        id: 'd-1',
+        type: 'context',
+        content: 'c',
+        tags: [],
+        createdAt: '',
+        updatedAt: '',
+      });
+
+      await memoryGovernance.promote('srcproj', 'q-1', 'human_validated');
+
+      expect(counters.get('governance:srcproj:promote:auto_transcript')).toBe(1);
+      // The aggregate review counter still advances (threshold math untouched).
+      expect(counters.get('governance:srcproj:promoted')).toBe(1);
+    });
+
+    it('bumps reject:{source} read from the quarantine payload on reject()', async () => {
+      mockQdrantClient.scroll.mockResolvedValue({
+        points: [
+          {
+            id: 'q-2',
+            payload: { id: 'q-2', type: 'note', content: 'c', source: 'auto_memory_tool' },
+          },
+        ],
+      });
+      mockedVS.delete.mockResolvedValue(undefined);
+
+      await memoryGovernance.reject('srcproj', 'q-2');
+
+      expect(counters.get('governance:srcproj:reject:auto_memory_tool')).toBe(1);
+      expect(counters.get('governance:srcproj:rejected')).toBe(1);
+    });
+
+    it('reject() still succeeds when the source read fails (attribution is best-effort)', async () => {
+      mockQdrantClient.scroll.mockRejectedValue(new Error('scroll down'));
+      mockedVS.delete.mockResolvedValue(undefined);
+
+      const result = await memoryGovernance.reject('srcproj', 'q-3');
+
+      expect(result).toBe(true);
+      expect(counters.get('governance:srcproj:rejected')).toBe(1);
+    });
+
+    it('getSourceCounters returns per-source ingest/promote/reject counts (zeros when unset)', async () => {
+      counters.set('governance:srcproj:ingest:auto_transcript', 7);
+      counters.set('governance:srcproj:promote:auto_transcript', 2);
+      counters.set('governance:srcproj:reject:auto_transcript', 1);
+
+      const result = await memoryGovernance.getSourceCounters('srcproj', [
+        'auto_transcript',
+        'auto_memory_tool',
+      ]);
+
+      expect(result.auto_transcript).toEqual({ ingested: 7, promoted: 2, rejected: 1 });
+      expect(result.auto_memory_tool).toEqual({ ingested: 0, promoted: 0, rejected: 0 });
+    });
+  });
+
   describe('cleanupExpiredQuarantine', () => {
     it('deletes quarantine memories older than TTL', async () => {
       const expired = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString(); // 14 days (> 7 TTL)

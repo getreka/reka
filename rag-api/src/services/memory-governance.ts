@@ -52,6 +52,14 @@ class MemoryGovernanceService {
     return `governance:${projectName}:rejected`;
   }
 
+  private sourceCounterKey(
+    projectName: string,
+    op: 'ingest' | 'promote' | 'reject',
+    source: string
+  ): string {
+    return `governance:${projectName}:${op}:${source}`;
+  }
+
   /**
    * Atomically bump a governance outcome counter (promote/reject).
    * Best-effort: a missing Redis client just means the threshold stays at default.
@@ -66,6 +74,27 @@ class MemoryGovernanceService {
     }
   }
 
+  /**
+   * Per-source capture-funnel counter (ingest/promote/reject by MemorySource).
+   * Unlike incrCounter this does NOT invalidate the adaptive-threshold cache —
+   * these counters feed /api/analytics/memory-roi, not the threshold math.
+   */
+  private async incrSourceCounter(
+    projectName: string,
+    op: 'ingest' | 'promote' | 'reject',
+    source: string
+  ): Promise<void> {
+    try {
+      await cacheService.increment(this.sourceCounterKey(projectName, op, source), 1);
+    } catch (err: any) {
+      logger.debug('Governance source counter increment failed', {
+        op,
+        source,
+        error: err.message,
+      });
+    }
+  }
+
   private async readCounter(key: string): Promise<number> {
     try {
       const raw = await cacheService.getClient()?.get(key);
@@ -74,6 +103,27 @@ class MemoryGovernanceService {
     } catch {
       return 0;
     }
+  }
+
+  /**
+   * Read the per-source capture-funnel counters. Counters are CUMULATIVE
+   * (never windowed/reset) — consumers wanting a window read deltas between
+   * snapshots (the memory-roi day-30 review does exactly that).
+   */
+  async getSourceCounters(
+    projectName: string,
+    sources: readonly string[]
+  ): Promise<Record<string, { ingested: number; promoted: number; rejected: number }>> {
+    const out: Record<string, { ingested: number; promoted: number; rejected: number }> = {};
+    for (const source of sources) {
+      const [ingested, promoted, rejected] = await Promise.all([
+        this.readCounter(this.sourceCounterKey(projectName, 'ingest', source)),
+        this.readCounter(this.sourceCounterKey(projectName, 'promote', source)),
+        this.readCounter(this.sourceCounterKey(projectName, 'reject', source)),
+      ]);
+      out[source] = { ingested, promoted, rejected };
+    }
+    return out;
   }
 
   /**
@@ -234,6 +284,7 @@ class MemoryGovernanceService {
     };
 
     await vectorStore.upsert(collectionName, [point]);
+    await this.incrSourceCounter(projectName, 'ingest', source);
     logger.info(`Memory quarantined: ${memory.type}`, {
       id: memory.id,
       project: projectName,
@@ -323,6 +374,10 @@ class MemoryGovernanceService {
 
     // Record the review outcome for adaptive-threshold computation.
     await this.incrCounter(this.promotedCounterKey(projectName));
+    const promotedSource = payload.source as string | undefined;
+    if (promotedSource) {
+      await this.incrSourceCounter(projectName, 'promote', promotedSource);
+    }
 
     // Append-only version audit: promotion is a governance-actor MODIFICATION of
     // the memory (quarantine → durable). Fire-and-forget — never block the promote.
@@ -367,10 +422,30 @@ class MemoryGovernanceService {
     memoryGovernanceTotal.inc({ operation: 'reject', tier: 'quarantine', project: projectName });
     const quarantineCollection = this.getQuarantineCollection(projectName);
 
+    // Best-effort: read the source BEFORE deleting so the per-source funnel
+    // counter can attribute the rejection. A failed read only loses attribution.
+    let rejectedSource: string | undefined;
+    try {
+      const found = await vectorStore['client'].scroll(quarantineCollection, {
+        limit: 1,
+        with_payload: true,
+        with_vector: false,
+        filter: { must: [{ key: 'id', match: { value: memoryId } }] },
+      });
+      rejectedSource = (found.points[0]?.payload as Record<string, unknown> | undefined)?.source as
+        | string
+        | undefined;
+    } catch {
+      /* source attribution is best-effort */
+    }
+
     try {
       await vectorStore.delete(quarantineCollection, [memoryId]);
       // Record the review outcome for adaptive-threshold computation.
       await this.incrCounter(this.rejectedCounterKey(projectName));
+      if (rejectedSource) {
+        await this.incrSourceCounter(projectName, 'reject', rejectedSource);
+      }
       logger.info(`Memory rejected: ${memoryId}`, { project: projectName });
       return true;
     } catch (error: any) {
