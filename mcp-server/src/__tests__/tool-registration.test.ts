@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { createSearchTools } from "../tools/search.js";
 import { createIndexingTools } from "../tools/indexing.js";
 import { createMemoryTools } from "../tools/memory.js";
+import { createMemoryToolTools } from "../tools/memory-tool.js";
 import { createArchitectureTools } from "../tools/architecture.js";
 import { createSessionTools } from "../tools/session.js";
 import { createSuggestionTools } from "../tools/suggestions.js";
@@ -20,16 +21,18 @@ import { createQualityTools } from "../tools/quality.js";
  * deletion) and the Proof rule (public copy states only what is
  * actually registered).
  *
- * 0.5.0 surface: 28 = 41 (0.4.0) − 8 DB tools (PR-4.0)
- * − memory_maintenance (PR-4.2) − 4 Confluence tools (PR-4.3).
+ * 0.5.0 surface incl. memory: 29 = 41 (0.4.0) − 8 DB tools (PR-4.0)
+ * − memory_maintenance (PR-4.2) − 4 Confluence tools (PR-4.3)
+ * + `memory` (M2 — memory_20250818 adapter wired as an MCP tool).
  */
-const EXPECTED_TOOL_COUNT = 28;
+const EXPECTED_TOOL_COUNT = 29;
 
 describe("tool registration surface", () => {
   const allSpecs = [
     ...createSearchTools("testproject"),
     ...createIndexingTools("testproject"),
     ...createMemoryTools("testproject"),
+    ...createMemoryToolTools("testproject"),
     ...createArchitectureTools("testproject"),
     ...createSessionTools("testproject"),
     ...createSuggestionTools("testproject"),

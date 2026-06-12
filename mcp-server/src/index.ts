@@ -32,6 +32,7 @@ configureConnectionPool({
 import { createSearchTools } from "./tools/search.js";
 import { createIndexingTools } from "./tools/indexing.js";
 import { createMemoryTools } from "./tools/memory.js";
+import { createMemoryToolTools } from "./tools/memory-tool.js";
 import { createArchitectureTools } from "./tools/architecture.js";
 import { createSessionTools } from "./tools/session.js";
 import { createSuggestionTools } from "./tools/suggestions.js";
@@ -106,6 +107,7 @@ const allSpecs: ToolSpec[] = [
   ...createSearchTools(PROJECT_NAME),
   ...createIndexingTools(PROJECT_NAME),
   ...createMemoryTools(PROJECT_NAME),
+  ...createMemoryToolTools(PROJECT_NAME),
   ...createArchitectureTools(PROJECT_NAME),
   ...createSessionTools(PROJECT_NAME, ctx),
   ...createSuggestionTools(PROJECT_NAME),
@@ -128,6 +130,8 @@ const LITE_TOOLS = new Set([
   "context_briefing",
   "remember",
   "recall",
+  // memory_20250818 surface — RL-trained triggering, must exist in EVERY profile.
+  "memory",
   // run_agent kept so everything else stays reachable in lite mode.
   "run_agent",
 ]);

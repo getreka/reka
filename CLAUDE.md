@@ -106,11 +106,11 @@ Tool Call → Sensory Buffer (Redis Stream, 24h TTL)
 
 ### MCP Server Tools
 
-The MCP server registers **28 tools, 0 hidden** (`MCP_PROFILE=full`, the default; `lite` registers a 6-tool subset). The canonical surface:
+The MCP server registers **29 tools, 0 hidden** (`MCP_PROFILE=full`, the default; `lite` registers a 7-tool subset). The canonical surface:
 
 - **Search:** `hybrid_search` (the one retrieval tool — hybrid by default, `mode: "navigate"` for a file/symbol map), `find_symbol`, `search_graph`, `search_docs`, `get_project_stats`
 - **Indexing:** `index_codebase`, `get_index_status`
-- **Memory:** `remember`, `recall`, `list_memories`, `forget`, `batch_remember`, `review_memories`, `promote_memory` (governance maintenance runs on the rag-api scheduler — `scheduled-maintenance.ts` — not via a tool)
+- **Memory:** `memory` (memory_20250818 six-command surface — view/create/str_replace/insert/delete/rename over `/memories` paths; writes are attributed `auto_memory_tool` and quarantined until promoted), `remember`, `recall`, `list_memories`, `forget`, `batch_remember`, `review_memories`, `promote_memory` (governance maintenance runs on the rag-api scheduler — `scheduled-maintenance.ts` — not via a tool)
 - **Architecture:** `record_adr`, `get_adrs`, `record_pattern`, `get_patterns`, `record_tech_debt`, `get_tech_debt`
 - **Context/setup:** `context_briefing`, `setup_project`; **Session:** `start_session`, `end_session`
 - **Agents/quality:** `run_agent`, `tribunal_debate`, `get_agent_types`, `get_quality_report`
