@@ -1,4 +1,5 @@
 import { createWorker } from '../queues';
+import config from '../../config';
 import { logger } from '../../utils/logger';
 import type { SensoryEvent } from '../../services/sensory-buffer';
 
@@ -14,6 +15,12 @@ async function getStaleDetector() {
 async function getWorkingMemory() {
   const mod = await import('../../services/working-memory');
   return mod.workingMemory;
+}
+// Only loaded when CONSOLIDATION_BATCH_ENABLED — the flag-off path never
+// imports the batch module (M4 acceptance a).
+async function getConsolidationBatch() {
+  const mod = await import('../../services/consolidation-batch');
+  return mod.consolidationBatch;
 }
 
 /**
@@ -85,6 +92,10 @@ export async function processSessionLifecycleJob(job: {
       // consolidation — a failed run must preserve the buffer so a BullMQ retry can
       // re-consolidate instead of losing the session.
       let consolidationOk = false;
+      // M4 batch path owns its own WM lifecycle: WM is cleared AT SUBMIT
+      // inside consolidationBatch.submit(), and the run finishes async via
+      // the llm-batch queue — so the guarded clear below must be skipped.
+      let wmHandledByBatch = false;
       // Hold the consolidation error so we can re-throw AFTER guarded cleanup is
       // skipped. Re-throwing makes the BullMQ job fail, which triggers the queue's
       // configured attempts/backoff to retry — the buffer survives because the
@@ -104,6 +115,40 @@ export async function processSessionLifecycleJob(job: {
             events: events.length,
           });
           consolidationOk = true; // nothing to consolidate → safe to clear
+        } else if (config.CONSOLIDATION_BATCH_ENABLED && config.ANTHROPIC_API_KEY) {
+          // M4: Opus 4.8 via Message Batches (ADR-003). Falls back to the
+          // sync Ollama path if batches.create throws.
+          const consolidationBatch = await getConsolidationBatch();
+          let outcome: 'submitted' | 'inflight' | 'empty' | 'failed' = 'failed';
+          try {
+            outcome = await consolidationBatch.submit(projectName, sessionId);
+          } catch (err: any) {
+            logger.warn('Batch consolidation submit failed — falling back to sync path', {
+              error: err.message,
+              sessionId,
+            });
+          }
+
+          if (outcome === 'submitted' || outcome === 'inflight') {
+            // 'submitted': WM was cleared at submit; the run continues async
+            // on the llm-batch queue — this job is done.
+            // 'inflight': a prior submit owns this session (dup-guard) —
+            // do nothing, especially not a sync run (it would re-read the
+            // still-alive sensory buffer and duplicate memories).
+            wmHandledByBatch = true;
+            logger.info(`Batch consolidation ${outcome}`, { sessionId, projectName });
+          } else if (outcome === 'empty') {
+            consolidationOk = true; // nothing to consolidate → safe to clear
+          } else {
+            // 'failed' → byte-identical sync Ollama path
+            const agent = await getConsolidationAgent();
+            await agent.consolidate(projectName, sessionId);
+            consolidationOk = true;
+            logger.info('Session consolidation completed (sync fallback)', {
+              sessionId,
+              events: events.length,
+            });
+          }
         } else {
           const agent = await getConsolidationAgent();
           await agent.consolidate(projectName, sessionId);
@@ -128,8 +173,8 @@ export async function processSessionLifecycleJob(job: {
 
       // Cleanup working memory — ONLY if consolidation succeeded (or was skipped).
       // The buffer must survive a failed consolidation so the retried job can
-      // re-consolidate from it.
-      if (consolidationOk) {
+      // re-consolidate from it. The batch path clears WM at submit instead.
+      if (consolidationOk && !wmHandledByBatch) {
         try {
           const wm = await getWorkingMemory();
           await wm.clear(projectName, sessionId);
@@ -144,6 +189,34 @@ export async function processSessionLifecycleJob(job: {
       if (consolidationError) {
         throw consolidationError;
       }
+      break;
+    }
+
+    // ── M4 batch-consolidation continuations (enqueued by the llm-batch
+    //    worker). Payloads are self-contained snapshots — a BullMQ retry of
+    //    any of these NEVER re-reads the sensory buffer. Errors propagate so
+    //    the queue's attempts/backoff retry the job.
+    case 'consolidation:abstract': {
+      const consolidationBatch = await getConsolidationBatch();
+      await consolidationBatch.handleAbstract(
+        data as import('../../services/consolidation-batch').ConsolidationAbstractPayload
+      );
+      break;
+    }
+
+    case 'consolidation:finalize': {
+      const consolidationBatch = await getConsolidationBatch();
+      await consolidationBatch.handleFinalize(
+        data as import('../../services/consolidation-batch').ConsolidationFinalizePayload
+      );
+      break;
+    }
+
+    case 'consolidation:batch-failed': {
+      const consolidationBatch = await getConsolidationBatch();
+      await consolidationBatch.handleTerminalFailure(
+        data as import('../../services/consolidation-batch').ConsolidationFailedPayload
+      );
       break;
     }
   }

@@ -137,7 +137,7 @@ Key settings:
 - `LLM_PROVIDER`: `ollama` | `openai` | `anthropic`
 - `ANTHROPIC_MODEL`: default `claude-opus-4-8` (complex tasks)
 - `CLAUDE_EFFORT`: default `high` — global fallback for Anthropic `output_config.effort`; per-call precedence is `CompletionOptions.effort` > complexity default > this
-- `CONSOLIDATION_ENABLED`: `true` — async consolidation via BullMQ worker
+- `CONSOLIDATION_ENABLED`: `true` — async consolidation via BullMQ worker. Runs sync on Ollama by default; `CONSOLIDATION_BATCH_ENABLED=true` (+ `ANTHROPIC_API_KEY`) routes steps 1–2 (pattern detection, abstraction) to `claude-opus-4-8` via the Message Batches API (ADR-003; Ollama sync path retained as fallback, `CONSOLIDATION_BATCH_WINDOW_MS` default 0 = batch-of-1)
 - `ALLOW_ANONYMOUS`: `true` — skip auth (dev only)
 
 There are **two distinct configs** — do not mix their values:
