@@ -16,6 +16,7 @@ const mocks = vi.hoisted(() => ({
   getToolCallCounts: vi.fn(),
   getDigestStats: vi.fn(),
   scrollCollection: vi.fn(),
+  getSourceCounters: vi.fn(),
 }));
 
 vi.mock('../../services/conversation-analyzer', () => ({
@@ -46,6 +47,10 @@ vi.mock('../../services/vector-store', () => ({
 
 vi.mock('../../services/retrieval-log', () => ({
   retrievalLog: { getDigestStats: mocks.getDigestStats },
+}));
+
+vi.mock('../../services/memory-governance', () => ({
+  memoryGovernance: { getSourceCounters: mocks.getSourceCounters },
 }));
 
 vi.mock('../../utils/metrics', () => ({
@@ -297,6 +302,14 @@ describe('Analytics Routes', () => {
   describe('GET /api/analytics/memory-roi', () => {
     const recentIso = (daysAgo: number) => new Date(Date.now() - daysAgo * 86400000).toISOString();
 
+    beforeEach(() => {
+      // Capture-funnel counters default to zeros — individual tests override.
+      mocks.getSourceCounters.mockResolvedValue({
+        auto_memory_tool: { ingested: 0, promoted: 0, rejected: 0 },
+        auto_transcript: { ingested: 0, promoted: 0, rejected: 0 },
+      });
+    });
+
     /** Seeded fixture: tool counts per the PINNED channel mapping. */
     const seededCounts = {
       // remember-side, channel manual
@@ -455,6 +468,100 @@ describe('Analytics Routes', () => {
     it('returns 400 without projectName', async () => {
       const res = await request(app).get('/api/analytics/memory-roi');
       expect(res.status).toBe(400);
+    });
+
+    describe('capture section (M5 per-source funnel)', () => {
+      it('reports per-source cumulative counters + windowed quarantine backlog', async () => {
+        mocks.getToolCallCounts.mockResolvedValue({});
+        mocks.getDigestStats.mockResolvedValue({
+          deliveries: 0,
+          nonEmptyDeliveries: 0,
+          sessionsWithDigest: 0,
+        });
+        mocks.getSourceCounters.mockResolvedValue({
+          auto_memory_tool: { ingested: 5, promoted: 4, rejected: 0 },
+          auto_transcript: { ingested: 10, promoted: 3, rejected: 1 },
+        });
+        mocks.scrollCollection.mockImplementation(async (collection: string) => {
+          if (collection.endsWith('_memory_pending')) {
+            return {
+              points: [
+                // in-window transcript entries
+                {
+                  id: 'p1',
+                  payload: { source: 'auto_transcript', createdAt: recentIso(2) },
+                },
+                {
+                  id: 'p2',
+                  payload: { source: 'auto_transcript', createdAt: recentIso(5) },
+                },
+                // out-of-window transcript entry
+                {
+                  id: 'p3',
+                  payload: { source: 'auto_transcript', createdAt: recentIso(99) },
+                },
+                // in-window memory-tool entry
+                {
+                  id: 'p4',
+                  payload: { source: 'auto_memory_tool', createdAt: recentIso(1) },
+                },
+                // other sources / missing fields don't count
+                { id: 'p5', payload: { source: 'auto_conversation', createdAt: recentIso(1) } },
+                { id: 'p6', payload: { createdAt: recentIso(1) } },
+              ],
+            };
+          }
+          return { points: [] };
+        });
+
+        const res = await withProject(request(app).get('/api/analytics/memory-roi?days=30'));
+
+        expect(res.status).toBe(200);
+        expect(mocks.getSourceCounters).toHaveBeenCalledWith('test', [
+          'auto_memory_tool',
+          'auto_transcript',
+        ]);
+        expect(res.body.capture.bySource.auto_transcript).toEqual({
+          ingested: 10,
+          promoted: 3,
+          rejected: 1,
+          promotionRate: 0.75, // 3 / (3 + 1)
+          pendingInWindow: 2,
+        });
+        expect(res.body.capture.bySource.auto_memory_tool).toEqual({
+          ingested: 5,
+          promoted: 4,
+          rejected: 0,
+          promotionRate: 1,
+          pendingInWindow: 1,
+        });
+        // The pre-existing response shapes stay intact (dashboard + tests rely on them).
+        expect(res.body.remembers.byChannel).toHaveProperty('manual');
+        expect(res.body.recalls.byChannel).toHaveProperty('memory_tool');
+        expect(res.body.ratios).toHaveProperty('strict');
+        expect(res.body.sessions).toHaveProperty('endSessionTriggerRate');
+      });
+
+      it('reports a null promotionRate when a source has zero reviews', async () => {
+        mocks.getToolCallCounts.mockResolvedValue({});
+        mocks.getDigestStats.mockResolvedValue({
+          deliveries: 0,
+          nonEmptyDeliveries: 0,
+          sessionsWithDigest: 0,
+        });
+        mocks.getSourceCounters.mockResolvedValue({
+          auto_memory_tool: { ingested: 0, promoted: 0, rejected: 0 },
+          auto_transcript: { ingested: 4, promoted: 0, rejected: 0 },
+        });
+        mocks.scrollCollection.mockResolvedValue({ points: [] });
+
+        const res = await withProject(request(app).get('/api/analytics/memory-roi'));
+
+        expect(res.status).toBe(200);
+        expect(res.body.capture.bySource.auto_transcript.promotionRate).toBeNull();
+        expect(res.body.capture.bySource.auto_transcript.ingested).toBe(4);
+        expect(res.body.capture.bySource.auto_transcript.pendingInWindow).toBe(0);
+      });
     });
   });
 });

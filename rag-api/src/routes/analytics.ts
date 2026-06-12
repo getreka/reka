@@ -434,6 +434,65 @@ router.get(
     const ratio = (numerator: number, denominator: number): number | null =>
       denominator > 0 ? Math.round((numerator / denominator) * 1000) / 1000 : null;
 
+    // 5. Capture-channel funnel (M5 validate-or-kill gate: the transcript
+    //    channel survives only if its promotion rate stays within 20% of the
+    //    memory-tool baseline). ingested/promoted/rejected come from the
+    //    per-source governance counters and are CUMULATIVE — they are never
+    //    windowed or reset, so the day-30 review reads deltas between
+    //    snapshots. pendingInWindow IS windowed: quarantine entries with that
+    //    source created since the window start.
+    const CAPTURE_SOURCES = ['auto_memory_tool', 'auto_transcript'] as const;
+    const { memoryGovernance } = await import('../services/memory-governance');
+    const sourceCounters = await memoryGovernance.getSourceCounters(projectName, CAPTURE_SOURCES);
+
+    const pendingBySource: Record<string, number> = {};
+    for (const source of CAPTURE_SOURCES) pendingBySource[source] = 0;
+    try {
+      let offset: string | undefined = undefined;
+      let scanned = 0;
+      do {
+        const page = await vectorStore.scrollCollection(
+          `${projectName}_memory_pending`,
+          200,
+          offset,
+          false
+        );
+        for (const point of page.points) {
+          const payload = point.payload as Record<string, unknown>;
+          const source = payload.source as string | undefined;
+          const createdAt = payload.createdAt as string | undefined;
+          if (source && source in pendingBySource && createdAt && createdAt >= since) {
+            pendingBySource[source]++;
+          }
+        }
+        scanned += page.points.length;
+        offset = page.nextOffset as string | undefined;
+      } while (offset && scanned < 10000);
+    } catch {
+      /* quarantine collection unavailable — report zeros */
+    }
+
+    const captureBySource: Record<
+      string,
+      {
+        ingested: number;
+        promoted: number;
+        rejected: number;
+        promotionRate: number | null;
+        pendingInWindow: number;
+      }
+    > = {};
+    for (const source of CAPTURE_SOURCES) {
+      const counts = sourceCounters[source];
+      captureBySource[source] = {
+        ingested: counts.ingested,
+        promoted: counts.promoted,
+        rejected: counts.rejected,
+        promotionRate: ratio(counts.promoted, counts.promoted + counts.rejected),
+        pendingInWindow: pendingBySource[source],
+      };
+    }
+
     res.json({
       projectName,
       days,
@@ -475,6 +534,9 @@ router.get(
         endSessionTriggerRate: ratio(endedExplicit, started),
         consolidatedWithLtmEvidence: consolidatedSessions.size,
         consolidationCompletionRate: ratio(consolidatedSessions.size, ended),
+      },
+      capture: {
+        bySource: captureBySource,
       },
     });
   })
