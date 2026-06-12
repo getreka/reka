@@ -548,18 +548,29 @@ router.delete(
 // ============================================
 
 /**
+ * GET /api/analytics/llm-usage and /api/analytics/memory-roi are served by
+ * routes/analytics.ts (mounted after this router). next('router') exits this
+ * router entirely so neither the :collection handler NOR the :collection
+ * scope param fires — these path segments are virtual endpoints, not
+ * collections, and scopeCollectionParam would 403 them for authenticated
+ * keys (per-key tenant scoping is still enforced on query.projectName by the
+ * app-level enforceProjectScope).
+ */
+router.get('/analytics/llm-usage', (_req: Request, _res: Response, next: NextFunction) =>
+  next('router')
+);
+router.get('/analytics/memory-roi', (_req: Request, _res: Response, next: NextFunction) =>
+  next('router')
+);
+
+/**
  * Get detailed collection analytics
  * GET /api/analytics/:collection
  */
 router.get(
   '/analytics/:collection',
-  asyncHandler(async (req: Request, res: Response, next: NextFunction) => {
+  asyncHandler(async (req: Request, res: Response) => {
     const { collection } = req.params;
-
-    // GET /api/analytics/llm-usage is served by routes/analytics.ts (mounted after
-    // this router) — fall through so the :collection param route doesn't shadow it.
-    if (collection === 'llm-usage') return next();
-
     const analytics = await vectorStore.getCollectionAnalytics(collection);
     res.json(analytics);
   })

@@ -299,6 +299,188 @@ router.get(
 );
 
 // ============================================
+// Memory ROI (M3 validate-or-kill metric)
+// ============================================
+
+/**
+ * PINNED tool-name → category mapping (dated 2026-06-12 — Subtraction-plan
+ * merges rename tools mid-window; this mapping is the defense). Includes the
+ * M2 `memory` tool from day one:
+ *
+ *   remember-side: channel `manual`     = remember, batch_remember,
+ *                                         record_adr, record_pattern
+ *                  channel `memory_tool` = memory:create, memory:insert,
+ *                                          memory:str_replace
+ *   recall-side:   channel `manual`     = recall, get_adrs, get_patterns
+ *                  channel `memory_tool` = memory:view
+ *
+ * The strict-ratio denominator includes adapter-channel writes — otherwise
+ * Direction-4 success (manual remembers → ~0 as the adapter takes over) would
+ * collapse the Direction-3 denominator and trivially inflate recall/remember
+ * past the 0.3 gate.
+ */
+const ROI_REMEMBER_MANUAL = ['remember', 'batch_remember', 'record_adr', 'record_pattern'] as const;
+const ROI_REMEMBER_MEMORY_TOOL = ['memory:create', 'memory:insert', 'memory:str_replace'] as const;
+const ROI_RECALL_MANUAL = ['recall', 'get_adrs', 'get_patterns'] as const;
+const ROI_RECALL_MEMORY_TOOL = ['memory:view'] as const;
+
+function pickCounts(
+  counts: Record<string, number>,
+  names: readonly string[],
+  stripPrefix?: string
+): { byTool: Record<string, number>; total: number } {
+  const byTool: Record<string, number> = {};
+  let total = 0;
+  for (const name of names) {
+    const count = counts[name] || 0;
+    const key = stripPrefix && name.startsWith(stripPrefix) ? name.slice(stripPrefix.length) : name;
+    byTool[key] = count;
+    total += count;
+  }
+  return { byTool, total };
+}
+
+/**
+ * Validate-or-kill metric — channel-aware recall/remember counts + digest
+ * coverage + session hook reliability.
+ * GET /api/analytics/memory-roi?projectName=&days=30
+ */
+router.get(
+  '/analytics/memory-roi',
+  validateProjectName,
+  asyncHandler(async (req: Request, res: Response) => {
+    const { projectName } = req.body;
+    const days = Math.min(Math.max(parseInt(req.query.days as string) || 30, 1), 365);
+    const since = new Date(Date.now() - days * 86400000).toISOString();
+
+    // 1. Tool-call counts from {project}_tool_usage (timestampMs numeric range)
+    const counts = await usageTracker.getToolCallCounts(projectName, days);
+
+    const rememberManual = pickCounts(counts, ROI_REMEMBER_MANUAL);
+    const rememberMemoryTool = pickCounts(counts, ROI_REMEMBER_MEMORY_TOOL, 'memory:');
+    const recallManual = pickCounts(counts, ROI_RECALL_MANUAL);
+    const recallMemoryTool = pickCounts(counts, ROI_RECALL_MEMORY_TOOL, 'memory:');
+
+    const remembersTotal = rememberManual.total + rememberMemoryTool.total;
+    const recallsTotal = recallManual.total + recallMemoryTool.total;
+
+    // 2. Digest deliveries from the retrieval audit log
+    const { retrievalLog } = await import('../services/retrieval-log');
+    const digestStats = await retrievalLog.getDigestStats(projectName, days);
+
+    // 3. Session hook reliability from {project}_sessions (window app-side —
+    //    startedAt is an ISO string, not range-filterable in Qdrant)
+    const { vectorStore } = await import('../services/vector-store');
+    let started = 0;
+    let ended = 0;
+    let endedExplicit = 0;
+    const endedSessionIds = new Set<string>();
+    try {
+      let offset: string | undefined = undefined;
+      let scanned = 0;
+      do {
+        const page = await vectorStore.scrollCollection(
+          `${projectName}_sessions`,
+          200,
+          offset,
+          false
+        );
+        for (const point of page.points) {
+          const payload = point.payload as Record<string, unknown>;
+          const startedAt = payload.startedAt as string | undefined;
+          if (!startedAt || startedAt < since) continue;
+          started++;
+          if (payload.status === 'ended') {
+            ended++;
+            const sid = payload.sessionId as string | undefined;
+            if (sid) endedSessionIds.add(sid);
+            const endReason = (payload.metadata as Record<string, unknown> | undefined)?.endReason;
+            if (endReason !== 'stale_cleanup') endedExplicit++;
+          }
+        }
+        scanned += page.points.length;
+        offset = page.nextOffset as string | undefined;
+      } while (offset && scanned < 10000);
+    } catch {
+      /* sessions collection unavailable — report zeros */
+    }
+
+    // 4. Consolidation completion evidence: episodic LTM writes carry the
+    //    sessionId they were consolidated from. (Semantic-only/zero-write
+    //    consolidations leave no durable per-session trace — this undercounts
+    //    until M4's episodic fix; the day-30 review rider applies.)
+    const consolidatedSessions = new Set<string>();
+    try {
+      let offset: string | undefined = undefined;
+      let scanned = 0;
+      do {
+        const page = await vectorStore.scrollCollection(
+          `${projectName}_memory_episodic`,
+          200,
+          offset,
+          false
+        );
+        for (const point of page.points) {
+          const sid = (point.payload as Record<string, unknown>).sessionId as string | undefined;
+          if (sid && endedSessionIds.has(sid)) consolidatedSessions.add(sid);
+        }
+        scanned += page.points.length;
+        offset = page.nextOffset as string | undefined;
+      } while (offset && scanned < 10000);
+    } catch {
+      /* episodic collection unavailable — report zeros */
+    }
+
+    const ratio = (numerator: number, denominator: number): number | null =>
+      denominator > 0 ? Math.round((numerator / denominator) * 1000) / 1000 : null;
+
+    res.json({
+      projectName,
+      days,
+      since,
+      remembers: {
+        total: remembersTotal,
+        byChannel: {
+          manual: { ...rememberManual.byTool, total: rememberManual.total },
+          memory_tool: { ...rememberMemoryTool.byTool, total: rememberMemoryTool.total },
+        },
+      },
+      recalls: {
+        total: recallsTotal,
+        byChannel: {
+          manual: { ...recallManual.byTool, total: recallManual.total },
+          memory_tool: { ...recallMemoryTool.byTool, total: recallMemoryTool.total },
+        },
+      },
+      digest: {
+        deliveries: digestStats.deliveries,
+        nonEmptyDeliveries: digestStats.nonEmptyDeliveries,
+        sessionsWithDigest: digestStats.sessionsWithDigest,
+        coverage: ratio(digestStats.sessionsWithDigest, started),
+      },
+      ratios: {
+        // Strict = model-initiated recalls / all remembers (both channels) —
+        // the named Direction-3 signal.
+        strict: ratio(recallsTotal, remembersTotal),
+        // Assisted additionally counts non-empty digest deliveries as reads,
+        // so the day-30 review can distinguish "digest replaced recall" from
+        // "nothing is read".
+        assisted: ratio(recallsTotal + digestStats.nonEmptyDeliveries, remembersTotal),
+      },
+      sessions: {
+        started,
+        ended,
+        endedExplicit,
+        staleAutoEnded: ended - endedExplicit,
+        endSessionTriggerRate: ratio(endedExplicit, started),
+        consolidatedWithLtmEvidence: consolidatedSessions.size,
+        consolidationCompletionRate: ratio(consolidatedSessions.size, ended),
+      },
+    });
+  })
+);
+
+// ============================================
 // Platform Analytics (cross-project)
 // ============================================
 
