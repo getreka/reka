@@ -259,6 +259,82 @@ describe('LongTermMemoryService', () => {
     });
   });
 
+  describe('recall (more branches)', () => {
+    it('returns an episodic memory and weights its score by retention', async () => {
+      const now = new Date().toISOString();
+      mockedVS.search
+        .mockResolvedValueOnce([
+          {
+            id: 'ep-1',
+            score: 0.9,
+            payload: {
+              id: 'ep-1',
+              content: 'debugged the auth flow',
+              timestamp: now,
+              stability: 7,
+              accessCount: 0,
+              tags: ['debug'],
+              sessionId: 's1',
+              files: ['auth.ts'],
+              actions: [],
+            },
+          },
+        ])
+        .mockResolvedValueOnce([]); // semantic empty
+
+      const results = await memoryLtm.recall({ projectName: 'test', query: 'auth' });
+
+      expect(results).toHaveLength(1);
+      expect(results[0].collection).toBe('episodic');
+      expect(results[0].memory.id).toBe('ep-1');
+      // Fresh episodic → retention ≈ 1.0, weighted score ≈ raw vector score.
+      expect(results[0].retention).toBeCloseTo(1.0, 1);
+      expect(results[0].score).toBeCloseTo(0.9, 1);
+    });
+
+    it('applies the subtype filter only to the semantic collection', async () => {
+      mockedVS.search.mockResolvedValue([]);
+
+      await memoryLtm.recall({ projectName: 'test', query: 'q', subtype: 'decision' });
+
+      // episodic search → no filter; semantic search → subtype filter.
+      const episodicFilter = mockedVS.search.mock.calls[0][3];
+      const semanticFilter = mockedVS.search.mock.calls[1][3];
+      expect(episodicFilter).toBeUndefined();
+      expect(semanticFilter).toEqual({
+        must: [{ key: 'subtype', match: { value: 'decision' } }],
+      });
+    });
+
+    it('swallows a non-404 search error for a collection and still returns the other', async () => {
+      const now = new Date().toISOString();
+      const boom = new Error('qdrant unavailable') as any;
+      boom.status = 500;
+      mockedVS.search.mockRejectedValueOnce(boom).mockResolvedValueOnce([
+        {
+          id: 'sem-1',
+          score: 0.8,
+          payload: { id: 'sem-1', content: 'fact', createdAt: now, stability: 90, accessCount: 0 },
+        },
+      ]);
+
+      const results = await memoryLtm.recall({ projectName: 'test', query: 'q' });
+
+      // Episodic threw (logged, swallowed); semantic survived.
+      expect(results).toHaveLength(1);
+      expect(results[0].collection).toBe('semantic');
+    });
+
+    it('honours collections=[semantic] (does not search episodic)', async () => {
+      mockedVS.search.mockResolvedValue([]);
+
+      await memoryLtm.recall({ projectName: 'test', query: 'q', collections: ['semantic'] });
+
+      expect(mockedVS.search).toHaveBeenCalledTimes(1);
+      expect(mockedVS.search.mock.calls[0][0]).toBe('test_memory_semantic');
+    });
+  });
+
   describe('strengthenOnRecall', () => {
     it('increments accessCount and stability', async () => {
       mockQdrantClient.retrieve.mockResolvedValue([
@@ -280,6 +356,145 @@ describe('LongTermMemoryService', () => {
           }),
         })
       );
+    });
+
+    it('targets the episodic collection for episodic memories', async () => {
+      mockQdrantClient.retrieve.mockResolvedValue([
+        { id: 'ep-1', payload: { accessCount: 0, stability: 7 } },
+      ]);
+
+      await memoryLtm.strengthenOnRecall('test', 'ep-1', 'episodic');
+
+      expect(mockQdrantClient.setPayload).toHaveBeenCalledWith(
+        'test_memory_episodic',
+        expect.objectContaining({
+          payload: expect.objectContaining({ accessCount: 1, stability: 10.5 }), // 7 * 1.5
+        })
+      );
+    });
+
+    it('is a no-op when the memory is not found', async () => {
+      mockQdrantClient.retrieve.mockResolvedValue([]);
+
+      await memoryLtm.strengthenOnRecall('test', 'missing', 'semantic');
+
+      expect(mockQdrantClient.setPayload).not.toHaveBeenCalled();
+    });
+
+    it('swallows a retrieve/setPayload error (best-effort strengthening)', async () => {
+      mockQdrantClient.retrieve.mockRejectedValue(new Error('qdrant down'));
+
+      // Must not throw — strengthening is best-effort.
+      await expect(
+        memoryLtm.strengthenOnRecall('test', 'mem-1', 'semantic')
+      ).resolves.toBeUndefined();
+      expect(mockQdrantClient.setPayload).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('list', () => {
+    it('maps scrolled episodic points to EpisodicMemory', async () => {
+      mockedVS.scrollCollection.mockResolvedValue({
+        points: [
+          {
+            id: 'ep-1',
+            payload: {
+              id: 'ep-1',
+              content: 'an event',
+              sessionId: 's1',
+              timestamp: new Date().toISOString(),
+              files: ['a.ts'],
+              tags: ['t'],
+              stability: 7,
+              accessCount: 1,
+            },
+          },
+        ],
+        nextOffset: undefined,
+      });
+
+      const out = await memoryLtm.list('test', 'episodic', { limit: 5 });
+
+      expect(mockedVS.scrollCollection).toHaveBeenCalledWith('test_memory_episodic', 5);
+      expect(out).toHaveLength(1);
+      expect(out[0].id).toBe('ep-1');
+      expect((out[0] as any).sessionId).toBe('s1');
+    });
+
+    it('returns [] when the collection does not exist (404)', async () => {
+      const err = new Error('Not found') as any;
+      err.status = 404;
+      mockedVS.scrollCollection.mockRejectedValue(err);
+
+      const out = await memoryLtm.list('test', 'semantic');
+
+      expect(out).toEqual([]);
+    });
+
+    it('returns [] on a non-404 scroll error', async () => {
+      mockedVS.scrollCollection.mockRejectedValue(new Error('boom'));
+
+      const out = await memoryLtm.list('test', 'semantic');
+
+      expect(out).toEqual([]);
+    });
+  });
+
+  describe('getStats', () => {
+    it('counts both collections', async () => {
+      mockedVS.count.mockResolvedValueOnce(3).mockResolvedValueOnce(7);
+
+      const stats = await memoryLtm.getStats('test');
+
+      expect(stats.episodic.count).toBe(3);
+      expect(stats.semantic.count).toBe(7);
+      expect(mockedVS.count).toHaveBeenCalledWith('test_memory_episodic');
+      expect(mockedVS.count).toHaveBeenCalledWith('test_memory_semantic');
+    });
+
+    it('returns zero counts when a collection count throws', async () => {
+      mockedVS.count.mockRejectedValue(new Error('missing'));
+
+      const stats = await memoryLtm.getStats('test');
+
+      expect(stats.episodic.count).toBe(0);
+      expect(stats.semantic.count).toBe(0);
+    });
+  });
+
+  describe('getByIds', () => {
+    it('retrieves matching points from semantic then episodic collections', async () => {
+      mockQdrantClient.retrieve
+        .mockResolvedValueOnce([
+          { id: 'sem-1', payload: { content: 'fact', tags: ['x'], createdAt: 'now' } },
+        ]) // semantic
+        .mockResolvedValueOnce([
+          { id: 'ep-1', payload: { content: 'event', tags: [], createdAt: 'then' } },
+        ]); // episodic
+
+      const out = await memoryLtm.getByIds('test', ['sem-1', 'ep-1']);
+
+      expect(mockQdrantClient.retrieve).toHaveBeenCalledWith(
+        'test_memory_semantic',
+        expect.objectContaining({ ids: ['sem-1', 'ep-1'] })
+      );
+      expect(out).toHaveLength(2);
+      expect(out.map((m) => m.id).sort()).toEqual(['ep-1', 'sem-1']);
+      expect(out.find((m) => m.id === 'sem-1')?.content).toBe('fact');
+    });
+
+    it('skips a collection that throws (may not exist yet)', async () => {
+      mockQdrantClient.retrieve
+        .mockRejectedValueOnce(new Error('no semantic collection'))
+        .mockResolvedValueOnce([{ id: 'ep-1', payload: { content: 'event' } }]);
+
+      const out = await memoryLtm.getByIds('test', ['ep-1']);
+
+      expect(out).toHaveLength(1);
+      expect(out[0].id).toBe('ep-1');
+      // Missing fields default to empty.
+      expect(out[0].tags).toEqual([]);
+      expect(out[0].createdAt).toBe('');
     });
   });
 });
