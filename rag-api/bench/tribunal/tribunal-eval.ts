@@ -3,9 +3,14 @@
  *
  * Runs tribunal debates against eval cases and scores them with LLM-as-judge.
  *
- * Usage:
- *   npx ts-node src/eval/tribunal-eval.ts [--cases=all|arch|code|tech] [--rounds=1]
- *   npx ts-node src/eval/tribunal-eval.ts --cases=arch-01  # single case
+ * Usage (run from rag-api/ so shared node_modules + src/ resolve):
+ *   npx ts-node --transpile-only bench/tribunal/tribunal-eval.ts [--cases=all|arch|code|tech] [--rounds=1]
+ *   npx ts-node --transpile-only bench/tribunal/tribunal-eval.ts --cases=arch-01  # single case
+ *
+ * Unlike the retrieval benchmark (bench/eval/, HTTP-only), this debate-quality
+ * eval imports live rag-api services in-process (tribunalService, llm), so it is
+ * run via ts-node --transpile-only and is excluded from bench's standalone
+ * type-check (it reaches into ../../src, which the bench tsconfig does not own).
  */
 
 import * as fs from 'fs';
@@ -17,9 +22,9 @@ import {
   METRIC_THRESHOLDS,
   EvalScorecard,
 } from './tribunal-judge-rubric';
-import { tribunalService, TribunalResult } from '../services/tribunal';
-import { llm } from '../services/llm';
-import { logger } from '../utils/logger';
+import { tribunalService, TribunalResult } from '../../src/services/tribunal';
+import { llm } from '../../src/services/llm';
+import { logger } from '../../src/utils/logger';
 
 // ── Interfaces ──────────────────────────────────────────────
 

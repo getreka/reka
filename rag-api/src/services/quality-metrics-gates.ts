@@ -1,10 +1,15 @@
 /**
- * Quality Gates - Runtime quality monitoring for LLM calls.
+ * Quality Metrics Gates - Runtime quality monitoring for LLM calls.
  *
- * Wraps LLM calls to collect metrics and detect quality regressions.
+ * Wraps LLM calls to collect metrics and detect quality regressions. Serves the
+ * live GET /api/quality routes.
+ *
+ * NOTE: distinct from ./quality-gates.ts, which runs verification gates
+ * (tsc/test/blast-radius) before memory promotion. The exported singleton here
+ * is `qualityMetricsGates` to avoid confusion with that module's `qualityGates`.
  */
 
-import { cacheService } from '../services/cache';
+import { cacheService } from './cache';
 import { logger } from '../utils/logger';
 
 export interface QualityMetrics {
@@ -186,5 +191,5 @@ class QualityGateService {
   }
 }
 
-export const qualityGates = new QualityGateService();
-export default qualityGates;
+export const qualityMetricsGates = new QualityGateService();
+export default qualityMetricsGates;

@@ -15,9 +15,9 @@
     "lint": "eslint src/ --ext .ts",
     "lint:fix": "eslint src/ --ext .ts --fix",
     "format": "prettier --write 'src/**/*.ts'",
-    "eval": "ts-node src/evals/cli.ts",
-    "eval:benchmark": "ts-node src/evals/benchmark.ts",
-    "bench": "tsx bench/runner.ts"
+    "bench": "tsx bench/runner.ts",
+    "eval": "ts-node --transpile-only -P bench/tsconfig.json bench/eval/cli.ts",
+    "eval:coir": "ts-node --transpile-only -P bench/tsconfig.json bench/eval/benchmarks/coir-adapter.ts"
   },
   "dependencies": {
     "@anthropic-ai/claude-agent-sdk": "^0.2.66",

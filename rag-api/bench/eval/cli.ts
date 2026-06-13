@@ -1,11 +1,11 @@
 /**
  * Eval CLI - Entry point for running evaluations and comparing reports.
  *
- * Usage:
- *   npx ts-node src/eval/cli.ts run [--project NAME] [--hybrid] [--api-url URL]
- *   npx ts-node src/eval/cli.ts compare <before.json> <after.json>
- *   npx ts-node src/eval/cli.ts benchmark run <adapter-module> [options]
- *   npx ts-node src/eval/cli.ts benchmark list
+ * Usage (run from rag-api/ so shared node_modules resolves):
+ *   npx ts-node bench/eval/cli.ts run [--project NAME] [--hybrid] [--api-url URL]
+ *   npx ts-node bench/eval/cli.ts compare <before.json> <after.json>
+ *   npx ts-node bench/eval/cli.ts benchmark run <adapter-module> [options]
+ *   npx ts-node bench/eval/cli.ts benchmark list
  */
 
 import * as path from 'path';
@@ -62,10 +62,10 @@ Built-in benchmark adapters
   (none bundled — implement BenchmarkAdapter and pass the module path to "benchmark run")
 
 To create an adapter:
-  1. Extend BenchmarkAdapter from src/eval/benchmarks/adapter.ts
+  1. Extend BenchmarkAdapter from bench/eval/benchmarks/adapter.ts
   2. Implement: name, level, prepare(), loadCases(), optionally indexCorpus()
   3. Export a default instance: export default new MyAdapter()
-  4. Run: npx ts-node src/eval/cli.ts benchmark run ./my-adapter.ts [options]
+  4. Run: npx ts-node bench/eval/cli.ts benchmark run ./my-adapter.ts [options]
     `);
     return;
   }
@@ -127,9 +127,9 @@ function printHelp(): void {
 RAG Eval CLI
 
 Usage:
-  npx ts-node src/eval/cli.ts run [options]                         Run eval against golden queries
-  npx ts-node src/eval/cli.ts compare <before.json> <after.json>   Compare two eval reports
-  npx ts-node src/eval/cli.ts benchmark <subcommand> [options]      Run a benchmark adapter
+  npx ts-node bench/eval/cli.ts run [options]                         Run eval against golden queries
+  npx ts-node bench/eval/cli.ts compare <before.json> <after.json>   Compare two eval reports
+  npx ts-node bench/eval/cli.ts benchmark <subcommand> [options]      Run a benchmark adapter
 
 Run options:
   --project NAME     Project name (default: from golden-queries.json)
@@ -148,8 +148,8 @@ function printBenchmarkHelp(): void {
 RAG Eval CLI — benchmark subcommand
 
 Usage:
-  npx ts-node src/eval/cli.ts benchmark list
-  npx ts-node src/eval/cli.ts benchmark run <adapter-module> [options]
+  npx ts-node bench/eval/cli.ts benchmark list
+  npx ts-node bench/eval/cli.ts benchmark run <adapter-module> [options]
 
 Run options:
   --api-url URL        RAG API base URL (default: RAG_API_URL env or http://localhost:3100)

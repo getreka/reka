@@ -13,7 +13,7 @@
  * Metrics computed: NDCG@10, Recall@10, MRR
  *
  * Usage:
- *   npx ts-node src/eval/benchmarks/coir-adapter.ts [--dataset cosqa|apps|stackoverflow] [--skip-index]
+ *   npx ts-node bench/eval/benchmarks/coir-adapter.ts [--dataset cosqa|apps|stackoverflow] [--skip-index]
  */
 
 import * as fs from 'fs';

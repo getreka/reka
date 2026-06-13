@@ -1,0 +1,10 @@
+# Benchmark run artifacts — regenerated on every run, never committed.
+results/
+eval/results/*.json
+tribunal/results/*.json
+
+# CoIR / BEIR corpora are downloaded on demand into eval/data/<dataset>/ at run
+# time (large). The committed qrels-test.json ground truth is the exception and
+# is force-added.
+eval/data/coir/**/corpus*.json
+eval/data/coir/**/queries*.json

@@ -155,7 +155,7 @@
     {
       "id": "v2-022",
       "query": "recallAtK metric function",
-      "expectedFiles": ["src/eval/metrics.ts"],
+      "expectedFiles": ["bench/eval/metrics.ts"],
       "category": "exact-match",
       "k": 10
     },
@@ -910,9 +910,9 @@
       "id": "v2-122",
       "query": "how does the eval runner compare query results against golden queries",
       "expectedFiles": [
-        "src/eval/runner.ts",
-        "src/eval/metrics.ts",
-        "src/eval/golden-queries.json"
+        "bench/eval/runner.ts",
+        "bench/eval/metrics.ts",
+        "bench/eval/golden-queries.json"
       ],
       "category": "cross-file",
       "k": 10
@@ -1317,7 +1317,7 @@
     {
       "id": "v2-177",
       "query": "how are the eval metrics recallAtK and ndcgAtK tested",
-      "expectedFiles": ["src/eval/metrics.ts"],
+      "expectedFiles": ["bench/eval/metrics.ts"],
       "category": "testing",
       "k": 10
     },
@@ -1361,8 +1361,8 @@
     },
     {
       "id": "v2-183",
-      "query": "how are the evals quality gates benchmark tests structured",
-      "expectedFiles": ["src/evals/quality-gates.ts", "src/evals/runner.ts"],
+      "query": "where is the runtime LLM quality-metrics gate that serves the quality route",
+      "expectedFiles": ["src/services/quality-metrics-gates.ts", "src/routes/quality.ts"],
       "category": "testing",
       "k": 10
     },
@@ -1389,8 +1389,8 @@
     },
     {
       "id": "v2-187",
-      "query": "how is the evals benchmark reporter formatting results",
-      "expectedFiles": ["src/evals/reporter.ts"],
+      "query": "how does the retrieval benchmark runner format and report results",
+      "expectedFiles": ["bench/eval/runner.ts", "bench/eval/compare.ts"],
       "category": "testing",
       "k": 10
     },

@@ -3,7 +3,7 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { qualityGates } from '../evals/quality-gates';
+import { qualityMetricsGates } from '../services/quality-metrics-gates';
 import { asyncHandler } from '../middleware/async-handler';
 
 const router = Router();
@@ -16,7 +16,7 @@ router.get(
   '/quality/report',
   asyncHandler(async (req: Request, res: Response) => {
     const endpoint = req.query.endpoint as string | undefined;
-    const report = await qualityGates.getReport(endpoint);
+    const report = await qualityMetricsGates.getReport(endpoint);
     res.json(report);
   })
 );
@@ -28,7 +28,7 @@ router.get(
 router.get(
   '/quality/alerts',
   asyncHandler(async (_req: Request, res: Response) => {
-    const alerts = await qualityGates.getAlerts();
+    const alerts = await qualityMetricsGates.getAlerts();
     res.json({ alerts, count: alerts.length });
   })
 );

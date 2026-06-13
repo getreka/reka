@@ -143,8 +143,10 @@ const DEFAULT_EXCLUDE = [
   '**/package-lock.json',
   '**/yarn.lock',
   '**/pnpm-lock.yaml',
+  // Benchmark run artifacts + golden datasets (this repo keeps them under
+  // bench/eval/; the **/ prefix also covers any consumer project's eval/ dir).
   '**/eval/results/**',
-  '**/eval/golden-queries.json',
+  '**/eval/golden-queries*.json',
 ];
 
 // Chunk types that classifyFile() can route to typed (SEPARATE_COLLECTIONS)
