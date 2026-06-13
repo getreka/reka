@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeEach } from 'vitest';
+import { describe, it, expect, vi, beforeEach, afterEach } from 'vitest';
 
 // ---------------------------------------------------------------------------
 // Hoisted mocks — declared before importing the module under test.
@@ -19,10 +19,9 @@ vi.mock('../../utils/logger', () => ({
 
 const mockRedisSet = vi.hoisted(() => vi.fn());
 const mockRedisDel = vi.hoisted(() => vi.fn().mockResolvedValue(1));
+const mockGetClient = vi.hoisted(() => vi.fn(() => ({ set: mockRedisSet, del: mockRedisDel })));
 vi.mock('../../services/cache', () => ({
-  cacheService: {
-    getClient: () => ({ set: mockRedisSet, del: mockRedisDel }),
-  },
+  cacheService: { getClient: mockGetClient },
 }));
 
 const mockWmGetAll = vi.hoisted(() => vi.fn());
@@ -94,6 +93,8 @@ beforeEach(() => {
   mockConfig.CONSOLIDATION_BATCH_ENABLED = true;
   mockConfig.CONSOLIDATION_BATCH_WINDOW_MS = 0;
   mockConfig.ANTHROPIC_API_KEY = 'test-key';
+  mockGetClient.mockReturnValue({ set: mockRedisSet, del: mockRedisDel });
+  mockRedisDel.mockResolvedValue(1);
   mockRedisSet.mockResolvedValue('OK'); // NX claim succeeds by default
   mockWmGetAll.mockResolvedValue(WM_SLOTS);
   mockSbRead.mockResolvedValue(
@@ -397,5 +398,92 @@ describe('consolidationBatch.handleTerminalFailure', () => {
 
     expect(mockWmInsert).toHaveBeenCalledTimes(2); // restored…
     expect(mockWmClear).not.toHaveBeenCalled(); // …and NOT wiped — no memory loss
+  });
+
+  it('keeps restoring later slots when an individual WM insert throws', async () => {
+    // The first insert fails (logged, swallowed); the second must still run.
+    mockWmInsert.mockRejectedValueOnce(new Error('slot insert failed'));
+
+    await consolidationBatch.handleTerminalFailure(basePayload({ reason: 'invalid_request' }));
+
+    expect(mockWmInsert).toHaveBeenCalledTimes(2);
+    // Fallback still ran on the snapshot despite the per-slot insert error.
+    expect(mockConsolidateSnapshot).toHaveBeenCalledWith('beep', 's-1', SNAPSHOT);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Inflight marker — no-Redis + del-error edge cases
+// ---------------------------------------------------------------------------
+
+describe('consolidationBatch inflight marker (Redis edge cases)', () => {
+  it('proceeds (claim granted) when there is no Redis client to guard with', async () => {
+    mockGetClient.mockReturnValue(null as any);
+
+    const outcome = await consolidationBatch.submit('beep', 's-1');
+
+    // No Redis → setInflight returns true (no guard possible) → submit proceeds.
+    expect(outcome).toBe('submitted');
+    expect(mockRedisSet).not.toHaveBeenCalled();
+    expect(mockBatchSubmit).toHaveBeenCalledTimes(1);
+  });
+
+  it('clearInflight is a no-op when there is no Redis client', async () => {
+    mockGetClient.mockReturnValue(null as any);
+
+    await expect(consolidationBatch.clearInflight('beep', 's-1')).resolves.toBeUndefined();
+    expect(mockRedisDel).not.toHaveBeenCalled();
+  });
+
+  it('clearInflight swallows a Redis del error', async () => {
+    mockRedisDel.mockRejectedValueOnce(new Error('del down'));
+
+    await expect(consolidationBatch.clearInflight('beep', 's-1')).resolves.toBeUndefined();
+  });
+});
+
+// ---------------------------------------------------------------------------
+// parseStrict — missing-text branch (via handleFinalize)
+// ---------------------------------------------------------------------------
+
+describe('consolidationBatch parseStrict missing-text', () => {
+  it('routes an undefined resultText to the failure path (no text to parse)', async () => {
+    // resultText omitted entirely → parseStrict throws "missing text" → fallback.
+    await consolidationBatch.handleFinalize(basePayload({}));
+
+    expect(mockStoreAbstracted).not.toHaveBeenCalled();
+    expect(mockConsolidateSnapshot).toHaveBeenCalledWith('beep', 's-1', SNAPSHOT);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// Coalescing window — CONSOLIDATION_BATCH_WINDOW_MS > 0
+// ---------------------------------------------------------------------------
+
+describe('consolidationBatch coalescing window (WINDOW_MS > 0)', () => {
+  beforeEach(() => {
+    vi.useFakeTimers();
+    mockConfig.CONSOLIDATION_BATCH_WINDOW_MS = 50;
+  });
+
+  afterEach(() => {
+    vi.useRealTimers();
+    mockConfig.CONSOLIDATION_BATCH_WINDOW_MS = 0;
+  });
+
+  it('buffers the row and flushes it as one batch after the window elapses', async () => {
+    const submitPromise = consolidationBatch.submit('beep', 's-1');
+
+    // Before the window elapses, no batch has been submitted yet.
+    expect(mockBatchSubmit).not.toHaveBeenCalled();
+
+    // Advance past the window → the buffered rows flush in a single batch.
+    await vi.advanceTimersByTimeAsync(60);
+    await submitPromise;
+
+    expect(mockBatchSubmit).toHaveBeenCalledTimes(1);
+    const args = mockBatchSubmit.mock.calls[0][0];
+    expect(args.caller).toBe('consolidation');
+    expect(args.rows).toHaveLength(1);
   });
 });

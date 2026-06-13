@@ -80,6 +80,25 @@ vi.mock('../../utils/metrics', () => ({
   qualityGateDuration: { observe: vi.fn() },
 }));
 
+// Real config reads only 3 keys; mock them so CONSOLIDATION_ENABLED can be
+// toggled per-test (drives the manual-memory → semantic-LTM mirror path).
+const mockConfig = vi.hoisted(() => ({
+  CONSOLIDATION_ENABLED: false,
+  MEMORY_QUARANTINE_TTL_DAYS: 7,
+  MEMORY_COMPACTION_THRESHOLD: 0.85,
+}));
+vi.mock('../../config', () => ({ default: mockConfig }));
+
+const mockLtmStoreSemantic = vi.hoisted(() => vi.fn().mockResolvedValue({ id: 'ltm-1' }));
+vi.mock('../../services/memory-ltm', () => ({
+  memoryLtm: { storeSemantic: mockLtmStoreSemantic },
+}));
+
+const mockVersionRecord = vi.hoisted(() => vi.fn().mockResolvedValue(undefined));
+vi.mock('../../services/memory-versions', () => ({
+  memoryVersions: { record: mockVersionRecord },
+}));
+
 import { vectorStore } from '../../services/vector-store';
 import { embeddingService } from '../../services/embedding';
 import { memoryService } from '../../services/memory';
@@ -118,6 +137,12 @@ describe('MemoryGovernanceService', () => {
     mockedEmbed.embedBatch.mockResolvedValue([fakeVector, fakeVector]);
     // Default: no existing memories for relationship detection
     mockedVS.search.mockResolvedValue([]);
+    // Re-wire hoisted mocks cleared by resetAllMocks + reset config flags.
+    mockConfig.CONSOLIDATION_ENABLED = false;
+    mockConfig.MEMORY_QUARANTINE_TTL_DAYS = 7;
+    mockConfig.MEMORY_COMPACTION_THRESHOLD = 0.85;
+    mockLtmStoreSemantic.mockResolvedValue({ id: 'ltm-1' });
+    mockVersionRecord.mockResolvedValue(undefined);
   });
 
   describe('ingest', () => {
@@ -809,6 +834,401 @@ describe('MemoryGovernanceService', () => {
       expect(result.quarantine_cleanup).toBeUndefined();
       expect(result.compaction).toBeDefined();
       expect(result.compaction!.dryRun).toBe(true);
+    });
+  });
+
+  describe('manual-memory semantic-LTM mirror (CONSOLIDATION_ENABLED)', () => {
+    const durable = {
+      id: 'durable-1',
+      type: 'decision' as const,
+      content: 'use TypeScript everywhere',
+      tags: ['lang'],
+      createdAt: '',
+      updatedAt: '',
+    };
+
+    it('mirrors a manual decision into semantic LTM when consolidation is enabled', async () => {
+      mockConfig.CONSOLIDATION_ENABLED = true;
+      mockedMemory.remember.mockResolvedValue(durable);
+
+      await memoryGovernance.ingest({
+        projectName: 'test',
+        content: 'use TypeScript everywhere',
+        type: 'decision',
+        tags: ['lang'],
+      });
+
+      // Fire-and-forget LTM mirror — let the microtask settle.
+      await Promise.resolve();
+      expect(mockLtmStoreSemantic).toHaveBeenCalledWith(
+        expect.objectContaining({
+          projectName: 'test',
+          subtype: 'decision',
+          confidence: 0.9,
+          source: 'manual',
+          metadata: { durableId: 'durable-1' },
+        })
+      );
+    });
+
+    it('does NOT mirror an unmapped memory type (e.g. note)', async () => {
+      mockConfig.CONSOLIDATION_ENABLED = true;
+      mockedMemory.remember.mockResolvedValue({ ...durable, type: 'note' as any });
+
+      await memoryGovernance.ingest({
+        projectName: 'test',
+        content: 'just a note',
+        type: 'note',
+      });
+
+      await Promise.resolve();
+      expect(mockLtmStoreSemantic).not.toHaveBeenCalled();
+    });
+
+    it('does not throw when the LTM mirror rejects (best-effort)', async () => {
+      mockConfig.CONSOLIDATION_ENABLED = true;
+      mockedMemory.remember.mockResolvedValue(durable);
+      mockLtmStoreSemantic.mockRejectedValue(new Error('ltm down'));
+
+      await expect(
+        memoryGovernance.ingest({
+          projectName: 'test',
+          content: 'use TypeScript everywhere',
+          type: 'decision',
+        })
+      ).resolves.toBeDefined();
+    });
+
+    it('does NOT mirror when consolidation is disabled', async () => {
+      mockConfig.CONSOLIDATION_ENABLED = false;
+      mockedMemory.remember.mockResolvedValue(durable);
+
+      await memoryGovernance.ingest({
+        projectName: 'test',
+        content: 'use TypeScript everywhere',
+        type: 'decision',
+      });
+
+      await Promise.resolve();
+      expect(mockLtmStoreSemantic).not.toHaveBeenCalled();
+    });
+  });
+
+  describe('ingest — quarantine edge cases', () => {
+    it('sets pending status + statusHistory for a quarantined todo', async () => {
+      mockedVS.upsert.mockResolvedValue(undefined);
+
+      const result = await memoryGovernance.ingest({
+        projectName: 'test',
+        content: 'follow up on the migration',
+        type: 'todo',
+        source: 'auto_pattern',
+        confidence: 0.8,
+      });
+
+      expect(result.status).toBe('pending');
+      expect(result.statusHistory).toEqual([expect.objectContaining({ status: 'pending' })]);
+    });
+  });
+
+  describe('getAdaptiveThreshold — caching + clamps', () => {
+    it('caches the computed threshold (second call does not re-read counters)', async () => {
+      counters.set('governance:cacheproj:promoted', 8);
+      counters.set('governance:cacheproj:rejected', 2);
+
+      const first = await memoryGovernance.getAdaptiveThreshold('cacheproj');
+      const callsAfterFirst = mockCacheGet.mock.calls.length;
+      const second = await memoryGovernance.getAdaptiveThreshold('cacheproj');
+
+      expect(second).toBe(first);
+      // Cache hit → no further counter reads.
+      expect(mockCacheGet.mock.calls.length).toBe(callsAfterFirst);
+    });
+
+    it('clamps to the 0.8 ceiling for an all-rejected history', async () => {
+      counters.set('governance:rejproj:promoted', 0);
+      counters.set('governance:rejproj:rejected', 20); // successRate 0 → 0.8
+
+      expect(await memoryGovernance.getAdaptiveThreshold('rejproj')).toBe(0.8);
+    });
+
+    it('clamps to the 0.4 floor for an all-promoted history', async () => {
+      counters.set('governance:promproj:promoted', 20);
+      counters.set('governance:promproj:rejected', 0); // successRate 1 → 0.4
+
+      expect(await memoryGovernance.getAdaptiveThreshold('promproj')).toBe(0.4);
+    });
+
+    it('falls back to the default 0.5 when counter reads throw', async () => {
+      mockCacheGet.mockRejectedValue(new Error('redis down'));
+
+      expect(await memoryGovernance.getAdaptiveThreshold('errproj')).toBe(0.5);
+    });
+  });
+
+  describe('promote — quarantine-delete resilience', () => {
+    it('still resolves when removing the quarantine copy fails (idempotent dupe)', async () => {
+      mockQdrantClient.scroll.mockResolvedValue({
+        points: [
+          {
+            id: 'q-1',
+            payload: {
+              id: 'q-1',
+              type: 'insight',
+              content: 'c',
+              tags: [],
+              source: 'auto_pattern',
+              metadata: {},
+            },
+          },
+        ],
+      });
+      mockedMemory.remember.mockResolvedValue({
+        id: 'd-1',
+        type: 'insight',
+        content: 'c',
+        tags: [],
+        createdAt: '',
+        updatedAt: '',
+      });
+      // Durable write succeeded, but quarantine delete throws.
+      mockedVS.delete.mockRejectedValue(new Error('delete failed'));
+
+      const result = await memoryGovernance.promote('test', 'q-1', 'human_validated');
+
+      // Promotion still succeeds — the leftover quarantine copy is harmless.
+      expect(result.id).toBe('d-1');
+      expect(counters.get('governance:test:promoted')).toBe(1);
+    });
+
+    it('still resolves when the promote counter increment throws (best-effort)', async () => {
+      mockQdrantClient.scroll.mockResolvedValue({
+        points: [
+          {
+            id: 'q-1',
+            payload: {
+              id: 'q-1',
+              type: 'insight',
+              content: 'c',
+              tags: [],
+              source: 'auto_pattern',
+              metadata: {},
+            },
+          },
+        ],
+      });
+      mockedVS.delete.mockResolvedValue(undefined);
+      mockedMemory.remember.mockResolvedValue({
+        id: 'd-1',
+        type: 'insight',
+        content: 'c',
+        tags: [],
+        createdAt: '',
+        updatedAt: '',
+      });
+      // Counter bump fails (Redis hiccup) — promotion must still succeed.
+      mockCacheIncrement.mockRejectedValue(new Error('redis incr down'));
+
+      const result = await memoryGovernance.promote('test', 'q-1', 'human_validated');
+
+      expect(result.id).toBe('d-1');
+    });
+
+    it('records an append-only version audit on promotion', async () => {
+      mockQdrantClient.scroll.mockResolvedValue({
+        points: [
+          {
+            id: 'q-1',
+            payload: { id: 'q-1', type: 'insight', content: 'c', tags: [], metadata: {} },
+          },
+        ],
+      });
+      mockedVS.delete.mockResolvedValue(undefined);
+      mockedMemory.remember.mockResolvedValue({
+        id: 'd-1',
+        type: 'insight',
+        content: 'c',
+        tags: [],
+        createdAt: '',
+        updatedAt: '',
+      });
+
+      await memoryGovernance.promote('test', 'q-1', 'pr_merged');
+      await Promise.resolve();
+
+      expect(mockVersionRecord).toHaveBeenCalledWith(
+        'test',
+        expect.objectContaining({
+          op: 'modified',
+          actor: 'governance',
+          memoryId: 'd-1',
+          metadata: expect.objectContaining({ promotedFrom: 'q-1', promoteReason: 'pr_merged' }),
+        })
+      );
+    });
+  });
+
+  describe('recallQuarantine', () => {
+    it('searches quarantine with type + tag filters and maps results', async () => {
+      mockedVS.search.mockResolvedValue([
+        {
+          id: 'q-1',
+          score: 0.7,
+          payload: {
+            type: 'insight',
+            content: 'pending insight',
+            tags: ['db-schema'],
+            source: 'auto_pattern',
+            validated: false,
+          },
+        },
+      ]);
+
+      const results = await memoryGovernance.recallQuarantine({
+        projectName: 'test',
+        query: 'schema',
+        type: 'insight',
+        tag: 'db-schema',
+        limit: 5,
+      });
+
+      expect(mockedVS.search).toHaveBeenCalledWith('test_memory_pending', expect.any(Array), 5, {
+        must: [
+          { key: 'type', match: { value: 'insight' } },
+          { key: 'tags', match: { any: ['db-schema'] } },
+        ],
+      });
+      expect(results).toHaveLength(1);
+      expect(results[0].memory.id).toBe('q-1');
+      expect(results[0].memory.validated).toBe(false);
+    });
+
+    it('omits the filter when type is "all" and no tag is given', async () => {
+      mockedVS.search.mockResolvedValue([]);
+
+      await memoryGovernance.recallQuarantine({ projectName: 'test', query: 'q' });
+
+      expect(mockedVS.search).toHaveBeenCalledWith(
+        'test_memory_pending',
+        expect.any(Array),
+        20,
+        undefined
+      );
+    });
+  });
+
+  describe('listQuarantine / getQuarantineById / deleteFromQuarantine errors', () => {
+    it('listQuarantine returns [] on a 404/400 scroll error', async () => {
+      const err = new Error('Bad request') as any;
+      err.status = 400;
+      mockQdrantClient.scroll.mockRejectedValue(err);
+
+      expect(await memoryGovernance.listQuarantine('test')).toEqual([]);
+    });
+
+    it('listQuarantine rethrows a non-404/400 scroll error', async () => {
+      mockQdrantClient.scroll.mockRejectedValue(new Error('unexpected'));
+
+      await expect(memoryGovernance.listQuarantine('test')).rejects.toThrow('unexpected');
+    });
+
+    it('getQuarantineById rethrows a non-404/400 scroll error', async () => {
+      mockQdrantClient.scroll.mockRejectedValue(new Error('unexpected'));
+
+      await expect(memoryGovernance.getQuarantineById('test', 'q-1')).rejects.toThrow('unexpected');
+    });
+
+    it('deleteFromQuarantine returns false on a delete error', async () => {
+      mockedVS.delete.mockRejectedValue(new Error('delete failed'));
+
+      expect(await memoryGovernance.deleteFromQuarantine('test', 'q-1')).toBe(false);
+    });
+  });
+
+  describe('cleanupExpiredQuarantine — error paths', () => {
+    it('collects a batch-delete error without aborting the run', async () => {
+      const expired = new Date(Date.now() - 14 * 24 * 60 * 60 * 1000).toISOString();
+      mockQdrantClient.scroll.mockResolvedValue({
+        points: [{ id: 'exp-1', payload: { createdAt: expired } }],
+        next_page_offset: undefined,
+      });
+      mockedVS.delete.mockRejectedValue(new Error('batch boom'));
+
+      const result = await memoryGovernance.cleanupExpiredQuarantine('test');
+
+      expect(result.rejected).toHaveLength(0);
+      expect(result.errors[0]).toContain('Batch delete failed');
+    });
+
+    it('records a non-404 scroll error in errors', async () => {
+      const err = new Error('server error') as any;
+      err.status = 500;
+      mockQdrantClient.scroll.mockRejectedValue(err);
+
+      const result = await memoryGovernance.cleanupExpiredQuarantine('test');
+
+      expect(result.errors[0]).toContain('Quarantine cleanup failed');
+    });
+  });
+
+  describe('runCompaction — error paths', () => {
+    it('swallows a per-original setPayload failure and still reports the cluster', async () => {
+      mockedMemory.mergeMemories.mockResolvedValue({
+        merged: [
+          {
+            original: [
+              { id: 'a', type: 'note', content: 'foo', tags: [], createdAt: '', updatedAt: '' },
+            ],
+            merged: {
+              id: 'tmp',
+              type: 'note',
+              content: 'merged',
+              tags: [],
+              createdAt: '',
+              updatedAt: '',
+              metadata: {},
+            },
+          },
+        ],
+        totalFound: 5,
+        totalMerged: 1,
+      });
+      mockedMemory.remember.mockResolvedValue({
+        id: 'new-merged',
+        type: 'note',
+        content: 'merged',
+        tags: [],
+        createdAt: '',
+        updatedAt: '',
+      });
+      mockQdrantClient.setPayload.mockRejectedValue(new Error('setPayload boom'));
+
+      const result = await memoryGovernance.runCompaction('test', { dryRun: false });
+
+      // The supersede failed but the merged memory was still created & reported.
+      expect(result.clusters).toHaveLength(1);
+      expect(result.clusters[0].mergedId).toBe('new-merged');
+    });
+
+    it('returns an empty result (no throw) when the durable collection is absent (404)', async () => {
+      const err = new Error('Not found') as any;
+      err.status = 404;
+      mockedMemory.mergeMemories.mockRejectedValue(err);
+
+      const result = await memoryGovernance.runCompaction('test', { dryRun: true });
+
+      expect(result.clusters).toHaveLength(0);
+      expect(result.totalClusters).toBe(0);
+    });
+
+    it('rethrows a non-404 merge error (and releases the lock)', async () => {
+      mockedMemory.mergeMemories.mockRejectedValue(new Error('merge boom'));
+
+      await expect(memoryGovernance.runCompaction('test')).rejects.toThrow('merge boom');
+
+      // Lock released → a subsequent run is not blocked.
+      mockedMemory.mergeMemories.mockResolvedValue({ merged: [], totalFound: 0, totalMerged: 0 });
+      await expect(memoryGovernance.runCompaction('test')).resolves.toBeDefined();
     });
   });
 });
