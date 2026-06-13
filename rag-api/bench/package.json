@@ -5,6 +5,9 @@
   "description": "Reka code-QA / retrieval benchmark harness (recall@k, MRR, answer-contains, token cost)",
   "scripts": {
     "bench": "ts-node --transpile-only -P tsconfig.json runner.ts",
+    "eval": "ts-node --transpile-only -P tsconfig.json eval/cli.ts",
+    "eval:coir": "ts-node --transpile-only -P tsconfig.json eval/benchmarks/coir-adapter.ts",
+    "tribunal": "ts-node --transpile-only tribunal/tribunal-eval.ts",
     "typecheck": "tsc -p tsconfig.json --noEmit",
     "test": "vitest run metrics.test.ts"
   },

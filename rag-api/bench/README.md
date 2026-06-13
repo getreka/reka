@@ -184,3 +184,47 @@ token cost over a dataset. To produce the comparative headline:
 
 The aggregate JSON (`overall`) is the canonical source for these figures; commit
 the dataset and the JSON report so the number is auditable.
+
+## The other harnesses under `bench/`
+
+`bench/` is the **single** home for every eval harness in this repo (there is no
+second copy under `src/` — see the Subtraction rule in the root `CLAUDE.md`).
+Besides the code-QA runner above, it holds two relocated sub-harnesses:
+
+### `bench/eval/` — golden-query + CoIR retrieval benchmark
+
+Self-contained, HTTP-only (talks to the RAG API over the network, imports no live
+`src/` service), so it type-checks under `bench/tsconfig.json` alongside the main
+runner. This is the harness the **M6 re-baseline (task 3)** drives for code-retrieval
+numbers.
+
+```bash
+# from rag-api/
+npm --prefix bench run eval -- run --project rag --hybrid       # golden queries
+npm --prefix bench run eval -- compare before.json after.json   # delta two reports
+npm --prefix bench run eval:coir -- --dataset cosqa             # CoIR (CosQA/APPS/StackOverflow)
+```
+
+Golden datasets live in `bench/eval/golden-queries.json` (default) and
+`bench/eval/golden-queries-v2.json` (larger, pass via `--golden`). CoIR qrels
+ground truth is committed at `bench/eval/data/coir/cosqa/qrels-test.json`; the
+queries/corpus are downloaded on demand (gitignored). Reports are written to
+`bench/eval/results/` (gitignored).
+
+### `bench/tribunal/` — debate-quality (LLM-as-judge) eval
+
+Unlike the retrieval harnesses, this one imports live rag-api services in-process
+(`tribunalService`, `llm` via `../../src`), so it is **run with ts-node
+`--transpile-only` and excluded from the bench type-check**:
+
+```bash
+# from rag-api/
+npm --prefix bench run tribunal -- --cases=arch --rounds=1
+```
+
+Cases live in `bench/tribunal/tribunal-cases.ts`; scorecards are written to
+`bench/tribunal/results/` (gitignored).
+
+> LongMemEval lives elsewhere on purpose: its ingest/benchmark scripts are in
+> `rag-api/src/scripts/longmemeval-*.ts` (they import the live indexing/memory
+> services directly and run inside the rag-api build), not under `bench/`.

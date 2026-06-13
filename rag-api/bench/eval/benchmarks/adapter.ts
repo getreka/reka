@@ -75,7 +75,7 @@ export abstract class BenchmarkAdapter {
    *   1. Load cases
    *   2. POST /api/search for each case, compute per-result metrics
    *   3. Aggregate into BenchmarkReport
-   *   4. Persist JSON to src/eval/results/
+   *   4. Persist JSON to bench/eval/results/
    */
   async run(apiUrl: string, apiKey: string, collection: string): Promise<BenchmarkReport> {
     const cases = await this.loadCases();
