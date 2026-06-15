@@ -12,7 +12,7 @@
     <a href="https://www.npmjs.com/package/@getreka/cli"><img src="https://img.shields.io/npm/v/@getreka/cli?style=flat-square&color=cb3837&label=@getreka/cli" alt="npm" /></a>
     <a href="https://github.com/getreka/reka/blob/main/LICENSE"><img src="https://img.shields.io/badge/license-BSL--1.1-blue?style=flat-square" alt="License" /></a>
     <a href="https://github.com/getreka/reka/stargazers"><img src="https://img.shields.io/github/stars/getreka/reka?style=flat-square&color=f5c542" alt="Stars" /></a>
-  </p>
+    <a href="https://github.com/getreka/reka/actions/workflows/egress-audit.yml"><img src="https://github.com/getreka/reka/actions/workflows/egress-audit.yml/badge.svg" alt="No telemetry · self-hosted" /></a>
 
   <p>
     <a href="#claude-code-plugin">Plugin</a> &middot;
