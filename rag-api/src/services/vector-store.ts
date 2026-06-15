@@ -3,7 +3,7 @@
  */
 
 import { QdrantClient } from '@qdrant/js-client-rest';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 import config from '../config';
 import { logger } from '../utils/logger';
 import { ExternalServiceError } from '../utils/errors';
@@ -346,7 +346,7 @@ class VectorStoreService {
     await this.ensureCollection(collection);
 
     const formattedPoints = points.map((p) => ({
-      id: p.id || uuidv4(),
+      id: p.id || randomUUID(),
       vector: p.vector,
       payload: p.payload,
     }));
@@ -410,7 +410,7 @@ class VectorStoreService {
     await this.ensureCollectionWithSparse(collection);
 
     const formattedPoints = points.map((p) => ({
-      id: p.id || uuidv4(),
+      id: p.id || randomUUID(),
       vector: {
         dense: p.vectors.dense,
         sparse: {
@@ -490,7 +490,7 @@ class VectorStoreService {
     await this.ensureCollectionWithBM25(collection);
 
     const formattedPoints = points.map((p) => ({
-      id: p.id || uuidv4(),
+      id: p.id || randomUUID(),
       vector: {
         dense: p.vector,
         bm25: {

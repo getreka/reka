@@ -9,7 +9,7 @@ initTracing(); // Must be before any other imports that create HTTP connections
 
 import express, { Express, Request, Response, NextFunction } from 'express';
 import cors from 'cors';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 import config from './config';
 import { logger, createRequestLogger } from './utils/logger';
 import { recordHttpRequest, getMetrics, getMetricsContentType } from './utils/metrics';
@@ -121,7 +121,7 @@ app.use(express.json({ limit: '10mb' }));
 // Request ID and logging middleware
 app.use((req: Request, res: Response, next: NextFunction) => {
   const start = Date.now();
-  const requestId = (req.headers['x-request-id'] as string) || uuidv4();
+  const requestId = (req.headers['x-request-id'] as string) || randomUUID();
   const projectName = (req.headers['x-project-name'] as string) || 'unknown';
 
   // Attach request context

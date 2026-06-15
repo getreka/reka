@@ -3,7 +3,7 @@
  * based on source (manual vs auto-generated).
  */
 
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 import { vectorStore, VectorPoint } from './vector-store';
 import { embeddingService } from './embedding';
 import {
@@ -230,7 +230,7 @@ class MemoryGovernanceService {
       );
       // Return a stub memory without persisting
       return {
-        id: uuidv4(),
+        id: randomUUID(),
         type: memoryOptions.type || 'note',
         content: memoryOptions.content,
         tags: memoryOptions.tags || [],
@@ -244,7 +244,7 @@ class MemoryGovernanceService {
     const collectionName = this.getQuarantineCollection(projectName);
 
     const memory: Memory = {
-      id: uuidv4(),
+      id: randomUUID(),
       type: memoryOptions.type || 'note',
       content: memoryOptions.content,
       tags: memoryOptions.tags || [],

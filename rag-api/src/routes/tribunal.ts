@@ -10,7 +10,7 @@
  */
 
 import { Router, Request, Response } from 'express';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 import { tribunalService } from '../services/tribunal';
 import { eventBus, type BusEvent } from '../services/event-bus';
 import { asyncHandler } from '../middleware/async-handler';
@@ -51,7 +51,7 @@ router.post(
   validateProjectName,
   validate(tribunalDebateSchema),
   asyncHandler(async (req: Request, res: Response) => {
-    const debateId = uuidv4();
+    const debateId = randomUUID();
 
     // Fire and forget — debate runs in background, stores result at each phase
     tribunalService.debate({ ...req.body, debateId }).catch(() => {

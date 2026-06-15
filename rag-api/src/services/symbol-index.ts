@@ -6,7 +6,7 @@
  * Used for exact symbol lookups and cross-file context enrichment.
  */
 
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 import { vectorStore, VectorPoint } from './vector-store';
 import { embeddingService } from './embedding';
 import { logger } from '../utils/logger';
@@ -66,7 +66,7 @@ class SymbolIndexService {
     const embeddings = await embeddingService.embedBatch(texts);
 
     const points: VectorPoint[] = entries.map((entry, i) => ({
-      id: uuidv4(),
+      id: randomUUID(),
       vector: embeddings[i],
       payload: {
         ...entry,

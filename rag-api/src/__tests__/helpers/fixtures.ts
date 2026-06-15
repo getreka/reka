@@ -2,7 +2,7 @@
  * Test fixtures — mock data factories for unit tests.
  */
 
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 
 /** Generate a fake embedding vector of the given dimension. */
 export function mockEmbedding(dim = 1024): number[] {
@@ -18,7 +18,7 @@ export function mockSearchResult(
   }>
 ): { id: string; score: number; payload: Record<string, unknown> } {
   return {
-    id: overrides?.id ?? uuidv4(),
+    id: overrides?.id ?? randomUUID(),
     score: overrides?.score ?? 0.85,
     payload: {
       file: 'src/services/example.ts',
@@ -48,7 +48,7 @@ export function mockMemory(
 ): Record<string, unknown> {
   const now = new Date().toISOString();
   return {
-    id: overrides?.id ?? uuidv4(),
+    id: overrides?.id ?? randomUUID(),
     type: overrides?.type ?? 'note',
     content: overrides?.content ?? 'Test memory content',
     tags: overrides?.tags ?? ['test'],
@@ -71,7 +71,7 @@ export function mockVectorPoint(
   }>
 ): { id: string; vector: number[]; payload: Record<string, unknown> } {
   return {
-    id: overrides?.id ?? uuidv4(),
+    id: overrides?.id ?? randomUUID(),
     vector: overrides?.vector ?? mockEmbedding(),
     payload: overrides?.payload ?? {
       file: 'src/test.ts',
