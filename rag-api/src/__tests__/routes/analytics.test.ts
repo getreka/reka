@@ -136,6 +136,33 @@ describe('Analytics Routes', () => {
       expect(res.status).toBe(200);
       expect(res.body.tracked).toBe(true);
     });
+
+    it('forwards metadata.command from the memory tool to the tracker', async () => {
+      // The upgraded mcp emitter sends metadata.command on memory-tool rows;
+      // the route must thread it through so getToolCallCounts can attribute
+      // the channel precisely instead of re-parsing inputSummary.
+      mocks.track.mockResolvedValue({ id: 'usage-2' });
+
+      const res = await withProject(
+        request(app)
+          .post('/api/track-usage')
+          .send({
+            projectName: 'test',
+            toolName: 'memory',
+            inputSummary: 'create /memories/a.md',
+            success: true,
+            metadata: { command: 'create' },
+          })
+      );
+
+      expect(res.status).toBe(200);
+      expect(mocks.track).toHaveBeenCalledWith(
+        expect.objectContaining({
+          toolName: 'memory',
+          metadata: { command: 'create' },
+        })
+      );
+    });
   });
 
   describe('GET /api/tool-analytics', () => {

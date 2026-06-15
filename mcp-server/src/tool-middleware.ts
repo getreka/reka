@@ -93,6 +93,37 @@ export function summarizeInput(
   return name;
 }
 
+/** Valid memory_20250818 sub-commands (mirrors the `memory` tool schema). */
+const MEMORY_COMMANDS = new Set([
+  "view",
+  "create",
+  "str_replace",
+  "insert",
+  "delete",
+  "rename",
+]);
+
+/**
+ * Structured usage metadata for analytics (memory-roi channel attribution).
+ *
+ * For the `memory` tool we surface the resolved sub-command precisely from
+ * args.command rather than leaving the rag-api consumer to re-parse it out of
+ * inputSummary. Returns undefined for every other tool so the usage row stays
+ * exactly as before (additive — no metadata unless we have something to add).
+ */
+export function usageMetadata(
+  name: string,
+  args: Record<string, unknown>,
+): Record<string, unknown> | undefined {
+  if (name === "memory") {
+    const command = args.command;
+    if (typeof command === "string" && MEMORY_COMMANDS.has(command)) {
+      return { command };
+    }
+  }
+  return undefined;
+}
+
 /** Count results from a tool response string */
 export function countResults(result: string): number {
   if (
@@ -166,6 +197,8 @@ export function trackUsage(
 ): void {
   if (TRACKING_EXCLUDE.has(name)) return;
 
+  const metadata = usageMetadata(name, args);
+
   ctx.api
     .post("/api/track-usage", {
       projectName: ctx.projectName,
@@ -176,6 +209,7 @@ export function trackUsage(
       resultCount: success ? countResults(result) : 0,
       success,
       errorMessage,
+      ...(metadata ? { metadata } : {}),
     })
     .catch(() => {});
 }
