@@ -9,7 +9,7 @@
  * - Patterns and trends
  */
 
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 import { vectorStore, VectorPoint } from './vector-store';
 import { embeddingService } from './embedding';
 import { logger } from '../utils/logger';
@@ -74,7 +74,7 @@ class UsageTrackerService {
     const now = Date.now();
 
     const usage: ToolUsage = {
-      id: uuidv4(),
+      id: randomUUID(),
       projectName,
       sessionId,
       toolName,

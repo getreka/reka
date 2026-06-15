@@ -7,7 +7,7 @@
  */
 
 import * as path from 'path';
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 import config from '../config';
 import { logger } from '../utils/logger';
 import { embeddingService } from './embedding';
@@ -126,7 +126,7 @@ class AgentRuntime {
     const timeout = options.timeout ?? profile.timeout ?? config.AGENT_TIMEOUT;
 
     const agentTask: AgentTask = {
-      id: uuidv4(),
+      id: randomUUID(),
       type: agentType,
       task,
       projectName,

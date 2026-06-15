@@ -11,7 +11,7 @@
  *   Each recall increases S by RECALL_STRENGTHENING_FACTOR (default 1.5x)
  */
 
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 import { vectorStore, VectorPoint } from './vector-store';
 // Note: reconsolidation import is deferred to avoid circular dependency
 // reconsolidation is triggered by the caller (memory.ts routes), not internally
@@ -157,7 +157,7 @@ class LongTermMemoryService {
    * Store an episodic memory (what happened during a session).
    */
   async storeEpisodic(opts: StoreEpisodicOptions): Promise<EpisodicMemory> {
-    const id = uuidv4();
+    const id = randomUUID();
     const now = new Date().toISOString();
     const stability = getBaseStability('episodic');
 
@@ -202,7 +202,7 @@ class LongTermMemoryService {
    * Store a semantic memory (decontextualized fact/decision/procedure).
    */
   async storeSemantic(opts: StoreSemanticOptions): Promise<SemanticMemory> {
-    const id = uuidv4();
+    const id = randomUUID();
     const now = new Date().toISOString();
     const stability = getBaseStability(opts.subtype);
 

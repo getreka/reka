@@ -4,7 +4,7 @@
  * Stores and retrieves memories using Qdrant vector database for semantic search.
  */
 
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 import { vectorStore, VectorPoint } from './vector-store';
 import { embeddingService } from './embedding';
 import { llm } from './llm';
@@ -344,7 +344,7 @@ class MemoryService {
     const collectionName = this.getCollectionName(projectName);
 
     const memory: Memory = {
-      id: uuidv4(),
+      id: randomUUID(),
       type,
       content,
       tags,
@@ -1119,7 +1119,7 @@ class MemoryService {
       } = item;
 
       const memory: Memory = {
-        id: uuidv4(),
+        id: randomUUID(),
         type,
         content,
         tags,
@@ -1433,7 +1433,7 @@ class MemoryService {
           const mergedTriggerDescription = triggerDonor?.triggerDescription;
 
           const mergedMemory: Memory = {
-            id: uuidv4(),
+            id: randomUUID(),
             type: cluster[0].type,
             content: mergedContent,
             tags: [...new Set(cluster.flatMap((m) => m.tags))],

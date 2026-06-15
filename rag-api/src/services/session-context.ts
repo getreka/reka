@@ -8,7 +8,7 @@
  * - Cross-session context transfer
  */
 
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 import { vectorStore, VectorPoint } from './vector-store';
 import { embeddingService } from './embedding';
 import { memoryGovernance } from './memory-governance';
@@ -86,7 +86,7 @@ class SessionContextService {
    * when they complete.
    */
   async startSession(options: StartSessionOptions): Promise<SessionContext> {
-    const { projectName, sessionId = uuidv4(), metadata } = options;
+    const { projectName, sessionId = randomUUID(), metadata } = options;
 
     // Create minimal context immediately — no I/O
     const context = this.createNewContext(sessionId, projectName, metadata);

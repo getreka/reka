@@ -8,7 +8,7 @@
  * This service spawns a full Claude Code instance with file system access.
  */
 
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 import {
   query,
   type Options,
@@ -166,7 +166,7 @@ class ClaudeAgentService {
   }
 
   private async _run(options: AutonomousAgentOptions): Promise<AutonomousAgentResult> {
-    const agentId = uuidv4();
+    const agentId = randomUUID();
     const agentConfig = AGENT_CONFIGS[options.type];
     const startTime = Date.now();
 
@@ -405,7 +405,7 @@ class ClaudeAgentService {
     projectPath: string;
     steps: WorkflowStep[];
   }): Promise<WorkflowResult> {
-    const workflowId = uuidv4();
+    const workflowId = randomUUID();
     const startTime = Date.now();
     const { projectName, projectPath, steps } = options;
 

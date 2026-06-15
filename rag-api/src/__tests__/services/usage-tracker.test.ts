@@ -18,9 +18,10 @@ vi.mock('../../services/embedding', () => ({
   },
 }));
 
-vi.mock('uuid', () => ({
-  v4: () => 'test-uuid',
-}));
+vi.mock('crypto', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('crypto')>();
+  return { ...actual, randomUUID: () => 'test-uuid' };
+});
 
 import { vectorStore } from '../../services/vector-store';
 import { embeddingService } from '../../services/embedding';

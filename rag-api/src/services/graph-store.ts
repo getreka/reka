@@ -9,7 +9,7 @@
  * payload filter/scroll — never vector similarity search.
  */
 
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 import { vectorStore, VectorPoint } from './vector-store';
 import { cacheService } from './cache';
 import { logger } from '../utils/logger';
@@ -80,7 +80,7 @@ class GraphStoreService {
         payload.symbolDescriptor = edge.symbolDescriptor;
       }
 
-      return { id: uuidv4(), vector: dummy, payload };
+      return { id: randomUUID(), vector: dummy, payload };
     });
 
     await vectorStore.upsert(collection, points);
@@ -159,7 +159,7 @@ class GraphStoreService {
       };
       if (edge.confidence) payload.confidence = edge.confidence;
       if (edge.symbolDescriptor) payload.symbolDescriptor = edge.symbolDescriptor;
-      return { id: uuidv4(), vector: dummy, payload };
+      return { id: randomUUID(), vector: dummy, payload };
     });
 
     await vectorStore.upsert(collection, points);
@@ -403,7 +403,7 @@ class GraphStoreService {
     const points: VectorPoint[] = files.map((file) => {
       graphEdgesTotal.inc({ project: projectName, edge_type: 'memory_references' });
       return {
-        id: uuidv4(),
+        id: randomUUID(),
         vector: dummy,
         payload: {
           fromFile: memoryRef,

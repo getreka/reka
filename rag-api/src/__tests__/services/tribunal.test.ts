@@ -80,7 +80,10 @@ vi.mock('../../utils/tracing', () => ({
 }));
 
 // Deterministic debate id.
-vi.mock('uuid', () => ({ v4: () => 'debate-uuid' }));
+vi.mock('crypto', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('crypto')>();
+  return { ...actual, randomUUID: () => 'debate-uuid' };
+});
 
 // modelCostUsd is the REAL pricing function (single source of truth) — we do NOT
 // mock it, so the test verifies cost actually flows through real Anthropic pricing.

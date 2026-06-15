@@ -28,7 +28,6 @@
  * tamper-evidence.
  */
 
-import { v4 as uuidv4 } from 'uuid';
 import crypto from 'crypto';
 import { cacheService } from './cache';
 import { logger } from '../utils/logger';
@@ -122,7 +121,7 @@ class MemoryVersionsService {
     if (!client) return null;
 
     const version: MemoryVersion = {
-      versionId: uuidv4(),
+      versionId: crypto.randomUUID(),
       projectName,
       memoryId: input.memoryId,
       op: input.op,

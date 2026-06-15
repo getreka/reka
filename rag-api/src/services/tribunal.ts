@@ -12,7 +12,7 @@
  *   - Advocates: TRIBUNAL_ADVOCATE_COMPLEXITY (default: 'complex' → Claude)
  */
 
-import { v4 as uuidv4 } from 'uuid';
+import { randomUUID } from 'crypto';
 import config from '../config';
 import { logger } from '../utils/logger';
 import { llm } from './llm';
@@ -523,7 +523,7 @@ class TribunalService {
     cfg: TribunalConfig & { debateId?: string },
     span?: any
   ): Promise<TribunalResult> {
-    const id = cfg.debateId || uuidv4();
+    const id = cfg.debateId || randomUUID();
     const maxRounds = cfg.maxRounds ?? 1;
     const maxBudget = cfg.maxBudget ?? 0.5;
     const startTime = Date.now();
