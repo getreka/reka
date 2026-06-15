@@ -407,6 +407,56 @@ describe('UsageTrackerService', () => {
       });
     });
 
+    it('PREFERS metadata.command over a conflicting inputSummary (new emitter)', async () => {
+      // The upgraded mcp emitter sends metadata.command; the row may still
+      // carry an inputSummary whose first token is a DIFFERENT command (or
+      // none). metadata must win — that is the whole point of the precise
+      // attribution. inputSummary is the path here, not the command.
+      mockQdrantClient.scroll.mockResolvedValue({
+        points: [
+          point('memory', {
+            metadata: { command: 'create' },
+            inputSummary: 'view /memories/a.md',
+          }),
+          point('memory', {
+            metadata: { command: 'delete' },
+            inputSummary: '/memories/old.md',
+          }),
+        ],
+        next_page_offset: null,
+      });
+
+      const counts = await usageTracker.getToolCallCounts('test', 30);
+
+      expect(counts).toEqual({ 'memory:create': 1, 'memory:delete': 1 });
+    });
+
+    it('FALLS BACK to inputSummary when metadata is absent (un-upgraded client)', async () => {
+      // Rows written before the emitter shipped (or by an older @getreka/mcp)
+      // have no metadata — they must still classify, so no regression while
+      // the emitter rolls out.
+      mockQdrantClient.scroll.mockResolvedValue({
+        points: [
+          point('memory', { inputSummary: 'create /memories/a.md' }),
+          point('memory', { inputSummary: 'view /memories' }),
+          // metadata present but not a valid command → fall back to summary
+          point('memory', {
+            metadata: { command: 'bogus' },
+            inputSummary: 'rename /memories/a.md /memories/b.md',
+          }),
+        ],
+        next_page_offset: null,
+      });
+
+      const counts = await usageTracker.getToolCallCounts('test', 30);
+
+      expect(counts).toEqual({
+        'memory:create': 1,
+        'memory:view': 1,
+        'memory:rename': 1,
+      });
+    });
+
     it('filters on NUMERIC timestampMs (the Qdrant range gotcha)', async () => {
       mockQdrantClient.scroll.mockResolvedValue({ points: [], next_page_offset: null });
 
