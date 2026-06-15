@@ -3,6 +3,8 @@ import {
   summarizeInput,
   countResults,
   formatToolError,
+  usageMetadata,
+  trackUsage,
   TRACKING_EXCLUDE,
   SESSION_TOOLS,
   TOOL_TIMEOUTS,
@@ -71,6 +73,85 @@ describe("Tool Middleware", () => {
 
     it("returns 1 for generic content", () => {
       expect(countResults("Some response text")).toBe(1);
+    });
+  });
+
+  describe("usageMetadata (memory-roi command attribution)", () => {
+    it("surfaces the resolved memory sub-command", () => {
+      expect(usageMetadata("memory", { command: "create" })).toEqual({
+        command: "create",
+      });
+      expect(usageMetadata("memory", { command: "view" })).toEqual({
+        command: "view",
+      });
+    });
+
+    it("ignores an unknown memory command (no metadata to attribute)", () => {
+      expect(usageMetadata("memory", { command: "bogus" })).toBeUndefined();
+      expect(usageMetadata("memory", {})).toBeUndefined();
+    });
+
+    it("returns undefined for non-memory tools (row unchanged)", () => {
+      expect(usageMetadata("recall", { query: "auth" })).toBeUndefined();
+      expect(usageMetadata("remember", { content: "x" })).toBeUndefined();
+    });
+  });
+
+  describe("trackUsage (memory tool carries metadata.command)", () => {
+    function ctxWithPostSpy() {
+      const post = vi.fn().mockResolvedValue({ data: {} });
+      const ctx = {
+        api: { post },
+        projectName: "testproject",
+        activeSessionId: "sess-1",
+      } as any;
+      return { ctx, post };
+    }
+
+    it("attaches metadata.command to the memory tool's usage row", () => {
+      const { ctx, post } = ctxWithPostSpy();
+      trackUsage(
+        "memory",
+        { command: "create", path: "/memories/a.md", file_text: "x" },
+        Date.now(),
+        true,
+        "Created memory file /memories/a.md",
+        undefined,
+        ctx,
+      );
+      expect(post).toHaveBeenCalledTimes(1);
+      const [url, body] = post.mock.calls[0];
+      expect(url).toBe("/api/track-usage");
+      expect(body.toolName).toBe("memory");
+      expect(body.metadata).toEqual({ command: "create" });
+    });
+
+    it("attributes a different command (view) precisely", () => {
+      const { ctx, post } = ctxWithPostSpy();
+      trackUsage(
+        "memory",
+        { command: "view", path: "/memories" },
+        Date.now(),
+        true,
+        "1. /memories/a.md",
+        undefined,
+        ctx,
+      );
+      expect(post.mock.calls[0][1].metadata).toEqual({ command: "view" });
+    });
+
+    it("omits metadata for non-memory tools (backward-compatible row)", () => {
+      const { ctx, post } = ctxWithPostSpy();
+      trackUsage(
+        "recall",
+        { query: "auth" },
+        Date.now(),
+        true,
+        "1. result",
+        undefined,
+        ctx,
+      );
+      expect(post.mock.calls[0][1]).not.toHaveProperty("metadata");
     });
   });
 
