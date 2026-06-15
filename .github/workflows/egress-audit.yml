@@ -1,0 +1,23 @@
+name: No telemetry
+
+# Backs the "no telemetry · self-hosted" badge. Deterministic, no secrets, no
+# install — just a static audit of the product code. See tools/egress-audit.mjs
+# and docker/NO-EGRESS.md.
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+permissions:
+  contents: read
+
+jobs:
+  egress-audit:
+    name: Egress audit (no telemetry · self-hosted)
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+      - run: node tools/egress-audit.mjs
